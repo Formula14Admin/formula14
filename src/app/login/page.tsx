@@ -31,20 +31,21 @@ export default function LoginPage() {
 
   return (
     <div
-      className="flex min-h-screen flex-col items-center justify-center px-4"
+      className="flex min-h-screen items-center justify-center px-4"
       style={{ backgroundColor: '#1a1a1a' }}
     >
-      <Image
-        src="/Primary Logo.png"
-        alt="Formula14"
-        width={0}
-        height={0}
-        sizes="90vw"
-        style={{ width: '90vw', maxWidth: '1100px', height: 'auto', marginBottom: '28px' }}
-        priority
-      />
+      <div className="flex flex-col items-center">
+        <Image
+          src="/Primary Logo.png"
+          alt="Formula14"
+          width={0}
+          height={0}
+          sizes="320px"
+          style={{ width: '320px', height: 'auto', marginBottom: '32px' }}
+          priority
+        />
 
-      <div className="w-full max-w-sm">
+        <div className="w-80">
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="mb-1.5 block text-sm font-medium text-gray-400">
@@ -93,6 +94,7 @@ export default function LoginPage() {
             {loading ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
+        </div>
       </div>
     </div>
   )
