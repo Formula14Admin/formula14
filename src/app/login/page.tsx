@@ -34,7 +34,7 @@ export default function LoginPage() {
       className="flex min-h-screen flex-col items-center justify-center px-4"
       style={{ backgroundColor: '#1a1a1a' }}
     >
-      <div className="relative mb-10 h-48 w-80">
+      <div className="relative mb-6 h-[70vh] w-[90vw] max-w-[1100px]">
         <Image src="/Primary Logo.png" alt="Formula14" fill className="object-contain" priority />
       </div>
 
