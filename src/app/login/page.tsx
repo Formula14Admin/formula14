@@ -36,7 +36,7 @@ export default function LoginPage() {
     >
       <div className="flex flex-col items-center">
         <Image
-          src="/Primary Logo.png"
+          src="/Updated Primary Logo.png"
           alt="Formula14"
           width={0}
           height={0}

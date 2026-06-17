@@ -56,7 +56,7 @@ export default function Sidebar() {
       {/* Logo */}
       <div className="px-4 py-5">
         <Image
-          src="/Primary Logo.png"
+          src="/Updated Primary Logo.png"
           alt="Formula14"
           width={0}
           height={0}
