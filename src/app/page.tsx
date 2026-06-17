@@ -52,8 +52,8 @@ export default function Home() {
         )}
       </div>
 
-      {/* Centred logo */}
-      <div className="relative h-72 w-[460px] max-w-[85vw]">
+      {/* Centred logo — large */}
+      <div className="relative h-[70vh] w-[90vw] max-w-[1100px]">
         <Image
           src="/Logo.png"
           alt="Formula14"
