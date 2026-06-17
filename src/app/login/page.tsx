@@ -3,12 +3,13 @@
 import Image from 'next/image'
 import { signIn } from 'next-auth/react'
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import LoginTransition from '@/components/LoginTransition'
+
 
 export default function LoginPage() {
-  const router = useRouter()
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [showTransition, setShowTransition] = useState(false)
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -24,21 +25,22 @@ export default function LoginPage() {
     if (result?.error) {
       setError('Invalid email or password.')
     } else {
-      router.push('/dashboard')
-      router.refresh()
+      setShowTransition(true)
     }
   }
 
+  if (showTransition) return <LoginTransition />
+
   return (
     <div
-      className="flex min-h-screen flex-col items-center justify-center px-4"
+      className="flex min-h-screen flex-col items-center px-4 py-10"
       style={{ backgroundColor: '#1a1a1a' }}
     >
-      <div className="relative mb-10 h-20 w-52">
-        <Image src="/Logo.png" alt="Formula14" fill className="object-contain" priority />
+      <div className="relative h-[70vh] w-[90vw] max-w-[1100px]">
+        <Image src="/Secondary Logo.png" alt="Formula14" fill className="object-contain" priority />
       </div>
 
-      <div className="w-full max-w-sm">
+      <div className="w-full max-w-sm mt-8">
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="mb-1.5 block text-sm font-medium text-gray-400">
