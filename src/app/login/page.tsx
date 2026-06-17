@@ -34,9 +34,15 @@ export default function LoginPage() {
       className="flex min-h-screen flex-col items-center justify-center px-4"
       style={{ backgroundColor: '#1a1a1a' }}
     >
-      <div className="relative mb-6 h-[70vh] w-[90vw] max-w-[1100px]">
-        <Image src="/Primary Logo.png" alt="Formula14" fill className="object-contain" priority />
-      </div>
+      <Image
+        src="/Primary Logo.png"
+        alt="Formula14"
+        width={0}
+        height={0}
+        sizes="90vw"
+        style={{ width: '90vw', maxWidth: '1100px', height: 'auto', marginBottom: '28px' }}
+        priority
+      />
 
       <div className="w-full max-w-sm">
         <form onSubmit={handleSubmit} className="space-y-4">
