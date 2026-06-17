@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm_config_cache=/tmp/npm-cache npm install *)",
+      "Bash(git add *)",
+      "Bash(git commit -m 'Build hub layout with sidebar navigation and all module pages *)",
+      "Bash(git push *)"
+    ]
+  }
+}
