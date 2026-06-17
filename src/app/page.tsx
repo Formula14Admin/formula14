@@ -55,7 +55,7 @@ export default function Home() {
       {/* Centred logo — large */}
       <div className="relative h-[70vh] w-[90vw] max-w-[1100px]">
         <Image
-          src="/Logo.png"
+          src="/Coming Soon Logo.png"
           alt="Formula14"
           fill
           className="object-contain"
