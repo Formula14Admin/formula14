@@ -3,6 +3,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { signOut, useSession } from 'next-auth/react'
 import {
   IconLayoutDashboard,
   IconCalendar,
@@ -13,6 +14,7 @@ import {
   IconId,
   IconSchool,
   IconNotebook,
+  IconLogout,
 } from '@tabler/icons-react'
 
 const NAV = [
@@ -44,6 +46,7 @@ const NAV = [
 
 export default function Sidebar() {
   const pathname = usePathname()
+  const { data: session } = useSession()
 
   return (
     <aside
@@ -100,6 +103,22 @@ export default function Sidebar() {
           </div>
         ))}
       </nav>
+
+      {/* Footer */}
+      <div className="border-t border-white/10 p-3">
+        {session?.user?.email && (
+          <p className="mb-1 truncate px-3 text-xs text-gray-500">
+            {session.user.email}
+          </p>
+        )}
+        <button
+          onClick={() => signOut({ callbackUrl: '/login' })}
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-gray-400 transition-colors hover:bg-white/[0.06] hover:text-gray-100"
+        >
+          <IconLogout size={18} strokeWidth={1.75} />
+          Sign out
+        </button>
+      </div>
     </aside>
   )
 }
