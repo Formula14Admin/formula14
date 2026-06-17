@@ -1,8 +1,715 @@
+'use client'
+
+import { useState, useRef, useEffect } from 'react'
+import {
+  IconChevronLeft,
+  IconChevronRight,
+  IconX,
+  IconTrash,
+  IconEdit,
+  IconPlus,
+  IconCheck,
+} from '@tabler/icons-react'
+
+// ── Grid constants ─────────────────────────────────────────────────────────────
+const START_H  = 6
+const END_H    = 21
+const SLOT_PX  = 48                          // px per 30-min slot
+const TOTAL_PX = (END_H - START_H) * 2 * SLOT_PX  // 1440px
+
+// ── Spaces ─────────────────────────────────────────────────────────────────────
+const SPACES = [
+  { id: 'primary',   label: 'Primary Station',  color: '#6BA3D6', light: '#e8f1fb' },
+  { id: 'secondary', label: 'Secondary Station', color: '#3B6D11', light: '#eaf3de' },
+  { id: 'shooting',  label: 'Shooting Bay',      color: '#854F0B', light: '#faeeda' },
+  { id: 'meeting',   label: 'Meeting Room',      color: '#534AB7', light: '#EEEDFE' },
+] as const
+
+type SpaceId = typeof SPACES[number]['id']
+
+// ── Session types per space ────────────────────────────────────────────────────
+const SESSION_TYPES: Record<SpaceId, string[]> = {
+  primary:   ['Individual Work Out', 'Small Group Session', 'Program', 'Team Training', 'Casual Shooting'],
+  secondary: ['Individual Work Out', 'Small Group Session', 'Program', 'Team Training', 'Casual Shooting'],
+  shooting:  ['Volume Shooting'],
+  meeting:   ['Coach Meeting', 'Film Review', 'Goal Setting', 'Meeting (General)', 'Parent Meeting', 'Player Meeting', 'Team Meeting'],
+}
+
+const ATHLETES = [
+  'Liam Carter', 'Jordan Williams', 'Aisha Thompson', 'Marcus Davies',
+  'Devon Knox', 'Kai Okafor', 'Tyler Ross', 'Priya Mehta', 'Sam Liu', 'Zara Obi',
+]
+
+// ── Types ──────────────────────────────────────────────────────────────────────
+type Booking = {
+  id: string
+  date: string
+  spaceId: SpaceId
+  startMins: number
+  duration: number
+  sessionType: string
+  athletes: string[]
+  coach: 'matt' | 'jade'
+}
+
+type Modal =
+  | null
+  | { kind: 'add';  spaceId: SpaceId | null; startMins: number; date: string }
+  | { kind: 'view'; booking: Booking }
+  | { kind: 'edit'; booking: Booking }
+
+// ── Date helpers ───────────────────────────────────────────────────────────────
+function ds(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+}
+function shift(d: Date, n: number): Date {
+  const r = new Date(d); r.setDate(r.getDate() + n); return r
+}
+function monday(d: Date): Date {
+  const day = d.getDay(); return shift(d, -((day + 6) % 7))
+}
+function parse(s: string): Date {
+  return new Date(s + 'T12:00:00')
+}
+
+// ── Time helpers ───────────────────────────────────────────────────────────────
+function fmtTime(mins: number): string {
+  const h = Math.floor(mins / 60), m = mins % 60
+  return `${h % 12 || 12}:${String(m).padStart(2,'0')} ${h >= 12 ? 'PM' : 'AM'}`
+}
+function fmtDur(mins: number): string {
+  const h = Math.floor(mins / 60), m = mins % 60
+  if (!m) return h === 1 ? '1 hr' : `${h} hrs`
+  if (!h) return `${m} min`
+  return `${h} hr ${m} min`
+}
+function toY(mins: number): number {
+  return ((mins - START_H * 60) / 30) * SLOT_PX
+}
+function fromY(y: number, containerH: number): number {
+  const clamped = Math.max(0, Math.min(containerH, y))
+  return Math.round(((clamped / SLOT_PX) * 30 + START_H * 60) / 30) * 30
+}
+function nowMins(): number {
+  const n = new Date(); return n.getHours() * 60 + n.getMinutes()
+}
+function uid(): string {
+  return Math.random().toString(36).slice(2, 9)
+}
+
+// ── Sample bookings ────────────────────────────────────────────────────────────
+function makeSamples(today: string): Booking[] {
+  const dt = parse(today)
+  const yd  = ds(shift(dt, -1))
+  const d2  = ds(shift(dt, -2))
+  const tm  = ds(shift(dt,  1))
+  const d2f = ds(shift(dt,  2))
+  return [
+    { id:'b1',  date:today, spaceId:'primary',   startMins:7*60,     duration:60,  sessionType:'Individual Work Out', athletes:['Liam Carter'],                                              coach:'matt' },
+    { id:'b2',  date:today, spaceId:'primary',   startMins:8*60+30,  duration:90,  sessionType:'Small Group Session', athletes:['Jordan Williams','Aisha Thompson','Devon Knox'],             coach:'matt' },
+    { id:'b3',  date:today, spaceId:'secondary', startMins:9*60,     duration:120, sessionType:'Team Training',       athletes:['Liam Carter','Jordan Williams','Marcus Davies','Priya Mehta','Tyler Ross'], coach:'jade' },
+    { id:'b4',  date:today, spaceId:'primary',   startMins:11*60,    duration:60,  sessionType:'Program',             athletes:['Marcus Davies'],                                             coach:'matt' },
+    { id:'b5',  date:today, spaceId:'secondary', startMins:14*60,    duration:90,  sessionType:'Small Group Session', athletes:['Aisha Thompson','Kai Okafor','Sam Liu'],                     coach:'jade' },
+    { id:'b6',  date:today, spaceId:'shooting',  startMins:16*60+30, duration:60,  sessionType:'Volume Shooting',     athletes:['Devon Knox'],                                               coach:'matt' },
+    { id:'b7',  date:today, spaceId:'meeting',   startMins:17*60,    duration:60,  sessionType:'Coach Meeting',       athletes:[],                                                           coach:'matt' },
+    { id:'b8',  date:today, spaceId:'primary',   startMins:18*60,    duration:90,  sessionType:'Team Training',       athletes:['Liam Carter','Jordan Williams','Aisha Thompson','Tyler Ross','Zara Obi'], coach:'matt' },
+    { id:'b9',  date:yd,   spaceId:'primary',   startMins:9*60,     duration:60,  sessionType:'Individual Work Out', athletes:['Tyler Ross'],                                               coach:'jade' },
+    { id:'b10', date:yd,   spaceId:'meeting',   startMins:15*60,    duration:60,  sessionType:'Film Review',         athletes:['Jordan Williams','Marcus Davies'],                          coach:'matt' },
+    { id:'b11', date:d2,   spaceId:'secondary', startMins:10*60,    duration:90,  sessionType:'Program',             athletes:['Priya Mehta','Sam Liu'],                                    coach:'matt' },
+    { id:'b12', date:d2,   spaceId:'shooting',  startMins:14*60,    duration:60,  sessionType:'Volume Shooting',     athletes:['Kai Okafor'],                                              coach:'jade' },
+    { id:'b13', date:tm,   spaceId:'primary',   startMins:8*60,     duration:90,  sessionType:'Small Group Session', athletes:['Liam Carter','Jordan Williams','Aisha Thompson'],           coach:'matt' },
+    { id:'b14', date:tm,   spaceId:'meeting',   startMins:13*60,    duration:60,  sessionType:'Goal Setting',        athletes:['Devon Knox'],                                               coach:'jade' },
+    { id:'b15', date:d2f,  spaceId:'secondary', startMins:11*60,    duration:60,  sessionType:'Team Training',       athletes:['Tyler Ross','Priya Mehta','Zara Obi'],                     coach:'matt' },
+  ]
+}
+
+// ── Page ───────────────────────────────────────────────────────────────────────
 export default function BookingsPage() {
+  const today = ds(new Date())
+
+  const [bookings, setBookings] = useState<Booking[]>(() => makeSamples(today))
+  const [anchor,   setAnchor]   = useState<Date>(() => new Date())
+  const [view,     setView]     = useState<'day' | 'week'>('day')
+  const [modal,    setModal]    = useState<Modal>(null)
+  const [nowY,     setNowY]     = useState(() => toY(nowMins()))
+
+  const gridRef = useRef<HTMLDivElement>(null)
+
+  // Tick NOW line every minute
+  useEffect(() => {
+    const id = setInterval(() => setNowY(toY(nowMins())), 60_000)
+    return () => clearInterval(id)
+  }, [])
+
+  // Scroll to current time on mount
+  useEffect(() => {
+    if (gridRef.current) gridRef.current.scrollTop = Math.max(0, nowY - 200)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Visible dates
+  const visibleDates = view === 'day'
+    ? [ds(anchor)]
+    : Array.from({ length: 7 }, (_, i) => ds(shift(monday(anchor), i)))
+
+  const isTodayVisible = visibleDates.includes(today)
+
+  // Toolbar title
+  const title = view === 'day'
+    ? parse(ds(anchor)).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+    : (() => {
+        const mon = monday(anchor), sun = shift(mon, 6)
+        return `${mon.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })} – ${sun.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}`
+      })()
+
+  function handleColClick(e: React.MouseEvent<HTMLDivElement>, spaceId: SpaceId | null, date: string) {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const raw  = fromY(e.clientY - rect.top, TOTAL_PX)
+    const clamped = Math.max(START_H * 60, Math.min((END_H) * 60 - 30, raw))
+    setModal({ kind: 'add', spaceId, startMins: clamped, date })
+  }
+
+  function handleSave(data: Omit<Booking, 'id'> & { id?: string }) {
+    if (data.id) {
+      setBookings(prev => prev.map(b => b.id === data.id ? { ...data, id: data.id! } as Booking : b))
+    } else {
+      setBookings(prev => [...prev, { ...data, id: uid() } as Booking])
+    }
+    setModal(null)
+  }
+
+  function handleDelete(id: string) {
+    setBookings(prev => prev.filter(b => b.id !== id))
+    setModal(null)
+  }
+
+  const hours = Array.from({ length: END_H - START_H }, (_, i) => START_H + i)
+
   return (
-    <div className="p-8">
-      <h1 className="text-2xl font-bold text-gray-900">Bookings</h1>
-      <p className="mt-1 text-sm text-gray-500">Schedule and manage court bookings</p>
+    <div className="flex h-full flex-col overflow-hidden">
+      {/* ── Toolbar ── */}
+      <div className="flex shrink-0 items-center gap-3 border-b border-gray-200 bg-white px-6 py-3">
+        <button
+          onClick={() => setAnchor(new Date())}
+          className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-600 transition hover:bg-gray-50"
+        >
+          Today
+        </button>
+        <div className="flex items-center">
+          <button
+            onClick={() => setAnchor(d => shift(d, view === 'day' ? -1 : -7))}
+            className="rounded p-1.5 text-gray-500 transition hover:bg-gray-100"
+          >
+            <IconChevronLeft size={18} />
+          </button>
+          <button
+            onClick={() => setAnchor(d => shift(d, view === 'day' ? 1 : 7))}
+            className="rounded p-1.5 text-gray-500 transition hover:bg-gray-100"
+          >
+            <IconChevronRight size={18} />
+          </button>
+        </div>
+        <span className="text-sm font-semibold text-gray-800">{title}</span>
+
+        <div className="ml-auto flex items-center gap-2">
+          {/* View toggle */}
+          <div className="flex items-center gap-0.5 rounded-lg bg-gray-100 p-1">
+            {(['day', 'week'] as const).map(v => (
+              <button
+                key={v}
+                onClick={() => setView(v)}
+                className={`rounded-md px-3 py-1 text-sm font-medium capitalize transition ${
+                  view === v
+                    ? 'bg-white text-gray-800 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {v}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => setModal({ kind: 'add', spaceId: null, startMins: 9 * 60, date: ds(anchor) })}
+            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold text-white transition hover:opacity-90"
+            style={{ backgroundColor: '#6BA3D6' }}
+          >
+            <IconPlus size={16} />
+            New Booking
+          </button>
+        </div>
+      </div>
+
+      {/* ── Calendar ── */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white">
+
+        {/* Column headers */}
+        <div className="flex shrink-0 border-b border-gray-100">
+          {/* Time gutter header */}
+          <div className="w-16 shrink-0 border-r border-gray-100" />
+
+          {view === 'day' ? (
+            SPACES.map((sp, i) => (
+              <div
+                key={sp.id}
+                className="flex flex-1 items-center justify-center gap-2 py-3"
+                style={{ borderLeft: i === 0 ? 'none' : '1px solid #f0f0f0' }}
+              >
+                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: sp.color }} />
+                <span className="text-xs font-semibold text-gray-700">{sp.label}</span>
+              </div>
+            ))
+          ) : (
+            visibleDates.map((d, i) => {
+              const dt = parse(d)
+              const dow = dt.toLocaleDateString('en-AU', { weekday: 'short' })
+              const dm  = dt.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
+              const isToday = d === today
+              return (
+                <div
+                  key={d}
+                  className="flex flex-1 flex-col items-center py-2"
+                  style={{ borderLeft: i === 0 ? 'none' : '1px solid #f0f0f0' }}
+                >
+                  <span className={`text-[11px] font-medium ${isToday ? 'text-[#6BA3D6]' : 'text-gray-400'}`}>
+                    {dow}
+                  </span>
+                  <span className={`text-sm font-bold ${isToday ? 'text-[#6BA3D6]' : 'text-gray-700'}`}>
+                    {dm}
+                  </span>
+                </div>
+              )
+            })
+          )}
+        </div>
+
+        {/* Scrollable grid */}
+        <div ref={gridRef} className="flex flex-1 overflow-y-auto">
+
+          {/* Time labels */}
+          <div className="w-16 shrink-0 select-none border-r border-gray-100">
+            {hours.map(h => (
+              <div key={h} className="relative" style={{ height: SLOT_PX * 2 }}>
+                <span
+                  className="absolute right-2 top-0 -translate-y-1/2 text-[11px] leading-none text-gray-400"
+                  style={{ top: 0 }}
+                >
+                  {h === 12 ? '12pm' : h > 12 ? `${h-12}pm` : `${h}am`}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {/* Grid + columns */}
+          <div className="relative flex flex-1" style={{ minHeight: TOTAL_PX }}>
+
+            {/* Horizontal grid lines (pointer-events:none) */}
+            <div className="pointer-events-none absolute inset-0">
+              {Array.from({ length: (END_H - START_H) * 2 }, (_, i) => (
+                <div
+                  key={i}
+                  style={{ height: SLOT_PX, borderTop: `1px solid ${i % 2 === 0 ? '#e5e7eb' : '#f3f4f6'}` }}
+                />
+              ))}
+            </div>
+
+            {/* NOW line */}
+            {isTodayVisible && nowY >= 0 && nowY <= TOTAL_PX && (
+              <div
+                className="pointer-events-none absolute left-0 right-0 z-20 flex items-center"
+                style={{ top: nowY }}
+              >
+                <span className="h-2 w-2 shrink-0 rounded-full bg-red-500" style={{ marginLeft: -4 }} />
+                <div className="h-px flex-1 bg-red-500 opacity-80" />
+              </div>
+            )}
+
+            {/* Space / day columns */}
+            {view === 'day' ? (
+              SPACES.map((sp, i) => {
+                const colBookings = bookings.filter(b => b.date === visibleDates[0] && b.spaceId === sp.id)
+                return (
+                  <div
+                    key={sp.id}
+                    className="relative flex-1 cursor-crosshair"
+                    style={{ borderLeft: i === 0 ? 'none' : '1px solid #f0f0f0', height: TOTAL_PX }}
+                    onClick={e => {
+                      if ((e.target as HTMLElement).closest('[data-booking]')) return
+                      handleColClick(e, sp.id, visibleDates[0])
+                    }}
+                  >
+                    {colBookings.map(b => (
+                      <BookingBlock
+                        key={b.id}
+                        booking={b}
+                        color={sp.color}
+                        light={sp.light}
+                        compact={false}
+                        onClick={() => setModal({ kind: 'view', booking: b })}
+                      />
+                    ))}
+                  </div>
+                )
+              })
+            ) : (
+              visibleDates.map((d, i) => {
+                const isToday = d === today
+                const colBookings = bookings.filter(b => b.date === d)
+                return (
+                  <div
+                    key={d}
+                    className="relative flex-1 cursor-crosshair"
+                    style={{
+                      borderLeft: i === 0 ? 'none' : '1px solid #f0f0f0',
+                      height: TOTAL_PX,
+                      backgroundColor: isToday ? 'rgba(107,163,214,0.03)' : 'transparent',
+                    }}
+                    onClick={e => {
+                      if ((e.target as HTMLElement).closest('[data-booking]')) return
+                      handleColClick(e, null, d)
+                    }}
+                  >
+                    {colBookings.map(b => {
+                      const sp = SPACES.find(s => s.id === b.spaceId)!
+                      return (
+                        <BookingBlock
+                          key={b.id}
+                          booking={b}
+                          color={sp.color}
+                          light={sp.light}
+                          compact
+                          onClick={() => setModal({ kind: 'view', booking: b })}
+                        />
+                      )
+                    })}
+                  </div>
+                )
+              })
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Modal ── */}
+      {modal && (
+        <BookingModal
+          modal={modal}
+          today={today}
+          onClose={() => setModal(null)}
+          onSave={handleSave}
+          onDelete={handleDelete}
+          onEdit={b => setModal({ kind: 'edit', booking: b })}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── Booking Block ──────────────────────────────────────────────────────────────
+function BookingBlock({
+  booking, color, light, compact, onClick,
+}: {
+  booking: Booking
+  color: string
+  light: string
+  compact: boolean
+  onClick: () => void
+}) {
+  const top    = toY(booking.startMins)
+  const height = Math.max(SLOT_PX / 2, (booking.duration / 30) * SLOT_PX)
+  const coach  = booking.coach === 'matt' ? 'Y' : 'J'
+
+  const athleteStr = booking.athletes.length === 0 ? '' :
+    booking.athletes.length <= 2
+      ? booking.athletes.map(a => a.split(' ')[0]).join(', ')
+      : `${booking.athletes.slice(0, 2).map(a => a.split(' ')[0]).join(', ')} +${booking.athletes.length - 2}`
+
+  const typeAbbr = booking.sessionType
+    .split(' ')
+    .filter(w => !['Session', 'Work', 'Out', 'Meeting', 'Review', 'Training', 'Setting', 'General', 'Shooting'].includes(w))
+    .map(w => w[0])
+    .join('')
+
+  return (
+    <div
+      data-booking="1"
+      onClick={e => { e.stopPropagation(); onClick() }}
+      className="absolute left-1 right-1 cursor-pointer overflow-hidden rounded-md border transition-opacity hover:opacity-80"
+      style={{ top, height, backgroundColor: light, borderColor: color + '50', borderLeftWidth: 3, borderLeftColor: color }}
+    >
+      <div className="relative px-1.5 pt-1">
+        <p className="truncate text-[11px] font-bold leading-tight" style={{ color }}>
+          {compact ? typeAbbr || booking.sessionType.slice(0, 3) : booking.sessionType}
+        </p>
+        {!compact && height >= 52 && (
+          <>
+            {athleteStr && (
+              <p className="mt-0.5 truncate text-[10px]" style={{ color: color + 'cc' }}>
+                {athleteStr}
+              </p>
+            )}
+          </>
+        )}
+        {!compact && (
+          <span
+            className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-black text-white"
+            style={{ backgroundColor: color }}
+          >
+            {coach}
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── Booking Modal ──────────────────────────────────────────────────────────────
+function BookingModal({
+  modal, today, onClose, onSave, onDelete, onEdit,
+}: {
+  modal: NonNullable<Modal>
+  today: string
+  onClose: () => void
+  onSave: (b: Omit<Booking, 'id'> & { id?: string }) => void
+  onDelete: (id: string) => void
+  onEdit: (b: Booking) => void
+}) {
+  const isView = modal.kind === 'view'
+  const src    = (modal.kind === 'edit' || modal.kind === 'view') ? modal.booking : null
+
+  const [spaceId,     setSpaceId]     = useState<SpaceId>(modal.kind === 'add' ? (modal.spaceId ?? 'primary') : src!.spaceId)
+  const [date,        setDate]        = useState(modal.kind === 'add' ? modal.date : src!.date)
+  const [startMins,   setStartMins]   = useState(modal.kind === 'add' ? modal.startMins : src!.startMins)
+  const [duration,    setDuration]    = useState(modal.kind === 'add' ? 60 : src!.duration)
+  const [sessionType, setSessionType] = useState(modal.kind === 'add' ? SESSION_TYPES[modal.spaceId ?? 'primary'][0] : src!.sessionType)
+  const [athletes,    setAthletes]    = useState<string[]>(modal.kind === 'add' ? [] : src!.athletes)
+  const [coach,       setCoach]       = useState<'matt' | 'jade'>(modal.kind === 'add' ? 'matt' : src!.coach)
+
+  function handleSpaceChange(id: SpaceId) {
+    setSpaceId(id)
+    setSessionType(SESSION_TYPES[id][0])
+  }
+
+  function toggleAthlete(name: string) {
+    setAthletes(prev => prev.includes(name) ? prev.filter(a => a !== name) : [...prev, name])
+  }
+
+  function handleSave() {
+    onSave({ id: src?.id, date, spaceId, startMins, duration, sessionType, athletes, coach })
+  }
+
+  const space = SPACES.find(s => s.id === spaceId)!
+  const endMins = startMins + duration
+
+  const INPUT  = 'w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 outline-none transition focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/40'
+  const LABEL  = 'mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-400'
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+      <div className="relative w-full max-w-md overflow-y-auto rounded-2xl bg-white shadow-2xl" style={{ maxHeight: 'calc(100vh - 64px)' }}>
+        <div className="sticky top-0 z-10 flex items-start justify-between bg-white px-6 pt-6 pb-4 border-b border-gray-100">
+          <div>
+            <h2 className="text-base font-bold text-gray-900">
+              {isView ? 'Session Details' : modal.kind === 'edit' ? 'Edit Booking' : 'New Booking'}
+            </h2>
+            {isView && (
+              <p className="mt-0.5 text-sm text-gray-500">
+                {parse(src!.date).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })}
+                {src!.date === today ? ' · Today' : ''}
+              </p>
+            )}
+          </div>
+          <div className="flex items-center gap-1">
+            {isView && (
+              <>
+                <button
+                  onClick={() => onEdit(src!)}
+                  className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-sm font-medium text-gray-600 transition hover:bg-gray-100"
+                >
+                  <IconEdit size={14} /> Edit
+                </button>
+                <button
+                  onClick={() => onDelete(src!.id)}
+                  className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-sm font-medium text-red-500 transition hover:bg-red-50"
+                >
+                  <IconTrash size={14} /> Delete
+                </button>
+              </>
+            )}
+            <button onClick={onClose} className="rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100">
+              <IconX size={18} />
+            </button>
+          </div>
+        </div>
+
+        <div className="px-6 py-5">
+          {/* ── View mode ── */}
+          {isView ? (
+            <div className="space-y-4">
+              <div className="flex items-center gap-3 rounded-xl p-3.5" style={{ backgroundColor: space.light }}>
+                <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: space.color }} />
+                <div>
+                  <p className="text-sm font-bold leading-snug" style={{ color: space.color }}>{src!.sessionType}</p>
+                  <p className="text-xs text-gray-500">{space.label}</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <p className="text-xs text-gray-400">Time</p>
+                  <p className="font-semibold text-gray-800">{fmtTime(src!.startMins)}–{fmtTime(endMins)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-400">Duration</p>
+                  <p className="font-semibold text-gray-800">{fmtDur(src!.duration)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-400">Coach</p>
+                  <p className="font-semibold text-gray-800">{src!.coach === 'matt' ? 'Matt (You)' : 'Jade'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-400">Athletes</p>
+                  <p className="font-semibold text-gray-800">
+                    {src!.athletes.length ? src!.athletes.join(', ') : '—'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* ── Add / Edit form ── */
+            <div className="space-y-4">
+              {/* Space */}
+              <div>
+                <label className={LABEL}>Space</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {SPACES.map(sp => (
+                    <button
+                      key={sp.id}
+                      type="button"
+                      onClick={() => handleSpaceChange(sp.id)}
+                      className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-left text-xs font-semibold transition ${
+                        spaceId === sp.id
+                          ? 'border-transparent text-white'
+                          : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
+                      }`}
+                      style={spaceId === sp.id ? { backgroundColor: sp.color } : {}}
+                    >
+                      <span
+                        className="h-2 w-2 shrink-0 rounded-full"
+                        style={{ backgroundColor: spaceId === sp.id ? 'rgba(255,255,255,0.7)' : sp.color }}
+                      />
+                      {sp.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Date + Start time */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={LABEL}>Date</label>
+                  <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INPUT} />
+                </div>
+                <div>
+                  <label className={LABEL}>Start time</label>
+                  <select value={startMins} onChange={e => setStartMins(Number(e.target.value))} className={INPUT}>
+                    {Array.from({ length: (END_H - START_H) * 2 }, (_, i) => {
+                      const m = START_H * 60 + i * 30
+                      return <option key={m} value={m}>{fmtTime(m)}</option>
+                    })}
+                  </select>
+                </div>
+              </div>
+
+              {/* Session type + duration */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={LABEL}>Session type</label>
+                  <select value={sessionType} onChange={e => setSessionType(e.target.value)} className={INPUT}>
+                    {SESSION_TYPES[spaceId].map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className={LABEL}>Duration</label>
+                  <select value={duration} onChange={e => setDuration(Number(e.target.value))} className={INPUT}>
+                    {[30, 45, 60, 90, 120, 150, 180].map(d => (
+                      <option key={d} value={d}>{fmtDur(d)}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Coach */}
+              <div>
+                <label className={LABEL}>Coach</label>
+                <div className="flex gap-2">
+                  {([{ id: 'matt', label: 'Matt (You)' }, { id: 'jade', label: 'Jade' }] as const).map(c => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => setCoach(c.id)}
+                      className={`flex-1 rounded-lg border py-2 text-sm font-semibold transition ${
+                        coach === c.id
+                          ? 'border-[#6BA3D6] bg-[#6BA3D6] text-white'
+                          : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                      }`}
+                    >
+                      {c.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Athletes */}
+              <div>
+                <label className={LABEL}>
+                  Athletes
+                  {athletes.length > 0 && (
+                    <span className="ml-1.5 rounded-full bg-[#6BA3D6] px-1.5 py-0.5 text-[10px] text-white">
+                      {athletes.length}
+                    </span>
+                  )}
+                </label>
+                <div className="flex max-h-36 flex-wrap gap-1.5 overflow-y-auto rounded-lg border border-gray-200 p-2.5">
+                  {ATHLETES.map(a => {
+                    const sel = athletes.includes(a)
+                    return (
+                      <button
+                        key={a}
+                        type="button"
+                        onClick={() => toggleAthlete(a)}
+                        className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition ${
+                          sel ? 'text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}
+                        style={sel ? { backgroundColor: '#6BA3D6' } : {}}
+                      >
+                        {sel && <IconCheck size={10} />}
+                        {a}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  className="rounded-lg px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+                  style={{ backgroundColor: '#6BA3D6' }}
+                >
+                  {modal.kind === 'edit' ? 'Save changes' : 'Create booking'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
