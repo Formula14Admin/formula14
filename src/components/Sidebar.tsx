@@ -54,16 +54,16 @@ export default function Sidebar() {
       style={{ backgroundColor: '#1a1a1a' }}
     >
       {/* Logo */}
-      <div className="flex items-center px-5 py-6">
-        <div className="relative h-10 w-36">
-          <Image
-            src="/Logo.png"
-            alt="Formula14"
-            fill
-            className="object-contain object-left"
-            priority
-          />
-        </div>
+      <div className="px-4 py-5">
+        <Image
+          src="/Primary Logo.png"
+          alt="Formula14"
+          width={0}
+          height={0}
+          sizes="224px"
+          style={{ width: '100%', height: 'auto' }}
+          priority
+        />
       </div>
 
       <div className="mx-4 border-b border-white/10" />
