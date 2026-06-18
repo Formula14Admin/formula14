@@ -1102,80 +1102,15 @@ function BookingModal({
                 </div>
               </div>
 
-              {/* Row 1: Session Type | Date */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={LABEL}>Session type</label>
-                  <SelectPicker
-                    value={sessionType}
-                    onChange={setSessionType}
-                    accentColor={accentColor}
-                    options={[
-                      { value: '', label: 'Select A Session Type', muted: true },
-                      ...SESSION_TYPES[spaceId].map(t => ({ value: t, label: t })),
-                    ]}
-                  />
-                </div>
-                <div>
-                  <label className={LABEL}>Date</label>
-                  <DatePicker value={date} onChange={setDate} accentColor={accentColor} />
-                </div>
-              </div>
-
-              {/* Row 2: Start Time | Finish Time */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={LABEL}>Start time</label>
-                  <TimePicker
-                    value={startMins}
-                    onChange={s => { setStartMins(s); if (finishMins <= s) setFinishMins(s + 60) }}
-                    options={Array.from({ length: 95 }, (_, i) => i * 15)}
-                    accentColor={accentColor}
-                  />
-                </div>
-                <div>
-                  <label className={LABEL}>Finish time</label>
-                  <TimePicker
-                    value={finishMins}
-                    onChange={setFinishMins}
-                    options={Array.from({ length: 95 }, (_, i) => (i + 1) * 15).filter(m => m > startMins)}
-                    accentColor={accentColor}
-                  />
-                </div>
-              </div>
-
-              {/* Row 3: Coach | Repeat */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={LABEL}>Coach</label>
-                  <SelectPicker
-                    value={coach}
-                    onChange={v => setCoach(v as 'matt' | 'jade' | 'other' | '')}
-                    accentColor={accentColor}
-                    options={[
-                      { value: '', label: 'No Coach Required', muted: true },
-                      { value: 'matt', label: 'Matt' },
-                      { value: 'jade', label: 'Jade' },
-                      { value: 'other', label: 'Other' },
-                    ]}
-                  />
-                </div>
-                <div>
-                  {bookingType === 'casual' ? (
-                    <>
-                      <label className={LABEL}>Number of Athletes</label>
-                      <SelectPicker
-                        value={numAthletes}
-                        onChange={setNumAthletes}
-                        accentColor={accentColor}
-                        options={[
-                          { value: '', label: 'Select Number Of Athletes', muted: true },
-                          ...Array.from({ length: 10 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) })),
-                        ]}
-                      />
-                    </>
-                  ) : (
-                    <>
+              {bookingType === 'unavailable' ? (
+                <>
+                  {/* Unavailable Row 1: Date | Repeat */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className={LABEL}>Date</label>
+                      <DatePicker value={date} onChange={setDate} accentColor={accentColor} />
+                    </div>
+                    <div>
                       <label className={LABEL}>Repeat</label>
                       <SelectPicker
                         value={repeat}
@@ -1189,66 +1124,207 @@ function BookingModal({
                           { value: 'yearly', label: 'Yearly' },
                         ]}
                       />
-                    </>
-                  )}
-                </div>
-              </div>
-
-              {/* Row 4: Repeat details — only shown when repeat is set and not casual */}
-              {bookingType !== 'casual' && repeat !== 'none' && (
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className={LABEL}>Ends on</label>
-                    <input
-                      type="date"
-                      value={repeatUntil}
-                      min={date}
-                      onChange={e => setRepeatUntil(e.target.value)}
-                      className={INPUT}
-                      style={{ textAlign: 'center' }}
-                    />
-                  </div>
-                  <div>
-                    <label className={LABEL}>Sessions</label>
-                    <div className="flex h-10 w-full items-center justify-center rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-500">
-                      {repeatUntil
-                        ? `${occurrenceDates(date, repeat, repeatUntil).length} sessions`
-                        : '—'}
                     </div>
                   </div>
-                </div>
-              )}
 
-              {/* Athletes */}
-              <div>
-                <label className={LABEL}>
-                  Athletes
-                  {athletes.length > 0 && (
-                    <span className="ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] text-white" style={{ backgroundColor: accentColor }}>
-                      {athletes.length}
-                    </span>
+                  {/* Unavailable Row 2: Start Time | Finish Time */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className={LABEL}>Start time</label>
+                      <TimePicker
+                        value={startMins}
+                        onChange={s => { setStartMins(s); if (finishMins <= s) setFinishMins(s + 60) }}
+                        options={Array.from({ length: 95 }, (_, i) => i * 15)}
+                        accentColor={accentColor}
+                      />
+                    </div>
+                    <div>
+                      <label className={LABEL}>Finish time</label>
+                      <TimePicker
+                        value={finishMins}
+                        onChange={setFinishMins}
+                        options={Array.from({ length: 95 }, (_, i) => (i + 1) * 15).filter(m => m > startMins)}
+                        accentColor={accentColor}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Repeat details for unavailable */}
+                  {repeat !== 'none' && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className={LABEL}>Ends on</label>
+                        <input
+                          type="date"
+                          value={repeatUntil}
+                          min={date}
+                          onChange={e => setRepeatUntil(e.target.value)}
+                          className={INPUT}
+                          style={{ textAlign: 'center' }}
+                        />
+                      </div>
+                      <div>
+                        <label className={LABEL}>Sessions</label>
+                        <div className="flex h-10 w-full items-center justify-center rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-500">
+                          {repeatUntil
+                            ? `${occurrenceDates(date, repeat, repeatUntil).length} sessions`
+                            : '—'}
+                        </div>
+                      </div>
+                    </div>
                   )}
-                </label>
-                <div className="flex max-h-36 flex-wrap gap-1.5 overflow-y-auto rounded-lg border border-gray-200 p-2.5">
-                  {ATHLETES.map(a => {
-                    const sel = athletes.includes(a)
-                    return (
-                      <button
-                        key={a}
-                        type="button"
-                        onClick={() => toggleAthlete(a)}
-                        className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition ${
-                          sel ? 'text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                        }`}
-                        style={sel ? { backgroundColor: accentColor } : {}}
-                      >
-                        {sel && <IconCheck size={10} />}
-                        {a}
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
+                </>
+              ) : (
+                <>
+                  {/* Row 1: Session Type | Date */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className={LABEL}>Session type</label>
+                      <SelectPicker
+                        value={sessionType}
+                        onChange={setSessionType}
+                        accentColor={accentColor}
+                        options={[
+                          { value: '', label: 'Select A Session Type', muted: true },
+                          ...SESSION_TYPES[spaceId].map(t => ({ value: t, label: t })),
+                        ]}
+                      />
+                    </div>
+                    <div>
+                      <label className={LABEL}>Date</label>
+                      <DatePicker value={date} onChange={setDate} accentColor={accentColor} />
+                    </div>
+                  </div>
+
+                  {/* Row 2: Start Time | Finish Time */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className={LABEL}>Start time</label>
+                      <TimePicker
+                        value={startMins}
+                        onChange={s => { setStartMins(s); if (finishMins <= s) setFinishMins(s + 60) }}
+                        options={Array.from({ length: 95 }, (_, i) => i * 15)}
+                        accentColor={accentColor}
+                      />
+                    </div>
+                    <div>
+                      <label className={LABEL}>Finish time</label>
+                      <TimePicker
+                        value={finishMins}
+                        onChange={setFinishMins}
+                        options={Array.from({ length: 95 }, (_, i) => (i + 1) * 15).filter(m => m > startMins)}
+                        accentColor={accentColor}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Row 3: Coach | Repeat or Number of Athletes */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className={LABEL}>Coach</label>
+                      <SelectPicker
+                        value={coach}
+                        onChange={v => setCoach(v as 'matt' | 'jade' | 'other' | '')}
+                        accentColor={accentColor}
+                        options={[
+                          { value: '', label: 'No Coach Required', muted: true },
+                          { value: 'matt', label: 'Matt' },
+                          { value: 'jade', label: 'Jade' },
+                          { value: 'other', label: 'Other' },
+                        ]}
+                      />
+                    </div>
+                    <div>
+                      {bookingType === 'casual' ? (
+                        <>
+                          <label className={LABEL}>Number of Athletes</label>
+                          <SelectPicker
+                            value={numAthletes}
+                            onChange={setNumAthletes}
+                            accentColor={accentColor}
+                            options={[
+                              { value: '', label: 'Select Number Of Athletes', muted: true },
+                              ...Array.from({ length: 10 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) })),
+                            ]}
+                          />
+                        </>
+                      ) : (
+                        <>
+                          <label className={LABEL}>Repeat</label>
+                          <SelectPicker
+                            value={repeat}
+                            onChange={v => { setRepeat(v as typeof repeat); setRepeatUntil('') }}
+                            accentColor={accentColor}
+                            options={[
+                              { value: 'none', label: 'None' },
+                              { value: 'weekly', label: 'Weekly' },
+                              { value: 'fortnightly', label: 'Fortnightly' },
+                              { value: 'monthly', label: 'Monthly' },
+                              { value: 'yearly', label: 'Yearly' },
+                            ]}
+                          />
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Row 4: Repeat details — only shown when repeat is set and not casual */}
+                  {bookingType !== 'casual' && repeat !== 'none' && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className={LABEL}>Ends on</label>
+                        <input
+                          type="date"
+                          value={repeatUntil}
+                          min={date}
+                          onChange={e => setRepeatUntil(e.target.value)}
+                          className={INPUT}
+                          style={{ textAlign: 'center' }}
+                        />
+                      </div>
+                      <div>
+                        <label className={LABEL}>Sessions</label>
+                        <div className="flex h-10 w-full items-center justify-center rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-500">
+                          {repeatUntil
+                            ? `${occurrenceDates(date, repeat, repeatUntil).length} sessions`
+                            : '—'}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Athletes */}
+                  <div>
+                    <label className={LABEL}>
+                      Athletes
+                      {athletes.length > 0 && (
+                        <span className="ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] text-white" style={{ backgroundColor: accentColor }}>
+                          {athletes.length}
+                        </span>
+                      )}
+                    </label>
+                    <div className="flex max-h-36 flex-wrap gap-1.5 overflow-y-auto rounded-lg border border-gray-200 p-2.5">
+                      {ATHLETES.map(a => {
+                        const sel = athletes.includes(a)
+                        return (
+                          <button
+                            key={a}
+                            type="button"
+                            onClick={() => toggleAthlete(a)}
+                            className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition ${
+                              sel ? 'text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            }`}
+                            style={sel ? { backgroundColor: accentColor } : {}}
+                          >
+                            {sel && <IconCheck size={10} />}
+                            {a}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </>
+              )}
 
               {/* Actions */}
               {bookingType === 'casual' ? (
