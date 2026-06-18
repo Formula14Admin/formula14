@@ -1003,8 +1003,8 @@ function BookingModal({
           </div>
         ) : (
           <div className="sticky top-0 z-10">
-            <div className="relative flex items-center justify-center px-12" style={{ backgroundColor: '#6BA3D6', paddingTop: '8px', paddingBottom: '8px' }}>
-              <img src="/New Booking Header.svg" alt="New Booking" className="block h-full w-auto" style={{ maxHeight: '76px' }} />
+            <div className="relative flex items-center justify-center px-12" style={{ backgroundColor: '#6BA3D6', paddingTop: '4px', paddingBottom: '4px' }}>
+              <img src="/New Booking Header.svg" alt="New Booking" className="block h-full w-auto" style={{ maxHeight: '90px' }} />
               <button
                 onClick={onClose}
                 className="absolute right-3 top-3 rounded-lg p-1.5 text-white/70 transition hover:bg-white/20"
