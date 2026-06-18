@@ -944,6 +944,7 @@ function BookingModal({
   const [coach,       setCoach]       = useState<'matt' | 'jade' | 'other' | ''>(modal.kind === 'add' ? '' : src!.coach)
   const [repeat,      setRepeat]      = useState<'none' | 'weekly' | 'fortnightly' | 'monthly' | 'yearly'>('none')
   const [repeatUntil, setRepeatUntil] = useState('')
+  const [bookingType, setBookingType] = useState<'member' | 'casual'>('member')
 
   function handleSpaceChange(id: SpaceId) {
     setSpaceId(id)
@@ -1052,6 +1053,22 @@ function BookingModal({
           ) : (
             /* ── Add / Edit form ── */
             <div className="space-y-4">
+              {/* Booking type toggle */}
+              <div className="flex overflow-hidden rounded-xl border border-gray-200">
+                {(['member', 'casual'] as const).map((type, i) => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => setBookingType(type)}
+                    className={`flex-1 py-2.5 text-sm font-semibold transition ${i === 0 ? '' : 'border-l border-gray-200'}`}
+                    style={bookingType === type
+                      ? { backgroundColor: '#6BA3D6', color: 'white' }
+                      : { backgroundColor: 'white', color: '#6b7280' }}
+                  >
+                    {type === 'member' ? 'Member Booking' : 'Casual Booking'}
+                  </button>
+                ))}
+              </div>
               {/* Space */}
               <div>
                 <label className={LABEL}>Space</label>
