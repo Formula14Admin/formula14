@@ -1379,7 +1379,33 @@ function BookingModal({
                     </div>
                   )}
 
-                  {/* Athletes — shown per session type, instructions pending */}
+                  {/* Athletes */}
+                  {sessionType === 'Individual Work Out' && (
+                    <div>
+                      <label className={LABEL}>Athlete</label>
+                      <SelectPicker
+                        value={singleAthlete}
+                        onChange={v => { setSingleAthlete(v); if (v !== 'other') setCustomAthlete('') }}
+                        accentColor={accentColor}
+                        getPanelPosition={getAthletePanelStyle}
+                        options={[
+                          { value: '', label: 'Select Athlete', muted: true },
+                          ...[...ATHLETES].sort().map(a => ({ value: a, label: a })),
+                          { value: 'other', label: 'Other' },
+                        ]}
+                      />
+                      {singleAthlete === 'other' && (
+                        <input
+                          type="text"
+                          value={customAthlete}
+                          onChange={e => setCustomAthlete(e.target.value)}
+                          placeholder="Enter athlete name"
+                          className={`mt-2 ${INPUT}`}
+                          style={{ textAlign: 'center' }}
+                        />
+                      )}
+                    </div>
+                  )}
                 </>
               )}
 
