@@ -1154,14 +1154,7 @@ function BookingModal({
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <label className={LABEL}>Ends on</label>
-                        <input
-                          type="date"
-                          value={repeatUntil}
-                          min={date}
-                          onChange={e => setRepeatUntil(e.target.value)}
-                          className={INPUT}
-                          style={{ textAlign: 'center' }}
-                        />
+                        <DatePicker value={repeatUntil} onChange={setRepeatUntil} accentColor={accentColor} />
                       </div>
                       <div>
                         <label className={LABEL}>Sessions</label>
@@ -1273,14 +1266,7 @@ function BookingModal({
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <label className={LABEL}>Ends on</label>
-                        <input
-                          type="date"
-                          value={repeatUntil}
-                          min={date}
-                          onChange={e => setRepeatUntil(e.target.value)}
-                          className={INPUT}
-                          style={{ textAlign: 'center' }}
-                        />
+                        <DatePicker value={repeatUntil} onChange={setRepeatUntil} accentColor={accentColor} />
                       </div>
                       <div>
                         <label className={LABEL}>Sessions</label>
