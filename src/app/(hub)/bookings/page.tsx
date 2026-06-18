@@ -50,7 +50,7 @@ type Booking = {
   duration: number
   sessionType: string
   athletes: string[]
-  coach: 'matt' | 'jade'
+  coach: 'matt' | 'jade' | 'other' | ''
 }
 
 type Modal =
@@ -448,7 +448,7 @@ function BookingBlock({
 }) {
   const top    = toY(booking.startMins)
   const height = Math.max(SLOT_PX, (booking.duration / 15) * SLOT_PX)
-  const coach  = booking.coach === 'matt' ? 'Y' : 'J'
+  const coachBadge = booking.coach === 'matt' ? 'Y' : booking.coach === 'jade' ? 'J' : booking.coach === 'other' ? 'O' : null
 
   const athleteStr = booking.athletes.length === 0 ? '' :
     booking.athletes.length <= 2
@@ -477,12 +477,12 @@ function BookingBlock({
             {athleteStr}
           </p>
         )}
-        {!compact && height >= 24 && (
+        {!compact && height >= 24 && coachBadge && (
           <span
             className="absolute right-1 top-0.5 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-black text-white"
             style={{ backgroundColor: color }}
           >
-            {coach}
+            {coachBadge}
           </span>
         )}
       </div>
@@ -510,7 +510,7 @@ function BookingModal({
   const [duration,    setDuration]    = useState(modal.kind === 'add' ? 60 : src!.duration)
   const [sessionType, setSessionType] = useState(modal.kind === 'add' ? SESSION_TYPES[modal.spaceId ?? 'primary'][0] : src!.sessionType)
   const [athletes,    setAthletes]    = useState<string[]>(modal.kind === 'add' ? [] : src!.athletes)
-  const [coach,       setCoach]       = useState<'matt' | 'jade'>(modal.kind === 'add' ? 'matt' : src!.coach)
+  const [coach,       setCoach]       = useState<'matt' | 'jade' | 'other' | ''>(modal.kind === 'add' ? '' : src!.coach)
 
   function handleSpaceChange(id: SpaceId) {
     setSpaceId(id)
@@ -591,7 +591,9 @@ function BookingModal({
                 </div>
                 <div>
                   <p className="text-xs text-gray-400">Coach</p>
-                  <p className="font-semibold text-gray-800">{src!.coach === 'matt' ? 'Matt' : 'Jade'}</p>
+                  <p className="font-semibold text-gray-800">
+                    {src!.coach === 'matt' ? 'Matt' : src!.coach === 'jade' ? 'Jade' : src!.coach === 'other' ? 'Other' : '—'}
+                  </p>
                 </div>
                 <div>
                   <p className="text-xs text-gray-400">Athletes</p>
@@ -663,7 +665,7 @@ function BookingModal({
                 </div>
               </div>
 
-              {/* Row 3: Duration | (empty) */}
+              {/* Row 3: Duration | Coach */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={LABEL}>Duration</label>
@@ -673,27 +675,14 @@ function BookingModal({
                     ))}
                   </select>
                 </div>
-                <div />
-              </div>
-
-              {/* Coach */}
-              <div>
-                <label className={LABEL}>Coach</label>
-                <div className="flex gap-2">
-                  {([{ id: 'matt', label: 'Matt' }, { id: 'jade', label: 'Jade' }] as const).map(c => (
-                    <button
-                      key={c.id}
-                      type="button"
-                      onClick={() => setCoach(c.id)}
-                      className={`flex-1 rounded-lg border py-2 text-sm font-semibold transition ${
-                        coach === c.id
-                          ? 'border-[#6BA3D6] bg-[#6BA3D6] text-white'
-                          : 'border-gray-200 text-gray-600 hover:border-gray-300'
-                      }`}
-                    >
-                      {c.label}
-                    </button>
-                  ))}
+                <div>
+                  <label className={LABEL}>Coach</label>
+                  <select value={coach} onChange={e => setCoach(e.target.value as 'matt' | 'jade' | 'other' | '')} className={INPUT} style={{ textAlign: 'center', textAlignLast: 'center' }}>
+                    <option value="">—</option>
+                    <option value="matt">Matt</option>
+                    <option value="jade">Jade</option>
+                    <option value="other">Other</option>
+                  </select>
                 </div>
               </div>
 
