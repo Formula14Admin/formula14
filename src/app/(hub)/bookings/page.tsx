@@ -1502,9 +1502,7 @@ function BookingModal({
                         />
                       </div>
                       <div>
-                        <label className={LABEL}>
-                          {parseInt(numAthletes) > 1 ? 'Athletes' : 'Athlete'}
-                        </label>
+                        <label className={LABEL}>Athlete</label>
                         {parseInt(numAthletes) > 1 ? (
                           <SelectPicker
                             value=""
@@ -1515,7 +1513,7 @@ function BookingModal({
                             accentColor={accentColor}
                             getPanelPosition={getAthletePanelStyle}
                             options={[
-                              { value: '', label: 'Select Athletes', muted: true },
+                              { value: '', label: 'Select Athlete', muted: true },
                               ...[...ATHLETES].sort().map(a => ({ value: a, label: a })),
                             ]}
                           />
