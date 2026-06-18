@@ -9,6 +9,7 @@ import {
   IconEdit,
   IconPlus,
   IconCheck,
+  IconCalendar,
 } from '@tabler/icons-react'
 
 // ── Grid constants ─────────────────────────────────────────────────────────────
@@ -519,6 +520,181 @@ function BookingBlock({
   )
 }
 
+// ── Date Picker ────────────────────────────────────────────────────────────────
+const MONTH_NAMES = [
+  'January','February','March','April','May','June',
+  'July','August','September','October','November','December',
+]
+
+function DatePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [open, setOpen] = useState(false)
+  const [view, setView] = useState<'days' | 'months'>('days')
+
+  const parsed = value ? new Date(value + 'T12:00:00') : null
+  const [viewYear, setViewYear] = useState(() => parsed?.getFullYear() ?? new Date().getFullYear())
+  const [viewMonth, setViewMonth] = useState(() => parsed?.getMonth() ?? new Date().getMonth())
+
+  // Sync view when value changes externally (e.g. modal reset)
+  useEffect(() => {
+    if (value) {
+      const d = new Date(value + 'T12:00:00')
+      setViewYear(d.getFullYear())
+      setViewMonth(d.getMonth())
+    }
+  }, [value])
+
+  const displayText = parsed
+    ? parsed.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+    : 'Select date'
+
+  // Build 42-cell Mon-anchored grid
+  const dow = (new Date(viewYear, viewMonth, 1).getDay() + 6) % 7
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate()
+  const daysInPrevMonth = new Date(viewYear, viewMonth, 0).getDate()
+  const cells: { date: Date; current: boolean }[] = []
+  for (let i = dow - 1; i >= 0; i--)
+    cells.push({ date: new Date(viewYear, viewMonth - 1, daysInPrevMonth - i), current: false })
+  for (let d = 1; d <= daysInMonth; d++)
+    cells.push({ date: new Date(viewYear, viewMonth, d), current: true })
+  for (let d = 1; cells.length < 42; d++)
+    cells.push({ date: new Date(viewYear, viewMonth + 1, d), current: false })
+
+  function isSel(date: Date) {
+    return !!parsed &&
+      date.getFullYear() === parsed.getFullYear() &&
+      date.getMonth() === parsed.getMonth() &&
+      date.getDate() === parsed.getDate()
+  }
+
+  function pickDate(date: Date) {
+    const iso = [
+      date.getFullYear(),
+      String(date.getMonth() + 1).padStart(2, '0'),
+      String(date.getDate()).padStart(2, '0'),
+    ].join('-')
+    onChange(iso)
+    setOpen(false)
+    setView('days')
+  }
+
+  function prevMonth() {
+    if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1) }
+    else setViewMonth(m => m - 1)
+  }
+  function nextMonth() {
+    if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1) }
+    else setViewMonth(m => m + 1)
+  }
+
+  return (
+    <div>
+      {/* Trigger */}
+      <button
+        type="button"
+        onClick={() => { setOpen(o => !o); setView('days') }}
+        className="flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-800 outline-none transition focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/40"
+      >
+        <IconCalendar size={14} className="shrink-0 text-gray-400" />
+        <span className="truncate">{displayText}</span>
+      </button>
+
+      {/* Inline calendar panel */}
+      {open && (
+        <div className="mt-1 rounded-xl border border-gray-200 bg-white shadow-md" style={{ minWidth: '200px' }}>
+          {view === 'days' ? (
+            <>
+              {/* Month / year nav */}
+              <div className="flex items-center justify-between px-2 pt-2 pb-1">
+                <button type="button" onClick={prevMonth} className="rounded p-1 text-gray-500 hover:bg-gray-100">
+                  <IconChevronLeft size={14} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setView('months')}
+                  className="text-xs font-semibold text-gray-800 transition hover:text-[#6BA3D6]"
+                >
+                  {MONTH_NAMES[viewMonth]} {viewYear}
+                </button>
+                <button type="button" onClick={nextMonth} className="rounded p-1 text-gray-500 hover:bg-gray-100">
+                  <IconChevronRight size={14} />
+                </button>
+              </div>
+
+              {/* Day-of-week headers */}
+              <div className="grid grid-cols-7 px-1">
+                {['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d => (
+                  <div key={d} className="py-0.5 text-center text-[9px] font-semibold uppercase tracking-wide text-gray-400">
+                    {d}
+                  </div>
+                ))}
+              </div>
+
+              {/* Day cells */}
+              <div className="grid grid-cols-7 px-1 pb-2">
+                {cells.map((cell, i) => {
+                  const sel = isSel(cell.date)
+                  return (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => pickDate(cell.date)}
+                      className={[
+                        'mx-auto flex h-6 w-6 items-center justify-center rounded-full text-[11px] transition',
+                        sel
+                          ? 'font-semibold text-white'
+                          : cell.current
+                          ? 'text-gray-700 hover:bg-gray-100'
+                          : 'text-gray-300 hover:bg-gray-50',
+                      ].join(' ')}
+                      style={sel ? { backgroundColor: '#6BA3D6' } : {}}
+                    >
+                      {cell.date.getDate()}
+                    </button>
+                  )
+                })}
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Year nav */}
+              <div className="flex items-center justify-between px-2 pt-2 pb-1">
+                <button type="button" onClick={() => setViewYear(y => y - 1)} className="rounded p-1 text-gray-500 hover:bg-gray-100">
+                  <IconChevronLeft size={14} />
+                </button>
+                <span className="text-xs font-semibold text-gray-800">{viewYear}</span>
+                <button type="button" onClick={() => setViewYear(y => y + 1)} className="rounded p-1 text-gray-500 hover:bg-gray-100">
+                  <IconChevronRight size={14} />
+                </button>
+              </div>
+
+              {/* Month grid — 3 × 4 */}
+              <div className="grid grid-cols-3 gap-1 px-2 pb-2">
+                {MONTH_NAMES.map((name, i) => {
+                  const sel = !!parsed && viewYear === parsed.getFullYear() && i === parsed.getMonth()
+                  return (
+                    <button
+                      key={name}
+                      type="button"
+                      onClick={() => { setViewMonth(i); setView('days') }}
+                      className={[
+                        'rounded-lg py-1.5 text-xs transition',
+                        sel ? 'font-semibold text-white' : 'text-gray-700 hover:bg-gray-100',
+                      ].join(' ')}
+                      style={sel ? { backgroundColor: '#6BA3D6' } : {}}
+                    >
+                      {name}
+                    </button>
+                  )
+                })}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Booking Modal ──────────────────────────────────────────────────────────────
 function BookingModal({
   modal, today, onClose, onSave, onDelete, onEdit,
@@ -684,7 +860,7 @@ function BookingModal({
                 </div>
                 <div>
                   <label className={LABEL}>Date</label>
-                  <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INPUT} style={{ textAlign: 'center' }} />
+                  <DatePicker value={date} onChange={setDate} />
                 </div>
               </div>
 
