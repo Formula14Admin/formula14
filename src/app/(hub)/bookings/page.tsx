@@ -630,12 +630,22 @@ function BookingModal({
                 </div>
               </div>
 
-              {/* Date + Start time */}
+              {/* Row 1: Session Type | Date */}
               <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={LABEL}>Session type</label>
+                  <select value={sessionType} onChange={e => setSessionType(e.target.value)} className={INPUT} style={{ textAlign: 'center', textAlignLast: 'center' }}>
+                    {SESSION_TYPES[spaceId].map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
                 <div>
                   <label className={LABEL}>Date</label>
                   <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INPUT} style={{ textAlign: 'center' }} />
                 </div>
+              </div>
+
+              {/* Row 2: Start Time | Finish Time (auto-calculated) */}
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={LABEL}>Start time</label>
                   <select value={startMins} onChange={e => setStartMins(Number(e.target.value))} className={INPUT} style={{ textAlign: 'center', textAlignLast: 'center' }}>
@@ -645,16 +655,16 @@ function BookingModal({
                     })}
                   </select>
                 </div>
+                <div>
+                  <label className={LABEL}>Finish time</label>
+                  <div className="flex h-10 w-full items-center justify-center rounded-lg border border-gray-200 bg-gray-50 px-3 text-center text-sm text-gray-500">
+                    {fmtTime(startMins + duration)}
+                  </div>
+                </div>
               </div>
 
-              {/* Session type + duration */}
+              {/* Row 3: Duration | (empty) */}
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={LABEL}>Session type</label>
-                  <select value={sessionType} onChange={e => setSessionType(e.target.value)} className={INPUT} style={{ textAlign: 'center', textAlignLast: 'center' }}>
-                    {SESSION_TYPES[spaceId].map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                </div>
                 <div>
                   <label className={LABEL}>Duration</label>
                   <select value={duration} onChange={e => setDuration(Number(e.target.value))} className={INPUT} style={{ textAlign: 'center', textAlignLast: 'center' }}>
@@ -663,6 +673,7 @@ function BookingModal({
                     ))}
                   </select>
                 </div>
+                <div />
               </div>
 
               {/* Coach */}
