@@ -31,12 +31,14 @@ const SPACES = [
 type SpaceId = typeof SPACES[number]['id']
 
 // ── Session types per space ────────────────────────────────────────────────────
-const SESSION_TYPES: Record<SpaceId, string[]> = {
-  primary:   ['Individual Work Out', 'Small Group Session', 'Program', 'Team Training', 'Casual Shooting'],
-  secondary: ['Individual Work Out', 'Small Group Session', 'Program', 'Team Training', 'Casual Shooting'],
-  shooting:  ['Volume Shooting'],
-  meeting:   ['Coach Meeting', 'Film Review', 'Goal Setting', 'Meeting (General)', 'Parent Meeting', 'Player Meeting', 'Team Meeting'],
-}
+const SESSION_TYPES = [
+  'Casual Shooting',
+  'Individual Work Out',
+  'Programs',
+  'Small Group Session',
+  'Team Training',
+  'Volume Shooting',
+]
 
 const ATHLETES = [
   'Liam Carter', 'Jordan Williams', 'Aisha Thompson', 'Marcus Davies',
@@ -939,7 +941,7 @@ function BookingModal({
   const [date,        setDate]        = useState(modal.kind === 'add' ? modal.date : src!.date)
   const [startMins,   setStartMins]   = useState(modal.kind === 'add' ? modal.startMins : src!.startMins)
   const [finishMins,  setFinishMins]  = useState(modal.kind === 'add' ? modal.startMins + 60 : src!.startMins + src!.duration)
-  const [sessionType, setSessionType] = useState(modal.kind === 'add' ? SESSION_TYPES[modal.spaceId ?? 'primary'][0] : src!.sessionType)
+  const [sessionType, setSessionType] = useState(modal.kind === 'add' ? '' : src!.sessionType)
   const [athletes,    setAthletes]    = useState<string[]>(modal.kind === 'add' ? [] : src!.athletes)
   const [coach,       setCoach]       = useState<'matt' | 'jade' | 'other' | ''>(modal.kind === 'add' ? '' : src!.coach)
   const [repeat,      setRepeat]      = useState<'none' | 'weekly' | 'fortnightly' | 'monthly' | 'yearly'>('none')
@@ -947,7 +949,6 @@ function BookingModal({
 
   function handleSpaceChange(id: SpaceId) {
     setSpaceId(id)
-    setSessionType(SESSION_TYPES[id][0])
   }
 
   function toggleAthlete(name: string) {
@@ -1085,7 +1086,10 @@ function BookingModal({
                   <SelectPicker
                     value={sessionType}
                     onChange={setSessionType}
-                    options={SESSION_TYPES[spaceId].map(t => ({ value: t, label: t }))}
+                    options={[
+                      { value: '', label: 'Please Select A Session Type', muted: true },
+                      ...SESSION_TYPES.map(t => ({ value: t, label: t })),
+                    ]}
                   />
                 </div>
                 <div>
