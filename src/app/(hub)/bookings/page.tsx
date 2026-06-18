@@ -874,7 +874,7 @@ function SelectPicker({ value, onChange, options }: {
         type="button"
         onClick={handleToggle}
         className="flex h-10 w-full items-center justify-center rounded-lg border border-gray-200 bg-white px-3 text-sm outline-none transition focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/40"
-        style={{ color: selectedOpt?.muted ? '#d1d5db' : '#1f2937' }}
+        style={{ color: selectedOpt?.muted ? '#bcbfc5' : '#1f2937' }}
       >
         {selectedLabel}
       </button>
@@ -907,7 +907,7 @@ function SelectPicker({ value, onChange, options }: {
                 }`}
                 style={sel
                   ? { backgroundColor: '#6BA3D6', color: 'white' }
-                  : { color: opt.muted ? '#d1d5db' : '#374151' }
+                  : { color: opt.muted ? '#bcbfc5' : '#374151' }
                 }
               >
                 {opt.label}
