@@ -1011,7 +1011,10 @@ function BookingModal({
   const [repeatUntil, setRepeatUntil] = useState('')
   const [bookingType, setBookingType] = useState<'member' | 'casual' | 'unavailable'>('member')
   const [numAthletes, setNumAthletes] = useState('')
+  const [singleAthlete,  setSingleAthlete]  = useState('')
+  const [customAthlete,  setCustomAthlete]  = useState('')
   const accentColor = bookingType === 'casual' ? '#6BAD6B' : bookingType === 'unavailable' ? '#ef4444' : '#6BA3D6'
+  const isIndividual = bookingType === 'member' && sessionType === 'Individual Work Out'
 
   function handleSpaceChange(id: SpaceId) {
     setSpaceId(id)
@@ -1024,7 +1027,10 @@ function BookingModal({
 
   function handleSave() {
     const duration = Math.max(15, finishMins - startMins)
-    const base = { spaceId, startMins, duration, sessionType, athletes, coach, bookingType }
+    const effectiveAthletes = isIndividual
+      ? (singleAthlete === 'other' ? (customAthlete.trim() ? [customAthlete.trim()] : []) : singleAthlete ? [singleAthlete] : [])
+      : athletes
+    const base = { spaceId, startMins, duration, sessionType, athletes: effectiveAthletes, coach, bookingType }
     if (repeat === 'none' || !repeatUntil) {
       onSave([{ ...base, date, id: src?.id }])
     } else {
@@ -1340,35 +1346,61 @@ function BookingModal({
                   )}
 
                   {/* Athletes */}
-                  <div>
-                    <label className={LABEL}>
-                      Athletes
-                      {athletes.length > 0 && (
-                        <span className="ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] text-white" style={{ backgroundColor: accentColor }}>
-                          {athletes.length}
-                        </span>
+                  {isIndividual ? (
+                    <div>
+                      <label className={LABEL}>Athlete</label>
+                      <SelectPicker
+                        value={singleAthlete}
+                        onChange={v => { setSingleAthlete(v); if (v !== 'other') setCustomAthlete('') }}
+                        accentColor={accentColor}
+                        options={[
+                          { value: '', label: 'Select Athlete', muted: true },
+                          ...[...ATHLETES].sort().map(a => ({ value: a, label: a })),
+                          { value: 'other', label: 'Other' },
+                        ]}
+                      />
+                      {singleAthlete === 'other' && (
+                        <input
+                          type="text"
+                          value={customAthlete}
+                          onChange={e => setCustomAthlete(e.target.value)}
+                          placeholder="Enter athlete name"
+                          className={`mt-2 ${INPUT}`}
+                          style={{ textAlign: 'center' }}
+                        />
                       )}
-                    </label>
-                    <div className="flex max-h-36 flex-wrap gap-1.5 overflow-y-auto rounded-lg border border-gray-200 p-2.5">
-                      {ATHLETES.map(a => {
-                        const sel = athletes.includes(a)
-                        return (
-                          <button
-                            key={a}
-                            type="button"
-                            onClick={() => toggleAthlete(a)}
-                            className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition ${
-                              sel ? 'text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                            }`}
-                            style={sel ? { backgroundColor: accentColor } : {}}
-                          >
-                            {sel && <IconCheck size={10} />}
-                            {a}
-                          </button>
-                        )
-                      })}
                     </div>
-                  </div>
+                  ) : (
+                    <div>
+                      <label className={LABEL}>
+                        Athletes
+                        {athletes.length > 0 && (
+                          <span className="ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] text-white" style={{ backgroundColor: accentColor }}>
+                            {athletes.length}
+                          </span>
+                        )}
+                      </label>
+                      <div className="flex max-h-36 flex-wrap gap-1.5 overflow-y-auto rounded-lg border border-gray-200 p-2.5">
+                        {ATHLETES.map(a => {
+                          const sel = athletes.includes(a)
+                          return (
+                            <button
+                              key={a}
+                              type="button"
+                              onClick={() => toggleAthlete(a)}
+                              className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition ${
+                                sel ? 'text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                              }`}
+                              style={sel ? { backgroundColor: accentColor } : {}}
+                            >
+                              {sel && <IconCheck size={10} />}
+                              {a}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
 
