@@ -507,7 +507,7 @@ function BookingModal({
   const [spaceId,     setSpaceId]     = useState<SpaceId>(modal.kind === 'add' ? (modal.spaceId ?? 'primary') : src!.spaceId)
   const [date,        setDate]        = useState(modal.kind === 'add' ? modal.date : src!.date)
   const [startMins,   setStartMins]   = useState(modal.kind === 'add' ? modal.startMins : src!.startMins)
-  const [duration,    setDuration]    = useState(modal.kind === 'add' ? 60 : src!.duration)
+  const [finishMins,  setFinishMins]  = useState(modal.kind === 'add' ? modal.startMins + 60 : src!.startMins + src!.duration)
   const [sessionType, setSessionType] = useState(modal.kind === 'add' ? SESSION_TYPES[modal.spaceId ?? 'primary'][0] : src!.sessionType)
   const [athletes,    setAthletes]    = useState<string[]>(modal.kind === 'add' ? [] : src!.athletes)
   const [coach,       setCoach]       = useState<'matt' | 'jade' | 'other' | ''>(modal.kind === 'add' ? '' : src!.coach)
@@ -522,11 +522,11 @@ function BookingModal({
   }
 
   function handleSave() {
+    const duration = Math.max(15, finishMins - startMins)
     onSave({ id: src?.id, date, spaceId, startMins, duration, sessionType, athletes, coach })
   }
 
-  const space   = SPACES.find(s => s.id === spaceId)!
-  const endMins = startMins + duration
+  const space = SPACES.find(s => s.id === spaceId)!
 
   const INPUT = 'h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-center text-sm text-gray-800 outline-none transition focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/40'
   const LABEL = 'mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-400 text-center'
@@ -595,7 +595,7 @@ function BookingModal({
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <p className="text-xs text-gray-400">Time</p>
-                  <p className="font-semibold text-gray-800">{fmtTime(src!.startMins)}–{fmtTime(endMins)}</p>
+                  <p className="font-semibold text-gray-800">{fmtTime(src!.startMins)}–{fmtTime(finishMins)}</p>
                 </div>
                 <div>
                   <p className="text-xs text-gray-400">Duration</p>
@@ -658,11 +658,20 @@ function BookingModal({
                 </div>
               </div>
 
-              {/* Row 2: Start Time | Finish Time (auto-calculated) */}
+              {/* Row 2: Start Time | Finish Time */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={LABEL}>Start time</label>
-                  <select value={startMins} onChange={e => setStartMins(Number(e.target.value))} className={INPUT} style={{ textAlign: 'center', textAlignLast: 'center' }}>
+                  <select
+                    value={startMins}
+                    onChange={e => {
+                      const s = Number(e.target.value)
+                      setStartMins(s)
+                      if (finishMins <= s) setFinishMins(s + 60)
+                    }}
+                    className={INPUT}
+                    style={{ textAlign: 'center', textAlignLast: 'center' }}
+                  >
                     {Array.from({ length: (END_H - START_H) * 4 }, (_, i) => {
                       const m = START_H * 60 + i * 15
                       return <option key={m} value={m}>{fmtTime(m)}</option>
@@ -671,22 +680,24 @@ function BookingModal({
                 </div>
                 <div>
                   <label className={LABEL}>Finish time</label>
-                  <div className="flex h-10 w-full items-center justify-center rounded-lg border border-gray-200 bg-gray-50 px-3 text-center text-sm text-gray-500">
-                    {fmtTime(startMins + duration)}
-                  </div>
+                  <select
+                    value={finishMins}
+                    onChange={e => setFinishMins(Number(e.target.value))}
+                    className={INPUT}
+                    style={{ textAlign: 'center', textAlignLast: 'center' }}
+                  >
+                    {Array.from({ length: (END_H - START_H) * 4 }, (_, i) => {
+                      const m = START_H * 60 + (i + 1) * 15
+                      return m > startMins && m <= END_H * 60
+                        ? <option key={m} value={m}>{fmtTime(m)}</option>
+                        : null
+                    })}
+                  </select>
                 </div>
               </div>
 
-              {/* Row 3: Duration | Coach */}
+              {/* Row 3: Coach */}
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={LABEL}>Duration</label>
-                  <select value={duration} onChange={e => setDuration(Number(e.target.value))} className={INPUT} style={{ textAlign: 'center', textAlignLast: 'center' }}>
-                    {[15, 30, 45, 60, 90, 120, 150, 180].map(d => (
-                      <option key={d} value={d}>{fmtDur(d)}</option>
-                    ))}
-                  </select>
-                </div>
                 <div>
                   <label className={LABEL}>Coach</label>
                   <select value={coach} onChange={e => setCoach(e.target.value as 'matt' | 'jade' | 'other' | '')} className={INPUT} style={{ textAlign: 'center', textAlignLast: 'center' }}>
@@ -696,6 +707,7 @@ function BookingModal({
                     <option value="other">Other</option>
                   </select>
                 </div>
+                <div />
               </div>
 
               {/* Athletes */}
