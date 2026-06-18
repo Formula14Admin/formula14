@@ -534,40 +534,52 @@ function BookingModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
       <div className="relative w-full max-w-md overflow-y-auto rounded-2xl bg-white shadow-2xl" style={{ maxHeight: 'calc(100vh - 64px)' }}>
-        <div className="sticky top-0 z-10 flex items-start justify-between border-b border-gray-100 bg-white px-6 pb-4 pt-6">
-          <div>
-            <h2 className="text-base font-bold text-gray-900">
-              {isView ? 'Session Details' : modal.kind === 'edit' ? 'Edit Booking' : 'New Booking'}
-            </h2>
-            {isView && (
+        {/* Header — blue panel for add/edit, white for view */}
+        {isView ? (
+          <div className="sticky top-0 z-10 flex items-start justify-between border-b border-gray-100 bg-white px-6 pb-4 pt-6">
+            <div>
+              <h2 className="text-base font-bold text-gray-900">Session Details</h2>
               <p className="mt-0.5 text-sm text-gray-500">
                 {parse(src!.date).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })}
                 {src!.date === today ? ' · Today' : ''}
               </p>
-            )}
+            </div>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => onEdit(src!)}
+                className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-sm font-medium text-gray-600 transition hover:bg-gray-100"
+              >
+                <IconEdit size={14} /> Edit
+              </button>
+              <button
+                onClick={() => onDelete(src!.id)}
+                className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-sm font-medium text-red-500 transition hover:bg-red-50"
+              >
+                <IconTrash size={14} /> Delete
+              </button>
+              <button onClick={onClose} className="rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100">
+                <IconX size={18} />
+              </button>
+            </div>
           </div>
-          <div className="flex items-center gap-1">
-            {isView && (
-              <>
-                <button
-                  onClick={() => onEdit(src!)}
-                  className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-sm font-medium text-gray-600 transition hover:bg-gray-100"
-                >
-                  <IconEdit size={14} /> Edit
-                </button>
-                <button
-                  onClick={() => onDelete(src!.id)}
-                  className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-sm font-medium text-red-500 transition hover:bg-red-50"
-                >
-                  <IconTrash size={14} /> Delete
-                </button>
-              </>
-            )}
-            <button onClick={onClose} className="rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100">
-              <IconX size={18} />
-            </button>
+        ) : (
+          <div
+            className="sticky top-0 z-10 rounded-t-2xl px-6 py-4"
+            style={{ backgroundColor: '#6BA3D6' }}
+          >
+            <div className="relative flex items-center justify-center">
+              <h2 className="text-base font-bold text-white">
+                {modal.kind === 'edit' ? 'Edit Booking' : 'New Booking'}
+              </h2>
+              <button
+                onClick={onClose}
+                className="absolute right-0 rounded-lg p-1.5 text-white/70 transition hover:bg-white/20"
+              >
+                <IconX size={18} />
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="px-6 py-5">
           {/* ── View mode ── */}
@@ -732,7 +744,7 @@ function BookingModal({
                   className="rounded-lg px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90"
                   style={{ backgroundColor: '#6BA3D6' }}
                 >
-                  {modal.kind === 'edit' ? 'Save changes' : 'Create booking'}
+                  {modal.kind === 'edit' ? 'Save Changes' : 'Create Booking'}
                 </button>
               </div>
             </div>
