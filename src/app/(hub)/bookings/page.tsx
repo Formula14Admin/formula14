@@ -634,11 +634,11 @@ function BookingModal({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={LABEL}>Date</label>
-                  <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INPUT} />
+                  <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INPUT} style={{ textAlign: 'center' }} />
                 </div>
                 <div>
                   <label className={LABEL}>Start time</label>
-                  <select value={startMins} onChange={e => setStartMins(Number(e.target.value))} className={INPUT}>
+                  <select value={startMins} onChange={e => setStartMins(Number(e.target.value))} className={INPUT} style={{ textAlign: 'center', textAlignLast: 'center' }}>
                     {Array.from({ length: (END_H - START_H) * 4 }, (_, i) => {
                       const m = START_H * 60 + i * 15
                       return <option key={m} value={m}>{fmtTime(m)}</option>
@@ -651,13 +651,13 @@ function BookingModal({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={LABEL}>Session type</label>
-                  <select value={sessionType} onChange={e => setSessionType(e.target.value)} className={INPUT}>
+                  <select value={sessionType} onChange={e => setSessionType(e.target.value)} className={INPUT} style={{ textAlign: 'center', textAlignLast: 'center' }}>
                     {SESSION_TYPES[spaceId].map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
                 </div>
                 <div>
                   <label className={LABEL}>Duration</label>
-                  <select value={duration} onChange={e => setDuration(Number(e.target.value))} className={INPUT}>
+                  <select value={duration} onChange={e => setDuration(Number(e.target.value))} className={INPUT} style={{ textAlign: 'center', textAlignLast: 'center' }}>
                     {[15, 30, 45, 60, 90, 120, 150, 180].map(d => (
                       <option key={d} value={d}>{fmtDur(d)}</option>
                     ))}
