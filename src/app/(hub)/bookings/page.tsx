@@ -53,6 +53,7 @@ type Booking = {
   sessionType: string
   athletes: string[]
   coach: 'matt' | 'jade' | 'other' | ''
+  bookingType: 'member' | 'casual' | 'unavailable'
 }
 
 type Modal =
@@ -127,21 +128,21 @@ function makeSamples(today: string): Booking[] {
   const tm  = ds(shift(dt,  1))
   const d2f = ds(shift(dt,  2))
   return [
-    { id:'b1',  date:today, spaceId:'primary',   startMins:7*60,     duration:60,  sessionType:'Individual Work Out', athletes:['Liam Carter'],                                              coach:'matt' },
-    { id:'b2',  date:today, spaceId:'primary',   startMins:8*60+30,  duration:90,  sessionType:'Small Group Session', athletes:['Jordan Williams','Aisha Thompson','Devon Knox'],             coach:'matt' },
-    { id:'b3',  date:today, spaceId:'secondary', startMins:9*60,     duration:120, sessionType:'Team Training',       athletes:['Liam Carter','Jordan Williams','Marcus Davies','Priya Mehta','Tyler Ross'], coach:'jade' },
-    { id:'b4',  date:today, spaceId:'primary',   startMins:11*60,    duration:60,  sessionType:'Program',             athletes:['Marcus Davies'],                                             coach:'matt' },
-    { id:'b5',  date:today, spaceId:'secondary', startMins:14*60,    duration:90,  sessionType:'Small Group Session', athletes:['Aisha Thompson','Kai Okafor','Sam Liu'],                     coach:'jade' },
-    { id:'b6',  date:today, spaceId:'shooting',  startMins:16*60+30, duration:60,  sessionType:'Volume Shooting',     athletes:['Devon Knox'],                                               coach:'matt' },
-    { id:'b7',  date:today, spaceId:'meeting',   startMins:17*60,    duration:60,  sessionType:'Coach Meeting',       athletes:[],                                                           coach:'matt' },
-    { id:'b8',  date:today, spaceId:'primary',   startMins:18*60,    duration:90,  sessionType:'Team Training',       athletes:['Liam Carter','Jordan Williams','Aisha Thompson','Tyler Ross','Zara Obi'], coach:'matt' },
-    { id:'b9',  date:yd,   spaceId:'primary',   startMins:9*60,     duration:60,  sessionType:'Individual Work Out', athletes:['Tyler Ross'],                                               coach:'jade' },
-    { id:'b10', date:yd,   spaceId:'meeting',   startMins:15*60,    duration:60,  sessionType:'Film Review',         athletes:['Jordan Williams','Marcus Davies'],                          coach:'matt' },
-    { id:'b11', date:d2,   spaceId:'secondary', startMins:10*60,    duration:90,  sessionType:'Program',             athletes:['Priya Mehta','Sam Liu'],                                    coach:'matt' },
-    { id:'b12', date:d2,   spaceId:'shooting',  startMins:14*60,    duration:60,  sessionType:'Volume Shooting',     athletes:['Kai Okafor'],                                              coach:'jade' },
-    { id:'b13', date:tm,   spaceId:'primary',   startMins:8*60,     duration:90,  sessionType:'Small Group Session', athletes:['Liam Carter','Jordan Williams','Aisha Thompson'],           coach:'matt' },
-    { id:'b14', date:tm,   spaceId:'meeting',   startMins:13*60,    duration:60,  sessionType:'Goal Setting',        athletes:['Devon Knox'],                                               coach:'jade' },
-    { id:'b15', date:d2f,  spaceId:'secondary', startMins:11*60,    duration:60,  sessionType:'Team Training',       athletes:['Tyler Ross','Priya Mehta','Zara Obi'],                     coach:'matt' },
+    { id:'b1',  date:today, spaceId:'primary',   startMins:7*60,     duration:60,  sessionType:'Individual Work Out', athletes:['Liam Carter'],                                              coach:'matt', bookingType:'member' },
+    { id:'b2',  date:today, spaceId:'primary',   startMins:8*60+30,  duration:90,  sessionType:'Small Group Session', athletes:['Jordan Williams','Aisha Thompson','Devon Knox'],             coach:'matt', bookingType:'member' },
+    { id:'b3',  date:today, spaceId:'secondary', startMins:9*60,     duration:120, sessionType:'Team Training',       athletes:['Liam Carter','Jordan Williams','Marcus Davies','Priya Mehta','Tyler Ross'], coach:'jade', bookingType:'member' },
+    { id:'b4',  date:today, spaceId:'primary',   startMins:11*60,    duration:60,  sessionType:'Program',             athletes:['Marcus Davies'],                                             coach:'matt', bookingType:'member' },
+    { id:'b5',  date:today, spaceId:'secondary', startMins:14*60,    duration:90,  sessionType:'Small Group Session', athletes:['Aisha Thompson','Kai Okafor','Sam Liu'],                     coach:'jade', bookingType:'member' },
+    { id:'b6',  date:today, spaceId:'shooting',  startMins:16*60+30, duration:60,  sessionType:'Volume Shooting',     athletes:['Devon Knox'],                                               coach:'matt', bookingType:'member' },
+    { id:'b7',  date:today, spaceId:'meeting',   startMins:17*60,    duration:60,  sessionType:'Coach Meeting',       athletes:[],                                                           coach:'matt', bookingType:'member' },
+    { id:'b8',  date:today, spaceId:'primary',   startMins:18*60,    duration:90,  sessionType:'Team Training',       athletes:['Liam Carter','Jordan Williams','Aisha Thompson','Tyler Ross','Zara Obi'], coach:'matt', bookingType:'member' },
+    { id:'b9',  date:yd,   spaceId:'primary',   startMins:9*60,     duration:60,  sessionType:'Individual Work Out', athletes:['Tyler Ross'],                                               coach:'jade', bookingType:'member' },
+    { id:'b10', date:yd,   spaceId:'meeting',   startMins:15*60,    duration:60,  sessionType:'Film Review',         athletes:['Jordan Williams','Marcus Davies'],                          coach:'matt', bookingType:'member' },
+    { id:'b11', date:d2,   spaceId:'secondary', startMins:10*60,    duration:90,  sessionType:'Program',             athletes:['Priya Mehta','Sam Liu'],                                    coach:'matt', bookingType:'member' },
+    { id:'b12', date:d2,   spaceId:'shooting',  startMins:14*60,    duration:60,  sessionType:'Volume Shooting',     athletes:['Kai Okafor'],                                              coach:'jade', bookingType:'member' },
+    { id:'b13', date:tm,   spaceId:'primary',   startMins:8*60,     duration:90,  sessionType:'Small Group Session', athletes:['Liam Carter','Jordan Williams','Aisha Thompson'],           coach:'matt', bookingType:'member' },
+    { id:'b14', date:tm,   spaceId:'meeting',   startMins:13*60,    duration:60,  sessionType:'Goal Setting',        athletes:['Devon Knox'],                                               coach:'jade', bookingType:'member' },
+    { id:'b15', date:d2f,  spaceId:'secondary', startMins:11*60,    duration:60,  sessionType:'Team Training',       athletes:['Tyler Ross','Priya Mehta','Zara Obi'],                     coach:'matt', bookingType:'member' },
   ]
 }
 
@@ -480,6 +481,8 @@ function BookingBlock({
   const top    = toY(booking.startMins)
   const height = Math.max(SLOT_PX, (booking.duration / 15) * SLOT_PX)
   const coachBadge = booking.coach === 'matt' ? 'M' : booking.coach === 'jade' ? 'J' : booking.coach === 'other' ? 'O' : null
+  const chipColor = booking.bookingType === 'unavailable' ? '#ef4444' : color
+  const chipLight = booking.bookingType === 'unavailable' ? '#fee2e2' : light
 
   const athleteStr = booking.athletes.length === 0 ? '' :
     booking.athletes.length <= 2
@@ -497,21 +500,21 @@ function BookingBlock({
       data-booking="1"
       onClick={e => { e.stopPropagation(); onClick() }}
       className="absolute left-1 right-1 cursor-pointer overflow-hidden rounded-md border transition-opacity hover:opacity-80"
-      style={{ top, height, backgroundColor: light, borderColor: color + '50', borderLeftWidth: 3, borderLeftColor: color }}
+      style={{ top, height, backgroundColor: chipLight, borderColor: chipColor + '50', borderLeftWidth: 3, borderLeftColor: chipColor }}
     >
       <div className="relative px-1.5 pt-0.5">
-        <p className="truncate text-[11px] font-bold leading-tight" style={{ color }}>
-          {compact ? (typeAbbr || booking.sessionType.slice(0, 3)) : booking.sessionType}
+        <p className="truncate text-[11px] font-bold leading-tight" style={{ color: chipColor }}>
+          {booking.bookingType === 'unavailable' ? 'Unavailable' : compact ? (typeAbbr || booking.sessionType.slice(0, 3)) : booking.sessionType}
         </p>
-        {!compact && height >= 40 && athleteStr && (
-          <p className="mt-0.5 truncate text-[10px]" style={{ color: color + 'cc' }}>
+        {!compact && height >= 40 && athleteStr && booking.bookingType !== 'unavailable' && (
+          <p className="mt-0.5 truncate text-[10px]" style={{ color: chipColor + 'cc' }}>
             {athleteStr}
           </p>
         )}
-        {!compact && height >= 24 && coachBadge && (
+        {!compact && height >= 24 && coachBadge && booking.bookingType !== 'unavailable' && (
           <span
             className="absolute right-1 top-0.5 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-black text-white"
-            style={{ backgroundColor: color }}
+            style={{ backgroundColor: chipColor }}
           >
             {coachBadge}
           </span>
@@ -958,7 +961,7 @@ function BookingModal({
 
   function handleSave() {
     const duration = Math.max(15, finishMins - startMins)
-    const base = { spaceId, startMins, duration, sessionType, athletes, coach }
+    const base = { spaceId, startMins, duration, sessionType, athletes, coach, bookingType }
     if (repeat === 'none' || !repeatUntil) {
       onSave([{ ...base, date, id: src?.id }])
     } else {
