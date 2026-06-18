@@ -1458,6 +1458,20 @@ function BookingModal({
                         />
                       </div>
                     </div>
+                  ) : bookingType === 'member' && ['Volume Shooting', 'Casual Shooting', 'Small Group Session'].includes(sessionType) ? (
+                    /* ── Member Volume/Casual Shooting / Small Group: number of athletes ── */
+                    <div>
+                      <label className={LABEL}>Number of Athletes</label>
+                      <SelectPicker
+                        value={numAthletes}
+                        onChange={setNumAthletes}
+                        accentColor={accentColor}
+                        options={[
+                          { value: '', label: 'Select Number Of Athletes', muted: true },
+                          ...Array.from({ length: 10 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) })),
+                        ]}
+                      />
+                    </div>
                   ) : sessionType === 'Individual Work Out' ? (
                     /* ── Member Individual Work Out: single athlete dropdown ── */
                     <div>
