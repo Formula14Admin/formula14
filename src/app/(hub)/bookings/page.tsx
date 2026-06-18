@@ -1003,7 +1003,7 @@ function BookingModal({
           </div>
         ) : (
           <div className="sticky top-0 z-10">
-            <div className="relative flex items-center justify-center px-12 py-5" style={{ backgroundColor: '#6BA3D6' }}>
+            <div className="relative flex items-center justify-center px-12 py-5" style={{ backgroundColor: '#000000' }}>
               <img src="/Updated Primary Logo.png" alt="Formula14" style={{ height: '56px', width: 'auto' }} />
               <button
                 onClick={onClose}
