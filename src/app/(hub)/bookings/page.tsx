@@ -530,7 +530,7 @@ const MONTH_NAMES = [
   'July','August','September','October','November','December',
 ]
 
-function DatePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+function DatePicker({ value, onChange, accentColor = '#6BA3D6' }: { value: string; onChange: (v: string) => void; accentColor?: string }) {
   const [open, setOpen] = useState(false)
   const [view, setView] = useState<'days' | 'months'>('days')
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -679,7 +679,7 @@ function DatePicker({ value, onChange }: { value: string; onChange: (v: string) 
                           ? 'text-gray-700 hover:bg-gray-100'
                           : 'text-gray-300 hover:bg-gray-50',
                       ].join(' ')}
-                      style={sel ? { backgroundColor: '#6BA3D6' } : {}}
+                      style={sel ? { backgroundColor: accentColor } : {}}
                     >
                       {cell.date.getDate()}
                     </button>
@@ -713,7 +713,7 @@ function DatePicker({ value, onChange }: { value: string; onChange: (v: string) 
                         'rounded-lg py-1.5 text-xs transition',
                         sel ? 'font-semibold text-white' : 'text-gray-700 hover:bg-gray-100',
                       ].join(' ')}
-                      style={sel ? { backgroundColor: '#6BA3D6' } : {}}
+                      style={sel ? { backgroundColor: accentColor } : {}}
                     >
                       {name}
                     </button>
@@ -730,10 +730,11 @@ function DatePicker({ value, onChange }: { value: string; onChange: (v: string) 
 }
 
 // ── Time Picker ────────────────────────────────────────────────────────────────
-function TimePicker({ value, onChange, options }: {
+function TimePicker({ value, onChange, options, accentColor = '#6BA3D6' }: {
   value: number
   onChange: (v: number) => void
   options: number[]
+  accentColor?: string
 }) {
   const [open, setOpen] = useState(false)
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -811,7 +812,7 @@ function TimePicker({ value, onChange, options }: {
                 className={`w-full py-1.5 text-center text-sm transition ${
                   sel ? 'font-semibold text-white' : 'text-gray-700 hover:bg-gray-100'
                 }`}
-                style={sel ? { backgroundColor: '#6BA3D6' } : {}}
+                style={sel ? { backgroundColor: accentColor } : {}}
               >
                 {fmtTime(mins)}
               </button>
@@ -825,10 +826,11 @@ function TimePicker({ value, onChange, options }: {
 }
 
 // ── Select Picker (string options) ────────────────────────────────────────────
-function SelectPicker({ value, onChange, options }: {
+function SelectPicker({ value, onChange, options, accentColor = '#6BA3D6' }: {
   value: string
   onChange: (v: string) => void
   options: { value: string; label: string; muted?: boolean }[]
+  accentColor?: string
 }) {
   const [open, setOpen] = useState(false)
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -909,7 +911,7 @@ function SelectPicker({ value, onChange, options }: {
                   sel ? 'font-semibold text-white' : 'hover:bg-gray-100'
                 }`}
                 style={sel
-                  ? { backgroundColor: '#6BA3D6', color: 'white' }
+                  ? { backgroundColor: accentColor, color: 'white' }
                   : { color: opt.muted ? '#bcbfc5' : '#374151' }
                 }
               >
@@ -949,6 +951,7 @@ function BookingModal({
   const [repeatUntil, setRepeatUntil] = useState('')
   const [bookingType, setBookingType] = useState<'member' | 'casual' | 'unavailable'>('member')
   const [numAthletes, setNumAthletes] = useState('')
+  const accentColor = bookingType === 'casual' ? '#6BAD6B' : '#6BA3D6'
 
   function handleSpaceChange(id: SpaceId) {
     setSpaceId(id)
@@ -1008,7 +1011,7 @@ function BookingModal({
           </div>
         ) : (
           <div className="sticky top-0 z-10">
-            <div className="relative flex items-center justify-center px-12" style={{ backgroundColor: '#6BA3D6', paddingTop: '4px', paddingBottom: '4px' }}>
+            <div className="relative flex items-center justify-center px-12" style={{ backgroundColor: accentColor, paddingTop: '4px', paddingBottom: '4px' }}>
               <img src="/New Booking Header.svg" alt="New Booking" className="block h-full w-auto" style={{ maxHeight: '90px' }} />
               <button
                 onClick={onClose}
@@ -1066,7 +1069,7 @@ function BookingModal({
                     onClick={() => setBookingType(type)}
                     className={`flex-1 py-2.5 text-sm font-semibold transition ${i === 0 ? '' : 'border-l border-gray-200'}`}
                     style={bookingType === type
-                      ? { backgroundColor: type === 'unavailable' ? '#ef4444' : '#6BA3D6', color: 'white' }
+                      ? { backgroundColor: type === 'unavailable' ? '#ef4444' : accentColor, color: 'white' }
                       : { backgroundColor: 'white', color: '#6b7280' }}
                   >
                     {type === 'member' ? 'Member Booking' : type === 'casual' ? 'Casual Booking' : 'Unavailable'}
@@ -1106,6 +1109,7 @@ function BookingModal({
                   <SelectPicker
                     value={sessionType}
                     onChange={setSessionType}
+                    accentColor={accentColor}
                     options={[
                       { value: '', label: 'Select A Session Type', muted: true },
                       ...SESSION_TYPES[spaceId].map(t => ({ value: t, label: t })),
@@ -1114,7 +1118,7 @@ function BookingModal({
                 </div>
                 <div>
                   <label className={LABEL}>Date</label>
-                  <DatePicker value={date} onChange={setDate} />
+                  <DatePicker value={date} onChange={setDate} accentColor={accentColor} />
                 </div>
               </div>
 
@@ -1126,6 +1130,7 @@ function BookingModal({
                     value={startMins}
                     onChange={s => { setStartMins(s); if (finishMins <= s) setFinishMins(s + 60) }}
                     options={Array.from({ length: 95 }, (_, i) => i * 15)}
+                    accentColor={accentColor}
                   />
                 </div>
                 <div>
@@ -1134,6 +1139,7 @@ function BookingModal({
                     value={finishMins}
                     onChange={setFinishMins}
                     options={Array.from({ length: 95 }, (_, i) => (i + 1) * 15).filter(m => m > startMins)}
+                    accentColor={accentColor}
                   />
                 </div>
               </div>
@@ -1145,6 +1151,7 @@ function BookingModal({
                   <SelectPicker
                     value={coach}
                     onChange={v => setCoach(v as 'matt' | 'jade' | 'other' | '')}
+                    accentColor={accentColor}
                     options={[
                       { value: '', label: 'No Coach Required', muted: true },
                       { value: 'matt', label: 'Matt' },
@@ -1160,6 +1167,7 @@ function BookingModal({
                       <SelectPicker
                         value={numAthletes}
                         onChange={setNumAthletes}
+                        accentColor={accentColor}
                         options={[
                           { value: '', label: 'Select Number Of Athletes', muted: true },
                           ...Array.from({ length: 10 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) })),
@@ -1172,6 +1180,7 @@ function BookingModal({
                       <SelectPicker
                         value={repeat}
                         onChange={v => { setRepeat(v as typeof repeat); setRepeatUntil('') }}
+                        accentColor={accentColor}
                         options={[
                           { value: 'none', label: 'None' },
                           { value: 'weekly', label: 'Weekly' },
@@ -1215,7 +1224,7 @@ function BookingModal({
                 <label className={LABEL}>
                   Athletes
                   {athletes.length > 0 && (
-                    <span className="ml-1.5 rounded-full bg-[#6BA3D6] px-1.5 py-0.5 text-[10px] text-white">
+                    <span className="ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] text-white" style={{ backgroundColor: accentColor }}>
                       {athletes.length}
                     </span>
                   )}
@@ -1231,7 +1240,7 @@ function BookingModal({
                         className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition ${
                           sel ? 'text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                         }`}
-                        style={sel ? { backgroundColor: '#6BA3D6' } : {}}
+                        style={sel ? { backgroundColor: accentColor } : {}}
                       >
                         {sel && <IconCheck size={10} />}
                         {a}
@@ -1249,7 +1258,7 @@ function BookingModal({
                       type="button"
                       onClick={handleSave}
                       className="rounded-lg px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90"
-                      style={{ backgroundColor: '#6BA3D6' }}
+                      style={{ backgroundColor: accentColor }}
                     >
                       {modal.kind === 'edit' ? 'Save Changes' : 'Create Booking'}
                     </button>
@@ -1279,7 +1288,7 @@ function BookingModal({
                     type="button"
                     onClick={handleSave}
                     className="rounded-lg px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90"
-                    style={{ backgroundColor: '#6BA3D6' }}
+                    style={{ backgroundColor: bookingType === 'unavailable' ? '#ef4444' : accentColor }}
                   >
                     {modal.kind === 'edit' ? 'Save Changes' : bookingType === 'unavailable' ? 'Mark Unavailability' : 'Create Booking'}
                   </button>
