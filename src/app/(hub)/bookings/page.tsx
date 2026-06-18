@@ -25,7 +25,7 @@ const SPACES = [
   { id: 'primary',   label: 'Primary Station',  color: '#6BA3D6', light: '#e8f1fb' },
   { id: 'secondary', label: 'Secondary Station', color: '#6BAD6B', light: '#edf5ed' },
   { id: 'shooting',  label: 'Shooting Bay',      color: '#D4A520', light: '#fdf5e0' },
-  { id: 'meeting',   label: 'Meeting Room',      color: '#534AB7', light: '#EEEDFE' },
+  { id: 'meeting',   label: 'Meeting Room',      color: '#A06BD6', light: '#f0ebfb' },
 ] as const
 
 type SpaceId = typeof SPACES[number]['id']
