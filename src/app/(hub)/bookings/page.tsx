@@ -1241,9 +1241,9 @@ function BookingModal({
                       Cancel
                     </button>
                   </div>
-                  <div className="text-right">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Total</p>
-                    <p className="text-2xl font-bold text-gray-900">$0.00</p>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">Total</span>
+                    <span className="text-lg font-bold text-gray-900">$0.00</span>
                   </div>
                 </div>
               ) : (
