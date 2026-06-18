@@ -1222,23 +1222,49 @@ function BookingModal({
               </div>
 
               {/* Actions */}
-              <div className="flex justify-end gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSave}
-                  className="rounded-lg px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90"
-                  style={{ backgroundColor: '#6BA3D6' }}
-                >
-                  {modal.kind === 'edit' ? 'Save Changes' : 'Create Booking'}
-                </button>
-              </div>
+              {bookingType === 'casual' ? (
+                <div className="flex items-center justify-between pt-1">
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={handleSave}
+                      className="rounded-lg px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+                      style={{ backgroundColor: '#6BA3D6' }}
+                    >
+                      {modal.kind === 'edit' ? 'Save Changes' : 'Create Booking'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={onClose}
+                      className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Total</p>
+                    <p className="text-2xl font-bold text-gray-900">$0.00</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSave}
+                    className="rounded-lg px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+                    style={{ backgroundColor: '#6BA3D6' }}
+                  >
+                    {modal.kind === 'edit' ? 'Save Changes' : 'Create Booking'}
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
