@@ -16,7 +16,7 @@ import {
 // ── Grid constants ─────────────────────────────────────────────────────────────
 const START_H  = 6
 const END_H    = 21
-const SLOT_PX  = 15                               // px per 15-min slot → 60px/hr
+const SLOT_PX  = 30                               // px per 15-min slot → 120px/hr
 const TOTAL_PX = (END_H - START_H) * 4 * SLOT_PX // 900px total
 const TOP_PAD  = 8                                // px above first slot so 6am isn't clipped
 
@@ -378,9 +378,9 @@ export default function BookingsPage() {
                     {hoverMatch && (
                       <div
                         className="pointer-events-none absolute left-0 right-0 z-10 flex items-center justify-center"
-                        style={{ top: hoverMatch.slotY, height: SLOT_PX, backgroundColor: 'rgba(0,0,0,0.05)' }}
+                        style={{ top: hoverMatch.slotY, height: SLOT_PX, backgroundColor: 'rgba(107,163,214,0.2)' }}
                       >
-                        <span className="text-center text-[10px] font-semibold" style={{ color: 'rgba(0,0,0,0.72)', lineHeight: 1 }}>
+                        <span className="text-center text-[20px] font-semibold" style={{ color: '#93bfe6', lineHeight: 1 }}>
                           {fmtTime(hoverMatch.slotMins)}
                         </span>
                       </div>
@@ -425,9 +425,9 @@ export default function BookingsPage() {
                     {hoverMatch && (
                       <div
                         className="pointer-events-none absolute left-0 right-0 z-10 flex items-center justify-center"
-                        style={{ top: hoverMatch.slotY, height: SLOT_PX, backgroundColor: 'rgba(0,0,0,0.05)' }}
+                        style={{ top: hoverMatch.slotY, height: SLOT_PX, backgroundColor: 'rgba(107,163,214,0.2)' }}
                       >
-                        <span className="text-center text-[10px] font-semibold" style={{ color: 'rgba(0,0,0,0.72)', lineHeight: 1 }}>
+                        <span className="text-center text-[20px] font-semibold" style={{ color: '#93bfe6', lineHeight: 1 }}>
                           {fmtTime(hoverMatch.slotMins)}
                         </span>
                       </div>
