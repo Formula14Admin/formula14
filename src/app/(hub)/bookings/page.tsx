@@ -1578,6 +1578,12 @@ function BookingModal({
                     </button>
                     <button
                       type="button"
+                      className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50"
+                    >
+                      Refresh Booking
+                    </button>
+                    <button
+                      type="button"
                       onClick={onClose}
                       className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50"
                     >
@@ -1597,6 +1603,12 @@ function BookingModal({
                     className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50"
                   >
                     Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50"
+                  >
+                    Refresh Booking
                   </button>
                   <button
                     type="button"
