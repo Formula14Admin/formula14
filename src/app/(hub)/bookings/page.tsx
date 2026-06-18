@@ -945,7 +945,7 @@ function BookingModal({
   const [repeat,      setRepeat]      = useState<'none' | 'weekly' | 'fortnightly' | 'monthly' | 'yearly'>('none')
   const [repeatUntil, setRepeatUntil] = useState('')
   const [bookingType, setBookingType] = useState<'member' | 'casual' | 'unavailable'>('member')
-  const [numAthletes, setNumAthletes] = useState('1')
+  const [numAthletes, setNumAthletes] = useState('')
 
   function handleSpaceChange(id: SpaceId) {
     setSpaceId(id)
@@ -1104,7 +1104,7 @@ function BookingModal({
                     value={sessionType}
                     onChange={setSessionType}
                     options={[
-                      { value: '', label: 'Please Select A Session Type', muted: true },
+                      { value: '', label: 'Select A Session Type', muted: true },
                       ...SESSION_TYPES[spaceId].map(t => ({ value: t, label: t })),
                     ]}
                   />
@@ -1157,7 +1157,10 @@ function BookingModal({
                       <SelectPicker
                         value={numAthletes}
                         onChange={setNumAthletes}
-                        options={Array.from({ length: 10 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }))}
+                        options={[
+                          { value: '', label: 'Select Number Of Athletes', muted: true },
+                          ...Array.from({ length: 10 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) })),
+                        ]}
                       />
                     </>
                   ) : (
