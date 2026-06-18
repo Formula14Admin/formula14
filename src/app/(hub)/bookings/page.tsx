@@ -864,7 +864,7 @@ function TimePicker({ value, onChange, options, accentColor = '#6BA3D6' }: {
 }
 
 // ── Select Picker (string options) ────────────────────────────────────────────
-function SelectPicker({ value, onChange, options, accentColor = '#6BA3D6', getPanelPosition, multiValues, onChangeMulti, maxSelect, panelMaxHeight = 200 }: {
+function SelectPicker({ value, onChange, options, accentColor = '#6BA3D6', getPanelPosition, multiValues, onChangeMulti, maxSelect, panelMaxHeight = 200, centerOnTrigger = false }: {
   value: string
   onChange: (v: string) => void
   options: { value: string; label: string; muted?: boolean }[]
@@ -874,6 +874,7 @@ function SelectPicker({ value, onChange, options, accentColor = '#6BA3D6', getPa
   onChangeMulti?: (v: string[]) => void
   maxSelect?: number
   panelMaxHeight?: number
+  centerOnTrigger?: boolean
 }) {
   const multiMode = multiValues !== undefined
   const [open, setOpen] = useState(false)
@@ -899,6 +900,21 @@ function SelectPicker({ value, onChange, options, accentColor = '#6BA3D6', getPa
     }
   }, [open])
 
+  function calcStyle(r: DOMRect) {
+    const GAP = 4
+    if (centerOnTrigger) {
+      const idealTop = r.top + r.height / 2 - panelMaxHeight / 2
+      const top = Math.max(GAP, Math.min(window.innerHeight - panelMaxHeight - GAP, idealTop))
+      return { top, left: r.left, width: r.width }
+    }
+    const spaceBelow = window.innerHeight - r.bottom - GAP
+    const spaceAbove = r.top - GAP
+    const top = spaceBelow >= panelMaxHeight || spaceBelow >= spaceAbove
+      ? r.bottom + GAP
+      : r.top - Math.min(panelMaxHeight, spaceAbove) - GAP
+    return { top, left: r.left, width: r.width }
+  }
+
   // Keep panel anchored to trigger while modal scrolls
   useEffect(() => {
     if (!open) return
@@ -907,14 +923,7 @@ function SelectPicker({ value, onChange, options, accentColor = '#6BA3D6', getPa
         const pos = getPanelPosition()
         if (pos) setPanelStyle(pos)
       } else if (triggerRef.current) {
-        const r = triggerRef.current.getBoundingClientRect()
-        const GAP = 4
-        const spaceBelow = window.innerHeight - r.bottom - GAP
-        const spaceAbove = r.top - GAP
-        const top = spaceBelow >= panelMaxHeight || spaceBelow >= spaceAbove
-          ? r.bottom + GAP
-          : r.top - Math.min(panelMaxHeight, spaceAbove) - GAP
-        setPanelStyle({ top, left: r.left, width: r.width })
+        setPanelStyle(calcStyle(triggerRef.current.getBoundingClientRect()))
       }
     }
     window.addEventListener('scroll', reposition, true)
@@ -923,7 +932,7 @@ function SelectPicker({ value, onChange, options, accentColor = '#6BA3D6', getPa
       window.removeEventListener('scroll', reposition, true)
       window.removeEventListener('resize', reposition)
     }
-  }, [open, getPanelPosition, panelMaxHeight])
+  }, [open, getPanelPosition, panelMaxHeight, centerOnTrigger])
 
   function handleToggle() {
     if (!open) {
@@ -931,14 +940,7 @@ function SelectPicker({ value, onChange, options, accentColor = '#6BA3D6', getPa
         const pos = getPanelPosition()
         if (pos) setPanelStyle(pos)
       } else if (triggerRef.current) {
-        const r = triggerRef.current.getBoundingClientRect()
-        const GAP = 4
-        const spaceBelow = window.innerHeight - r.bottom - GAP
-        const spaceAbove = r.top - GAP
-        const top = spaceBelow >= panelMaxHeight || spaceBelow >= spaceAbove
-          ? r.bottom + GAP
-          : r.top - Math.min(panelMaxHeight, spaceAbove) - GAP
-        setPanelStyle({ top, left: r.left, width: r.width })
+        setPanelStyle(calcStyle(triggerRef.current.getBoundingClientRect()))
       }
     }
     setOpen(o => !o)
@@ -983,7 +985,9 @@ function SelectPicker({ value, onChange, options, accentColor = '#6BA3D6', getPa
           }}
         >
           {options.map(opt => {
-            const sel = multiMode ? multiValues!.includes(opt.value) : opt.value === value
+            const sel = multiMode
+              ? (opt.value === '' ? multiValues!.length === 0 : multiValues!.includes(opt.value))
+              : opt.value === value
             const atMax = multiMode && maxSelect !== undefined && multiValues!.length >= maxSelect && !sel
             return (
               <button
@@ -1060,22 +1064,8 @@ function BookingModal({
   const accentColor = bookingType === 'casual' ? '#6BAD6B' : bookingType === 'unavailable' ? '#ef4444' : '#6BA3D6'
   const isIndividual = bookingType === 'member' && sessionType === 'Individual Work Out'
 
-  const modalRef         = useRef<HTMLDivElement>(null)
-  const headerRef        = useRef<HTMLDivElement>(null)
-  const sessionTypeColRef = useRef<HTMLDivElement>(null)
-
-  function getAthletePanelStyle() {
-    if (!modalRef.current || !headerRef.current || !sessionTypeColRef.current) return null
-    const header  = headerRef.current.getBoundingClientRect()
-    const modal   = modalRef.current.getBoundingClientRect()
-    const col     = sessionTypeColRef.current.getBoundingClientRect()
-    return {
-      top:    header.bottom,
-      left:   modal.left + (modal.width - col.width) / 2,
-      width:  col.width,
-      height: modal.bottom - header.bottom,
-    }
-  }
+  const modalRef  = useRef<HTMLDivElement>(null)
+  const headerRef = useRef<HTMLDivElement>(null)
 
   function handleSpaceChange(id: SpaceId) {
     setSpaceId(id)
@@ -1298,7 +1288,7 @@ function BookingModal({
                 <>
                   {/* Row 1: Session Type | Date */}
                   <div className="grid grid-cols-2 gap-3">
-                    <div ref={sessionTypeColRef}>
+                    <div>
                       <label className={LABEL}>Session type</label>
                       <SelectPicker
                         value={sessionType}
@@ -1511,7 +1501,7 @@ function BookingModal({
                             onChangeMulti={setAthletes}
                             maxSelect={parseInt(numAthletes)}
                             accentColor={accentColor}
-                            getPanelPosition={getAthletePanelStyle}
+                            centerOnTrigger
                             options={[
                               { value: '', label: 'Select Athlete', muted: true },
                               ...[...ATHLETES].sort().map(a => ({ value: a, label: a })),
@@ -1523,7 +1513,7 @@ function BookingModal({
                               value={singleAthlete}
                               onChange={v => { setSingleAthlete(v); if (v !== 'other') setCustomAthlete('') }}
                               accentColor={accentColor}
-                              getPanelPosition={getAthletePanelStyle}
+                              centerOnTrigger
                               options={[
                                 { value: '', label: 'Select Athlete', muted: true },
                                 ...[...ATHLETES].sort().map(a => ({ value: a, label: a })),
@@ -1552,7 +1542,7 @@ function BookingModal({
                         value={singleAthlete}
                         onChange={v => { setSingleAthlete(v); if (v !== 'other') setCustomAthlete('') }}
                         accentColor={accentColor}
-                        getPanelPosition={getAthletePanelStyle}
+                        centerOnTrigger
                         options={[
                           { value: '', label: 'Select Athlete', muted: true },
                           ...[...ATHLETES].sort().map(a => ({ value: a, label: a })),
