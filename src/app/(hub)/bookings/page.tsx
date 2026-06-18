@@ -31,14 +31,12 @@ const SPACES = [
 type SpaceId = typeof SPACES[number]['id']
 
 // ── Session types per space ────────────────────────────────────────────────────
-const SESSION_TYPES = [
-  'Casual Shooting',
-  'Individual Work Out',
-  'Programs',
-  'Small Group Session',
-  'Team Training',
-  'Volume Shooting',
-]
+const SESSION_TYPES: Record<SpaceId, string[]> = {
+  primary:   ['Casual Shooting', 'Individual Work Out', 'Programs', 'Small Group Session', 'Team Training', 'Volume Shooting'],
+  secondary: ['Casual Shooting', 'Individual Work Out', 'Programs', 'Small Group Session', 'Team Training', 'Volume Shooting'],
+  shooting:  ['Casual Shooting', 'Individual Work Out', 'Programs', 'Small Group Session', 'Team Training', 'Volume Shooting'],
+  meeting:   ['Coach Meeting', 'Film Review', 'Goal Setting', 'Meeting (General)', 'Parent Meeting', 'Player Meeting', 'Team Meeting'],
+}
 
 const ATHLETES = [
   'Liam Carter', 'Jordan Williams', 'Aisha Thompson', 'Marcus Davies',
@@ -949,6 +947,7 @@ function BookingModal({
 
   function handleSpaceChange(id: SpaceId) {
     setSpaceId(id)
+    setSessionType('')
   }
 
   function toggleAthlete(name: string) {
@@ -1088,7 +1087,7 @@ function BookingModal({
                     onChange={setSessionType}
                     options={[
                       { value: '', label: 'Please Select A Session Type', muted: true },
-                      ...SESSION_TYPES.map(t => ({ value: t, label: t })),
+                      ...SESSION_TYPES[spaceId].map(t => ({ value: t, label: t })),
                     ]}
                   />
                 </div>
