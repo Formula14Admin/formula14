@@ -910,7 +910,7 @@ function SelectPicker({ value, onChange, options, accentColor = '#6BA3D6', getPa
         const GAP = 4, PANEL_MAX_H = 200
         const spaceBelow = window.innerHeight - r.bottom - GAP
         const spaceAbove = r.top - GAP
-        const top = spaceBelow >= 120 || spaceBelow >= spaceAbove
+        const top = spaceBelow >= PANEL_MAX_H || spaceBelow >= spaceAbove
           ? r.bottom + GAP
           : r.top - Math.min(PANEL_MAX_H, spaceAbove) - GAP
         setPanelStyle({ top, left: r.left, width: r.width })
@@ -934,7 +934,7 @@ function SelectPicker({ value, onChange, options, accentColor = '#6BA3D6', getPa
         const GAP = 4, PANEL_MAX_H = 200
         const spaceBelow = window.innerHeight - r.bottom - GAP
         const spaceAbove = r.top - GAP
-        const top = spaceBelow >= 120 || spaceBelow >= spaceAbove
+        const top = spaceBelow >= PANEL_MAX_H || spaceBelow >= spaceAbove
           ? r.bottom + GAP
           : r.top - Math.min(PANEL_MAX_H, spaceAbove) - GAP
         setPanelStyle({ top, left: r.left, width: r.width })
@@ -1511,6 +1511,7 @@ function BookingModal({
                             onChangeMulti={setAthletes}
                             maxSelect={parseInt(numAthletes)}
                             accentColor={accentColor}
+                            getPanelPosition={getAthletePanelStyle}
                             options={[
                               { value: '', label: 'Select Athletes', muted: true },
                               ...[...ATHLETES].sort().map(a => ({ value: a, label: a })),
