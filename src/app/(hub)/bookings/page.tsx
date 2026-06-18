@@ -1003,17 +1003,14 @@ function BookingModal({
           </div>
         ) : (
           <div className="sticky top-0 z-10">
-            <div className="relative overflow-hidden" style={{ height: '97px' }}>
-              <img src="/Test.png" alt="" className="absolute inset-0 h-full w-full" style={{ objectFit: 'cover' }} />
+            <div className="relative flex items-center justify-center px-12 py-6" style={{ backgroundColor: '#6BA3D6' }}>
+              <span className="text-2xl font-bold text-white">New Booking</span>
               <button
                 onClick={onClose}
                 className="absolute right-3 top-3 rounded-lg p-1.5 text-white/70 transition hover:bg-white/20"
               >
                 <IconX size={18} />
               </button>
-            </div>
-            <div className="bg-white py-3 text-center">
-              <span className="text-base font-bold text-gray-900">New Booking</span>
             </div>
           </div>
         )}
