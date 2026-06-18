@@ -600,21 +600,14 @@ function BookingModal({
             </div>
           </div>
         ) : (
-          <div
-            className="sticky top-0 z-10 rounded-t-2xl px-6 py-4"
-            style={{ backgroundColor: '#6BA3D6' }}
-          >
-            <div className="relative flex items-center justify-center">
-              <h2 className="text-xl text-white" style={{ fontFamily: "'Sprite Graffiti Shadow', cursive" }}>
-                {modal.kind === 'edit' ? 'Edit Booking' : 'New Booking'}
-              </h2>
-              <button
-                onClick={onClose}
-                className="absolute right-0 rounded-lg p-1.5 text-white/70 transition hover:bg-white/20"
-              >
-                <IconX size={18} />
-              </button>
-            </div>
+          <div className="sticky top-0 z-10 relative">
+            <img src="/New Booking Header.svg" alt="" className="block w-full" />
+            <button
+              onClick={onClose}
+              className="absolute right-3 top-3 rounded-lg p-1.5 text-white/70 transition hover:bg-white/20"
+            >
+              <IconX size={18} />
+            </button>
           </div>
         )}
 
