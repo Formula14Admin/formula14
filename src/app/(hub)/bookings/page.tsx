@@ -380,7 +380,7 @@ export default function BookingsPage() {
                         className="pointer-events-none absolute left-0 right-0 z-10 flex items-center justify-center"
                         style={{ top: hoverMatch.slotY, height: SLOT_PX, backgroundColor: 'rgba(0,0,0,0.07)' }}
                       >
-                        <span className="text-center text-base font-semibold" style={{ color: '#6b7280', lineHeight: 1 }}>
+                        <span className="text-center text-xs font-semibold" style={{ color: '#6b7280', lineHeight: 1 }}>
                           {fmtTime(hoverMatch.slotMins)}
                         </span>
                       </div>
@@ -427,7 +427,7 @@ export default function BookingsPage() {
                         className="pointer-events-none absolute left-0 right-0 z-10 flex items-center justify-center"
                         style={{ top: hoverMatch.slotY, height: SLOT_PX, backgroundColor: 'rgba(0,0,0,0.07)' }}
                       >
-                        <span className="text-center text-base font-semibold" style={{ color: '#6b7280', lineHeight: 1 }}>
+                        <span className="text-center text-xs font-semibold" style={{ color: '#6b7280', lineHeight: 1 }}>
                           {fmtTime(hoverMatch.slotMins)}
                         </span>
                       </div>
