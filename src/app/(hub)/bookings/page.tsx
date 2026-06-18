@@ -1525,6 +1525,7 @@ function BookingModal({
                               value={singleAthlete}
                               onChange={v => { setSingleAthlete(v); if (v !== 'other') setCustomAthlete('') }}
                               accentColor={accentColor}
+                              getPanelPosition={getAthletePanelStyle}
                               options={[
                                 { value: '', label: 'Select Athlete', muted: true },
                                 ...[...ATHLETES].sort().map(a => ({ value: a, label: a })),
