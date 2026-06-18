@@ -1380,7 +1380,86 @@ function BookingModal({
                   )}
 
                   {/* Athletes */}
-                  {sessionType === 'Individual Work Out' && (
+                  {bookingType === 'casual' && spaceId !== 'meeting' ? (
+                    /* ── Casual (non-meeting): athlete intake form ── */
+                    <div className="space-y-3">
+                      <div>
+                        <label className={LABEL}>Name</label>
+                        <input type="text" value={athleteName} onChange={e => setAthleteName(e.target.value)}
+                          placeholder="Full name" className={INPUT} />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className={LABEL}>Gender</label>
+                          <SelectPicker
+                            value={athleteGender}
+                            onChange={setAthleteGender}
+                            accentColor={accentColor}
+                            options={[
+                              { value: '', label: 'Select Gender', muted: true },
+                              { value: 'male', label: 'Male' },
+                              { value: 'female', label: 'Female' },
+                              { value: 'prefer_not', label: 'Prefer not to say' },
+                            ]}
+                          />
+                        </div>
+                        <div>
+                          <label className={LABEL}>Age</label>
+                          <input type="number" min="1" max="120" value={athleteAge}
+                            onChange={e => setAthleteAge(e.target.value)}
+                            placeholder="Age" className={INPUT} style={{ textAlign: 'center' }} />
+                        </div>
+                      </div>
+                      <div>
+                        <label className={LABEL}>Rep Club</label>
+                        <SelectPicker
+                          value={athleteRepClub}
+                          onChange={v => { setAthleteRepClub(v); if (v !== 'other') setAthleteRepClubOther('') }}
+                          accentColor={accentColor}
+                          options={[
+                            { value: '', label: 'Select Rep Club', muted: true },
+                            { value: 'spba',    label: 'Southern Peninsula Basketball Association' },
+                            { value: 'breakers',label: 'Mornington Breakers' },
+                            { value: 'wba',     label: 'Westernport Basketball Association' },
+                            { value: 'blues',   label: 'Frankston Blues' },
+                            { value: 'bobcats', label: 'Frankston Bobcats' },
+                            { value: 'chelsea', label: 'Chelsea Basketball' },
+                            { value: 'none',    label: 'Not currently playing rep' },
+                            { value: 'other',   label: 'Other' },
+                          ]}
+                        />
+                      </div>
+                      {athleteRepClub === 'other' && (
+                        <div>
+                          <label className={LABEL}>Club Name</label>
+                          <input type="text" value={athleteRepClubOther}
+                            onChange={e => setAthleteRepClubOther(e.target.value)}
+                            placeholder="Enter club name" className={INPUT} />
+                        </div>
+                      )}
+                      <div>
+                        <label className={LABEL}>Brief Playing History</label>
+                        <textarea
+                          value={athletePlayingHistory}
+                          onChange={e => setAthletePlayingHistory(e.target.value)}
+                          rows={3}
+                          placeholder="e.g. 3 years domestic, currently in U16s..."
+                          className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 outline-none transition resize-none focus:border-[#6BAD6B] focus:ring-1 focus:ring-[#6BAD6B]/40"
+                        />
+                      </div>
+                      <div>
+                        <label className={LABEL}>What is the player trying to get out of this session?</label>
+                        <textarea
+                          value={athleteSessionGoals}
+                          onChange={e => setAthleteSessionGoals(e.target.value)}
+                          rows={3}
+                          placeholder="e.g. Improve ball handling, prepare for trials..."
+                          className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 outline-none transition resize-none focus:border-[#6BAD6B] focus:ring-1 focus:ring-[#6BAD6B]/40"
+                        />
+                      </div>
+                    </div>
+                  ) : sessionType === 'Individual Work Out' ? (
+                    /* ── Member Individual Work Out: single athlete dropdown ── */
                     <div>
                       <label className={LABEL}>Athlete</label>
                       <SelectPicker
@@ -1405,7 +1484,7 @@ function BookingModal({
                         />
                       )}
                     </div>
-                  )}
+                  ) : null}
                 </>
               )}
 
