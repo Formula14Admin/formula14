@@ -726,6 +726,101 @@ function DatePicker({ value, onChange }: { value: string; onChange: (v: string) 
   )
 }
 
+// ── Time Picker ────────────────────────────────────────────────────────────────
+function TimePicker({ value, onChange, options }: {
+  value: number
+  onChange: (v: number) => void
+  options: number[]
+}) {
+  const [open, setOpen] = useState(false)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const selectedRef = useRef<HTMLButtonElement>(null)
+  const [panelStyle, setPanelStyle] = useState({ top: 0, left: 0, width: 0 })
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (
+        !triggerRef.current?.contains(e.target as Node) &&
+        !panelRef.current?.contains(e.target as Node)
+      ) setOpen(false)
+    }
+    if (open) document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  // Scroll selected item into view each time the panel opens
+  useEffect(() => {
+    if (open && selectedRef.current) {
+      selectedRef.current.scrollIntoView({ block: 'nearest' })
+    }
+  }, [open])
+
+  function handleToggle() {
+    if (!open && triggerRef.current) {
+      const r = triggerRef.current.getBoundingClientRect()
+      const GAP = 4
+      const PANEL_MAX_H = 200
+      const spaceBelow = window.innerHeight - r.bottom - GAP
+      const spaceAbove = r.top - GAP
+      const top = spaceBelow >= 120 || spaceBelow >= spaceAbove
+        ? r.bottom + GAP
+        : r.top - Math.min(PANEL_MAX_H, spaceAbove) - GAP
+      setPanelStyle({ top, left: r.left, width: r.width })
+    }
+    setOpen(o => !o)
+  }
+
+  return (
+    <div>
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={handleToggle}
+        className="flex h-10 w-full items-center justify-center rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-800 outline-none transition focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/40"
+      >
+        {fmtTime(value)}
+      </button>
+
+      {open && createPortal(
+        <div
+          ref={panelRef}
+          className="rounded-xl border border-gray-200 bg-white shadow-xl"
+          style={{
+            position: 'fixed',
+            top: panelStyle.top,
+            left: panelStyle.left,
+            width: panelStyle.width,
+            zIndex: 9999,
+            maxHeight: '200px',
+            overflowY: 'auto',
+            fontFamily: "'Google Sans Flex', sans-serif",
+          }}
+        >
+          {options.map(mins => {
+            const sel = mins === value
+            return (
+              <button
+                key={mins}
+                ref={sel ? selectedRef : null}
+                type="button"
+                onClick={() => { onChange(mins); setOpen(false) }}
+                className={`w-full py-1.5 text-center text-sm transition ${
+                  sel ? 'font-semibold text-white' : 'text-gray-700 hover:bg-gray-50'
+                }`}
+                style={sel ? { backgroundColor: '#6BA3D6' } : {}}
+              >
+                {fmtTime(mins)}
+              </button>
+            )
+          })}
+        </div>,
+        document.body
+      )}
+    </div>
+  )
+}
+
 // ── Booking Modal ──────────────────────────────────────────────────────────────
 function BookingModal({
   modal, today, onClose, onSave, onDelete, onEdit,
@@ -901,37 +996,22 @@ function BookingModal({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={LABEL}>Start time</label>
-                  <select
+                  <TimePicker
                     value={startMins}
-                    onChange={e => {
-                      const s = Number(e.target.value)
-                      setStartMins(s)
-                      if (finishMins <= s) setFinishMins(s + 60)
-                    }}
-                    className={INPUT}
-                    style={{ textAlign: 'center', textAlignLast: 'center' }}
-                  >
-                    {Array.from({ length: (END_H - START_H) * 4 }, (_, i) => {
-                      const m = START_H * 60 + i * 15
-                      return <option key={m} value={m}>{fmtTime(m)}</option>
-                    })}
-                  </select>
+                    onChange={s => { setStartMins(s); if (finishMins <= s) setFinishMins(s + 60) }}
+                    options={Array.from({ length: (END_H - START_H) * 4 }, (_, i) => START_H * 60 + i * 15)}
+                  />
                 </div>
                 <div>
                   <label className={LABEL}>Finish time</label>
-                  <select
+                  <TimePicker
                     value={finishMins}
-                    onChange={e => setFinishMins(Number(e.target.value))}
-                    className={INPUT}
-                    style={{ textAlign: 'center', textAlignLast: 'center' }}
-                  >
-                    {Array.from({ length: (END_H - START_H) * 4 }, (_, i) => {
+                    onChange={setFinishMins}
+                    options={Array.from({ length: (END_H - START_H) * 4 }, (_, i) => {
                       const m = START_H * 60 + (i + 1) * 15
-                      return m > startMins && m <= END_H * 60
-                        ? <option key={m} value={m}>{fmtTime(m)}</option>
-                        : null
-                    })}
-                  </select>
+                      return m > startMins && m <= END_H * 60 ? m : null
+                    }).filter((m): m is number => m !== null)}
+                  />
                 </div>
               </div>
 
