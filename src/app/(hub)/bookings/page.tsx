@@ -16,7 +16,7 @@ import {
 // ── Grid constants ─────────────────────────────────────────────────────────────
 const START_H  = 6
 const END_H    = 21
-const SLOT_PX  = 30                               // px per 15-min slot → 120px/hr
+const SLOT_PX  = 15                               // px per 15-min slot → 60px/hr
 const TOTAL_PX = (END_H - START_H) * 4 * SLOT_PX // 900px total
 const TOP_PAD  = 8                                // px above first slot so 6am isn't clipped
 
