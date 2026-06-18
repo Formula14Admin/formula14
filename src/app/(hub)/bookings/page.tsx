@@ -448,7 +448,7 @@ function BookingBlock({
 }) {
   const top    = toY(booking.startMins)
   const height = Math.max(SLOT_PX, (booking.duration / 15) * SLOT_PX)
-  const coachBadge = booking.coach === 'matt' ? 'Y' : booking.coach === 'jade' ? 'J' : booking.coach === 'other' ? 'O' : null
+  const coachBadge = booking.coach === 'matt' ? 'M' : booking.coach === 'jade' ? 'J' : booking.coach === 'other' ? 'O' : null
 
   const athleteStr = booking.athletes.length === 0 ? '' :
     booking.athletes.length <= 2
