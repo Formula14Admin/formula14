@@ -592,7 +592,7 @@ function DatePicker({ value, onChange }: { value: string; onChange: (v: string) 
       <button
         type="button"
         onClick={() => { setOpen(o => !o); setView('days') }}
-        className="flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-800 outline-none transition focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/40"
+        className="flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-3 text-lg text-gray-800 outline-none transition focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/40"
       >
         <IconCalendar size={14} className="shrink-0 text-gray-400" />
         <span className="truncate">{displayText}</span>
@@ -611,7 +611,7 @@ function DatePicker({ value, onChange }: { value: string; onChange: (v: string) 
                 <button
                   type="button"
                   onClick={() => setView('months')}
-                  className="text-xs font-semibold text-gray-800 transition hover:text-[#6BA3D6]"
+                  className="text-base font-semibold text-gray-800 transition hover:text-[#6BA3D6]"
                 >
                   {MONTH_NAMES[viewMonth]} {viewYear}
                 </button>
@@ -623,7 +623,7 @@ function DatePicker({ value, onChange }: { value: string; onChange: (v: string) 
               {/* Day-of-week headers */}
               <div className="grid grid-cols-7 px-1">
                 {['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d => (
-                  <div key={d} className="py-0.5 text-center text-[9px] font-semibold uppercase tracking-wide text-gray-400">
+                  <div key={d} className="py-0.5 text-center text-[13px] font-semibold uppercase tracking-wide text-gray-400">
                     {d}
                   </div>
                 ))}
@@ -639,7 +639,7 @@ function DatePicker({ value, onChange }: { value: string; onChange: (v: string) 
                       type="button"
                       onClick={() => pickDate(cell.date)}
                       className={[
-                        'mx-auto flex h-6 w-6 items-center justify-center rounded-full text-[11px] transition',
+                        'mx-auto flex h-7 w-7 items-center justify-center rounded-full text-[15px] transition',
                         sel
                           ? 'font-semibold text-white'
                           : cell.current
@@ -661,7 +661,7 @@ function DatePicker({ value, onChange }: { value: string; onChange: (v: string) 
                 <button type="button" onClick={() => setViewYear(y => y - 1)} className="rounded p-1 text-gray-500 hover:bg-gray-100">
                   <IconChevronLeft size={14} />
                 </button>
-                <span className="text-xs font-semibold text-gray-800">{viewYear}</span>
+                <span className="text-base font-semibold text-gray-800">{viewYear}</span>
                 <button type="button" onClick={() => setViewYear(y => y + 1)} className="rounded p-1 text-gray-500 hover:bg-gray-100">
                   <IconChevronRight size={14} />
                 </button>
@@ -677,7 +677,7 @@ function DatePicker({ value, onChange }: { value: string; onChange: (v: string) 
                       type="button"
                       onClick={() => { setViewMonth(i); setView('days') }}
                       className={[
-                        'rounded-lg py-1.5 text-xs transition',
+                        'rounded-lg py-1.5 text-base transition',
                         sel ? 'font-semibold text-white' : 'text-gray-700 hover:bg-gray-100',
                       ].join(' ')}
                       style={sel ? { backgroundColor: '#6BA3D6' } : {}}
@@ -741,8 +741,8 @@ function BookingModal({
 
   const space = SPACES.find(s => s.id === spaceId)!
 
-  const INPUT = 'h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-center text-sm text-gray-800 outline-none transition focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/40'
-  const LABEL = 'mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-400 text-center'
+  const INPUT = 'h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-center text-lg text-gray-800 outline-none transition focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/40'
+  const LABEL = 'mb-1 block text-base font-semibold uppercase tracking-wide text-gray-400 text-center'
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
@@ -751,8 +751,8 @@ function BookingModal({
         {isView ? (
           <div className="sticky top-0 z-10 flex items-start justify-between border-b border-gray-100 bg-white px-6 pb-4 pt-6">
             <div>
-              <h2 className="text-base font-bold text-gray-900">Session Details</h2>
-              <p className="mt-0.5 text-sm text-gray-500">
+              <h2 className="text-xl font-bold text-gray-900">Session Details</h2>
+              <p className="mt-0.5 text-lg text-gray-500">
                 {parse(src!.date).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })}
                 {src!.date === today ? ' · Today' : ''}
               </p>
@@ -760,13 +760,13 @@ function BookingModal({
             <div className="flex items-center gap-1">
               <button
                 onClick={() => onEdit(src!)}
-                className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-sm font-medium text-gray-600 transition hover:bg-gray-100"
+                className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-lg font-medium text-gray-600 transition hover:bg-gray-100"
               >
                 <IconEdit size={14} /> Edit
               </button>
               <button
                 onClick={() => onDelete(src!.id)}
-                className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-sm font-medium text-red-500 transition hover:bg-red-50"
+                className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-lg font-medium text-red-500 transition hover:bg-red-50"
               >
                 <IconTrash size={14} /> Delete
               </button>
@@ -794,27 +794,27 @@ function BookingModal({
               <div className="flex items-center gap-3 rounded-xl p-3.5" style={{ backgroundColor: space.light }}>
                 <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: space.color }} />
                 <div>
-                  <p className="text-sm font-bold leading-snug" style={{ color: space.color }}>{src!.sessionType}</p>
-                  <p className="text-xs text-gray-500">{space.label}</p>
+                  <p className="text-lg font-bold leading-snug" style={{ color: space.color }}>{src!.sessionType}</p>
+                  <p className="text-base text-gray-500">{space.label}</p>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4 text-sm">
+              <div className="grid grid-cols-2 gap-4 text-lg">
                 <div>
-                  <p className="text-xs text-gray-400">Time</p>
+                  <p className="text-base text-gray-400">Time</p>
                   <p className="font-semibold text-gray-800">{fmtTime(src!.startMins)}–{fmtTime(finishMins)}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-400">Duration</p>
+                  <p className="text-base text-gray-400">Duration</p>
                   <p className="font-semibold text-gray-800">{fmtDur(src!.duration)}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-400">Coach</p>
+                  <p className="text-base text-gray-400">Coach</p>
                   <p className="font-semibold text-gray-800">
                     {src!.coach === 'matt' ? 'Matt' : src!.coach === 'jade' ? 'Jade' : src!.coach === 'other' ? 'Other' : '—'}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-400">Athletes</p>
+                  <p className="text-base text-gray-400">Athletes</p>
                   <p className="font-semibold text-gray-800">
                     {src!.athletes.length ? src!.athletes.join(', ') : '—'}
                   </p>
@@ -833,7 +833,7 @@ function BookingModal({
                       key={sp.id}
                       type="button"
                       onClick={() => handleSpaceChange(sp.id)}
-                      className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-center text-sm font-semibold transition ${
+                      className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-center text-lg font-semibold transition ${
                         spaceId === sp.id
                           ? 'border-transparent text-white'
                           : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
@@ -941,7 +941,7 @@ function BookingModal({
                   </div>
                   <div>
                     <label className={LABEL}>Sessions</label>
-                    <div className="flex h-10 w-full items-center justify-center rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-500">
+                    <div className="flex h-10 w-full items-center justify-center rounded-lg border border-gray-200 bg-gray-50 text-lg text-gray-500">
                       {repeatUntil
                         ? `${occurrenceDates(date, repeat, repeatUntil).length} sessions`
                         : '—'}
@@ -955,7 +955,7 @@ function BookingModal({
                 <label className={LABEL}>
                   Athletes
                   {athletes.length > 0 && (
-                    <span className="ml-1.5 rounded-full bg-[#6BA3D6] px-1.5 py-0.5 text-[10px] text-white">
+                    <span className="ml-1.5 rounded-full bg-[#6BA3D6] px-1.5 py-0.5 text-sm text-white">
                       {athletes.length}
                     </span>
                   )}
@@ -968,12 +968,12 @@ function BookingModal({
                         key={a}
                         type="button"
                         onClick={() => toggleAthlete(a)}
-                        className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition ${
+                        className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-base font-medium transition ${
                           sel ? 'text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                         }`}
                         style={sel ? { backgroundColor: '#6BA3D6' } : {}}
                       >
-                        {sel && <IconCheck size={10} />}
+                        {sel && <IconCheck size={14} />}
                         {a}
                       </button>
                     )
@@ -986,14 +986,14 @@ function BookingModal({
                 <button
                   type="button"
                   onClick={onClose}
-                  className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50"
+                  className="rounded-lg border border-gray-200 px-4 py-2 text-lg font-semibold text-gray-600 transition hover:bg-gray-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
                   onClick={handleSave}
-                  className="rounded-lg px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+                  className="rounded-lg px-5 py-2 text-lg font-semibold text-white transition hover:opacity-90"
                   style={{ backgroundColor: '#6BA3D6' }}
                 >
                   {modal.kind === 'edit' ? 'Save Changes' : 'Create Booking'}
