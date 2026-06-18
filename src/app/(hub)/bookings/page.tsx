@@ -864,17 +864,18 @@ function TimePicker({ value, onChange, options, accentColor = '#6BA3D6' }: {
 }
 
 // ── Select Picker (string options) ────────────────────────────────────────────
-function SelectPicker({ value, onChange, options, accentColor = '#6BA3D6' }: {
+function SelectPicker({ value, onChange, options, accentColor = '#6BA3D6', getPanelPosition }: {
   value: string
   onChange: (v: string) => void
   options: { value: string; label: string; muted?: boolean }[]
   accentColor?: string
+  getPanelPosition?: () => { top: number; left: number; width: number; height: number } | null
 }) {
   const [open, setOpen] = useState(false)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const selectedRef = useRef<HTMLButtonElement>(null)
-  const [panelStyle, setPanelStyle] = useState({ top: 0, left: 0, width: 0 })
+  const [panelStyle, setPanelStyle] = useState<{ top: number; left: number; width: number; height?: number }>({ top: 0, left: 0, width: 0 })
 
   useEffect(() => {
     function handler(e: MouseEvent) {
@@ -897,15 +898,19 @@ function SelectPicker({ value, onChange, options, accentColor = '#6BA3D6' }: {
   useEffect(() => {
     if (!open) return
     function reposition() {
-      if (!triggerRef.current) return
-      const r = triggerRef.current.getBoundingClientRect()
-      const GAP = 4, PANEL_MAX_H = 200
-      const spaceBelow = window.innerHeight - r.bottom - GAP
-      const spaceAbove = r.top - GAP
-      const top = spaceBelow >= 120 || spaceBelow >= spaceAbove
-        ? r.bottom + GAP
-        : r.top - Math.min(PANEL_MAX_H, spaceAbove) - GAP
-      setPanelStyle({ top, left: r.left, width: r.width })
+      if (getPanelPosition) {
+        const pos = getPanelPosition()
+        if (pos) setPanelStyle(pos)
+      } else if (triggerRef.current) {
+        const r = triggerRef.current.getBoundingClientRect()
+        const GAP = 4, PANEL_MAX_H = 200
+        const spaceBelow = window.innerHeight - r.bottom - GAP
+        const spaceAbove = r.top - GAP
+        const top = spaceBelow >= 120 || spaceBelow >= spaceAbove
+          ? r.bottom + GAP
+          : r.top - Math.min(PANEL_MAX_H, spaceAbove) - GAP
+        setPanelStyle({ top, left: r.left, width: r.width })
+      }
     }
     window.addEventListener('scroll', reposition, true)
     window.addEventListener('resize', reposition)
@@ -913,18 +918,23 @@ function SelectPicker({ value, onChange, options, accentColor = '#6BA3D6' }: {
       window.removeEventListener('scroll', reposition, true)
       window.removeEventListener('resize', reposition)
     }
-  }, [open])
+  }, [open, getPanelPosition])
 
   function handleToggle() {
-    if (!open && triggerRef.current) {
-      const r = triggerRef.current.getBoundingClientRect()
-      const GAP = 4, PANEL_MAX_H = 200
-      const spaceBelow = window.innerHeight - r.bottom - GAP
-      const spaceAbove = r.top - GAP
-      const top = spaceBelow >= 120 || spaceBelow >= spaceAbove
-        ? r.bottom + GAP
-        : r.top - Math.min(PANEL_MAX_H, spaceAbove) - GAP
-      setPanelStyle({ top, left: r.left, width: r.width })
+    if (!open) {
+      if (getPanelPosition) {
+        const pos = getPanelPosition()
+        if (pos) setPanelStyle(pos)
+      } else if (triggerRef.current) {
+        const r = triggerRef.current.getBoundingClientRect()
+        const GAP = 4, PANEL_MAX_H = 200
+        const spaceBelow = window.innerHeight - r.bottom - GAP
+        const spaceAbove = r.top - GAP
+        const top = spaceBelow >= 120 || spaceBelow >= spaceAbove
+          ? r.bottom + GAP
+          : r.top - Math.min(PANEL_MAX_H, spaceAbove) - GAP
+        setPanelStyle({ top, left: r.left, width: r.width })
+      }
     }
     setOpen(o => !o)
   }
@@ -954,7 +964,7 @@ function SelectPicker({ value, onChange, options, accentColor = '#6BA3D6' }: {
             left: panelStyle.left,
             width: panelStyle.width,
             zIndex: 9999,
-            maxHeight: '200px',
+            ...(panelStyle.height ? { height: panelStyle.height } : { maxHeight: '200px' }),
             overflowY: 'auto',
             fontFamily: "'Google Sans Flex', sans-serif",
           }}
@@ -1016,6 +1026,22 @@ function BookingModal({
   const accentColor = bookingType === 'casual' ? '#6BAD6B' : bookingType === 'unavailable' ? '#ef4444' : '#6BA3D6'
   const isIndividual = bookingType === 'member' && sessionType === 'Individual Work Out'
 
+  const modalRef  = useRef<HTMLDivElement>(null)
+  const headerRef = useRef<HTMLDivElement>(null)
+
+  function getAthletePanelStyle() {
+    if (!modalRef.current || !headerRef.current) return null
+    const modal  = modalRef.current.getBoundingClientRect()
+    const header = headerRef.current.getBoundingClientRect()
+    const PAD = 24
+    return {
+      top:    header.bottom,
+      left:   modal.left + PAD,
+      width:  modal.width - PAD * 2,
+      height: modal.bottom - header.bottom,
+    }
+  }
+
   function handleSpaceChange(id: SpaceId) {
     setSpaceId(id)
     setSessionType('')
@@ -1046,7 +1072,7 @@ function BookingModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
-      <div className="booking-modal relative w-full max-w-[717px] overflow-y-auto rounded-2xl bg-white shadow-2xl" style={{ maxHeight: 'calc(100vh - 64px)', fontFamily: "'Google Sans Flex', sans-serif" }}>
+      <div ref={modalRef} className="booking-modal relative w-full max-w-[717px] overflow-y-auto rounded-2xl bg-white shadow-2xl" style={{ maxHeight: 'calc(100vh - 64px)', fontFamily: "'Google Sans Flex', sans-serif" }}>
         {/* Header — blue panel for add/edit, white for view */}
         {isView ? (
           <div className="sticky top-0 z-10 flex items-start justify-between border-b border-gray-100 bg-white px-6 pb-4 pt-6">
@@ -1077,7 +1103,7 @@ function BookingModal({
           </div>
         ) : (
           <div className="sticky top-0 z-10">
-            <div className="relative flex items-center justify-center px-12" style={{ backgroundColor: accentColor, paddingTop: '4px', paddingBottom: '4px' }}>
+            <div ref={headerRef} className="relative flex items-center justify-center px-12" style={{ backgroundColor: accentColor, paddingTop: '4px', paddingBottom: '4px' }}>
               <img src="/New Booking Header.svg" alt="New Booking" className="block h-full w-auto" style={{ maxHeight: '90px' }} />
               <button
                 onClick={onClose}
@@ -1353,6 +1379,7 @@ function BookingModal({
                         value={singleAthlete}
                         onChange={v => { setSingleAthlete(v); if (v !== 'other') setCustomAthlete('') }}
                         accentColor={accentColor}
+                        getPanelPosition={getAthletePanelStyle}
                         options={[
                           { value: '', label: 'Select Athlete', muted: true },
                           ...[...ATHLETES].sort().map(a => ({ value: a, label: a })),
