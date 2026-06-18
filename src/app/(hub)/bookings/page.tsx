@@ -59,7 +59,7 @@ type Modal =
   | { kind: 'view'; booking: Booking }
   | { kind: 'edit'; booking: Booking }
 
-type HoverInfo = { colKey: string; slotY: number } | null
+type HoverInfo = { colKey: string; slotY: number; slotMins: number } | null
 
 // ── Date helpers ───────────────────────────────────────────────────────────────
 function ds(d: Date): string {
@@ -196,7 +196,7 @@ export default function BookingsPage() {
     }
     const rect = e.currentTarget.getBoundingClientRect()
     const snapped = Math.max(START_H * 60, Math.min(END_H * 60 - 15, fromY(e.clientY - rect.top)))
-    setHoverInfo({ colKey, slotY: toY(snapped) })
+    setHoverInfo({ colKey, slotY: toY(snapped), slotMins: snapped })
   }
 
   function handleSave(items: (Omit<Booking, 'id'> & { id?: string })[]) {
@@ -358,7 +358,7 @@ export default function BookingsPage() {
               SPACES.map((sp, i) => {
                 const colKey = sp.id
                 const colBookings = bookings.filter(b => b.date === visibleDates[0] && b.spaceId === sp.id)
-                const hoverY = hoverInfo?.colKey === colKey ? hoverInfo.slotY : null
+                const hoverMatch = hoverInfo?.colKey === colKey ? hoverInfo : null
                 return (
                   <div
                     key={sp.id}
@@ -372,11 +372,15 @@ export default function BookingsPage() {
                     onMouseLeave={() => setHoverInfo(null)}
                   >
                     {/* Slot hover highlight */}
-                    {hoverY !== null && (
+                    {hoverMatch && (
                       <div
-                        className="pointer-events-none absolute left-0 right-0 z-10"
-                        style={{ top: hoverY, height: SLOT_PX, backgroundColor: 'rgba(0,0,0,0.05)' }}
-                      />
+                        className="pointer-events-none absolute left-0 right-0 z-10 flex items-center justify-center"
+                        style={{ top: hoverMatch.slotY, height: SLOT_PX, backgroundColor: 'rgba(0,0,0,0.05)' }}
+                      >
+                        <span className="text-[10px] font-semibold leading-none" style={{ color: 'rgba(0,0,0,0.72)' }}>
+                          {fmtTime(hoverMatch.slotMins)}
+                        </span>
+                      </div>
                     )}
                     {colBookings.map(b => (
                       <BookingBlock
@@ -396,7 +400,7 @@ export default function BookingsPage() {
                 const colKey = d
                 const isToday = d === today
                 const colBookings = bookings.filter(b => b.date === d)
-                const hoverY = hoverInfo?.colKey === colKey ? hoverInfo.slotY : null
+                const hoverMatch = hoverInfo?.colKey === colKey ? hoverInfo : null
                 return (
                   <div
                     key={d}
@@ -415,11 +419,15 @@ export default function BookingsPage() {
                     onMouseLeave={() => setHoverInfo(null)}
                   >
                     {/* Slot hover highlight */}
-                    {hoverY !== null && (
+                    {hoverMatch && (
                       <div
-                        className="pointer-events-none absolute left-0 right-0 z-10"
-                        style={{ top: hoverY, height: SLOT_PX, backgroundColor: 'rgba(0,0,0,0.05)' }}
-                      />
+                        className="pointer-events-none absolute left-0 right-0 z-10 flex items-center justify-center"
+                        style={{ top: hoverMatch.slotY, height: SLOT_PX, backgroundColor: 'rgba(0,0,0,0.05)' }}
+                      >
+                        <span className="text-[10px] font-semibold leading-none" style={{ color: 'rgba(0,0,0,0.72)' }}>
+                          {fmtTime(hoverMatch.slotMins)}
+                        </span>
+                      </div>
                     )}
                     {colBookings.map(b => {
                       const sp = SPACES.find(s => s.id === b.spaceId)!
