@@ -1459,18 +1459,43 @@ function BookingModal({
                       </div>
                     </div>
                   ) : bookingType === 'member' && ['Volume Shooting', 'Casual Shooting', 'Small Group Session'].includes(sessionType) ? (
-                    /* ── Member Volume/Casual Shooting / Small Group: number of athletes ── */
-                    <div>
-                      <label className={LABEL}>Number of Athletes</label>
-                      <SelectPicker
-                        value={numAthletes}
-                        onChange={setNumAthletes}
-                        accentColor={accentColor}
-                        options={[
-                          { value: '', label: 'Select Number Of Athletes', muted: true },
-                          ...Array.from({ length: 10 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) })),
-                        ]}
-                      />
+                    /* ── Member Volume/Casual Shooting / Small Group: number of athletes + athlete picker ── */
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className={LABEL}>Number of Athletes</label>
+                        <SelectPicker
+                          value={numAthletes}
+                          onChange={setNumAthletes}
+                          accentColor={accentColor}
+                          options={[
+                            { value: '', label: 'Select Number Of Athletes', muted: true },
+                            ...Array.from({ length: 6 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) })),
+                          ]}
+                        />
+                      </div>
+                      <div>
+                        <label className={LABEL}>Athlete</label>
+                        <SelectPicker
+                          value={singleAthlete}
+                          onChange={v => { setSingleAthlete(v); if (v !== 'other') setCustomAthlete('') }}
+                          accentColor={accentColor}
+                          options={[
+                            { value: '', label: 'Select Athlete', muted: true },
+                            ...[...ATHLETES].sort().map(a => ({ value: a, label: a })),
+                            { value: 'other', label: 'Other' },
+                          ]}
+                        />
+                        {singleAthlete === 'other' && (
+                          <input
+                            type="text"
+                            value={customAthlete}
+                            onChange={e => setCustomAthlete(e.target.value)}
+                            placeholder="Enter athlete name"
+                            className={`mt-2 ${INPUT}`}
+                            style={{ textAlign: 'center' }}
+                          />
+                        )}
+                      </div>
                     </div>
                   ) : sessionType === 'Individual Work Out' ? (
                     /* ── Member Individual Work Out: single athlete dropdown ── */
