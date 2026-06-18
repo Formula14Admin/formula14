@@ -945,6 +945,7 @@ function BookingModal({
   const [repeat,      setRepeat]      = useState<'none' | 'weekly' | 'fortnightly' | 'monthly' | 'yearly'>('none')
   const [repeatUntil, setRepeatUntil] = useState('')
   const [bookingType, setBookingType] = useState<'member' | 'casual' | 'unavailable'>('member')
+  const [numAthletes, setNumAthletes] = useState('1')
 
   function handleSpaceChange(id: SpaceId) {
     setSpaceId(id)
@@ -1150,23 +1151,36 @@ function BookingModal({
                   />
                 </div>
                 <div>
-                  <label className={LABEL}>Repeat</label>
-                  <SelectPicker
-                    value={repeat}
-                    onChange={v => { setRepeat(v as typeof repeat); setRepeatUntil('') }}
-                    options={[
-                      { value: 'none', label: 'None' },
-                      { value: 'weekly', label: 'Weekly' },
-                      { value: 'fortnightly', label: 'Fortnightly' },
-                      { value: 'monthly', label: 'Monthly' },
-                      { value: 'yearly', label: 'Yearly' },
-                    ]}
-                  />
+                  {bookingType === 'casual' ? (
+                    <>
+                      <label className={LABEL}>Number of Athletes</label>
+                      <SelectPicker
+                        value={numAthletes}
+                        onChange={setNumAthletes}
+                        options={Array.from({ length: 10 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }))}
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <label className={LABEL}>Repeat</label>
+                      <SelectPicker
+                        value={repeat}
+                        onChange={v => { setRepeat(v as typeof repeat); setRepeatUntil('') }}
+                        options={[
+                          { value: 'none', label: 'None' },
+                          { value: 'weekly', label: 'Weekly' },
+                          { value: 'fortnightly', label: 'Fortnightly' },
+                          { value: 'monthly', label: 'Monthly' },
+                          { value: 'yearly', label: 'Yearly' },
+                        ]}
+                      />
+                    </>
+                  )}
                 </div>
               </div>
 
-              {/* Row 4: Repeat details — only shown when repeat is set */}
-              {repeat !== 'none' && (
+              {/* Row 4: Repeat details — only shown when repeat is set and not casual */}
+              {bookingType !== 'casual' && repeat !== 'none' && (
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className={LABEL}>Ends on</label>
