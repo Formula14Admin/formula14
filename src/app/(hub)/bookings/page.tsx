@@ -528,8 +528,8 @@ function BookingModal({
   const space   = SPACES.find(s => s.id === spaceId)!
   const endMins = startMins + duration
 
-  const INPUT = 'w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 outline-none transition focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/40'
-  const LABEL = 'mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-400'
+  const INPUT = 'w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-center text-sm text-gray-800 outline-none transition focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/40'
+  const LABEL = 'mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-400 text-center'
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
@@ -613,7 +613,7 @@ function BookingModal({
                       key={sp.id}
                       type="button"
                       onClick={() => handleSpaceChange(sp.id)}
-                      className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-left text-xs font-semibold transition ${
+                      className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-center text-sm font-semibold transition ${
                         spaceId === sp.id
                           ? 'border-transparent text-white'
                           : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
