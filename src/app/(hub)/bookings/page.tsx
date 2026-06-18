@@ -101,6 +101,21 @@ function nowMins(): number {
 function uid(): string {
   return Math.random().toString(36).slice(2, 9)
 }
+function occurrenceDates(startDate: string, repeat: string, until: string): string[] {
+  const dates: string[] = [startDate]
+  if (!until) return dates
+  let cur = parse(startDate)
+  const end = parse(until)
+  for (let i = 0; i < 500; i++) {
+    if      (repeat === 'weekly')       cur = shift(cur, 7)
+    else if (repeat === 'fortnightly')  cur = shift(cur, 14)
+    else if (repeat === 'monthly')      { cur = new Date(cur); cur.setMonth(cur.getMonth() + 1) }
+    else if (repeat === 'yearly')       { cur = new Date(cur); cur.setFullYear(cur.getFullYear() + 1) }
+    if (cur > end) break
+    dates.push(ds(cur))
+  }
+  return dates
+}
 
 // ── Sample bookings ────────────────────────────────────────────────────────────
 function makeSamples(today: string): Booking[] {
@@ -184,12 +199,18 @@ export default function BookingsPage() {
     setHoverInfo({ colKey, slotY: toY(snapped) })
   }
 
-  function handleSave(data: Omit<Booking, 'id'> & { id?: string }) {
-    if (data.id) {
-      setBookings(prev => prev.map(b => b.id === data.id ? { ...data, id: data.id! } as Booking : b))
-    } else {
-      setBookings(prev => [...prev, { ...data, id: uid() } as Booking])
-    }
+  function handleSave(items: (Omit<Booking, 'id'> & { id?: string })[]) {
+    setBookings(prev => {
+      let next = [...prev]
+      for (const data of items) {
+        if (data.id) {
+          next = next.map(b => b.id === data.id ? { ...data, id: data.id! } as Booking : b)
+        } else {
+          next = [...next, { ...data, id: uid() } as Booking]
+        }
+      }
+      return next
+    })
     setModal(null)
   }
 
@@ -497,7 +518,7 @@ function BookingModal({
   modal: NonNullable<Modal>
   today: string
   onClose: () => void
-  onSave: (b: Omit<Booking, 'id'> & { id?: string }) => void
+  onSave: (items: (Omit<Booking, 'id'> & { id?: string })[]) => void
   onDelete: (id: string) => void
   onEdit: (b: Booking) => void
 }) {
@@ -511,6 +532,8 @@ function BookingModal({
   const [sessionType, setSessionType] = useState(modal.kind === 'add' ? SESSION_TYPES[modal.spaceId ?? 'primary'][0] : src!.sessionType)
   const [athletes,    setAthletes]    = useState<string[]>(modal.kind === 'add' ? [] : src!.athletes)
   const [coach,       setCoach]       = useState<'matt' | 'jade' | 'other' | ''>(modal.kind === 'add' ? '' : src!.coach)
+  const [repeat,      setRepeat]      = useState<'none' | 'weekly' | 'fortnightly' | 'monthly' | 'yearly'>('none')
+  const [repeatUntil, setRepeatUntil] = useState('')
 
   function handleSpaceChange(id: SpaceId) {
     setSpaceId(id)
@@ -523,7 +546,13 @@ function BookingModal({
 
   function handleSave() {
     const duration = Math.max(15, finishMins - startMins)
-    onSave({ id: src?.id, date, spaceId, startMins, duration, sessionType, athletes, coach })
+    const base = { spaceId, startMins, duration, sessionType, athletes, coach }
+    if (repeat === 'none' || !repeatUntil) {
+      onSave([{ ...base, date, id: src?.id }])
+    } else {
+      const dates = occurrenceDates(date, repeat, repeatUntil)
+      onSave(dates.map(d => ({ ...base, date: d })))
+    }
   }
 
   const space = SPACES.find(s => s.id === spaceId)!
@@ -696,7 +725,7 @@ function BookingModal({
                 </div>
               </div>
 
-              {/* Row 3: Coach */}
+              {/* Row 3: Coach | Repeat */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={LABEL}>Coach</label>
@@ -707,8 +736,42 @@ function BookingModal({
                     <option value="other">Other</option>
                   </select>
                 </div>
-                <div />
+                <div>
+                  <label className={LABEL}>Repeat</label>
+                  <select value={repeat} onChange={e => { setRepeat(e.target.value as typeof repeat); setRepeatUntil('') }} className={INPUT} style={{ textAlign: 'center', textAlignLast: 'center' }}>
+                    <option value="none">None</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="fortnightly">Fortnightly</option>
+                    <option value="monthly">Monthly</option>
+                    <option value="yearly">Yearly</option>
+                  </select>
+                </div>
               </div>
+
+              {/* Row 4: Repeat details — only shown when repeat is set */}
+              {repeat !== 'none' && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className={LABEL}>Ends on</label>
+                    <input
+                      type="date"
+                      value={repeatUntil}
+                      min={date}
+                      onChange={e => setRepeatUntil(e.target.value)}
+                      className={INPUT}
+                      style={{ textAlign: 'center' }}
+                    />
+                  </div>
+                  <div>
+                    <label className={LABEL}>Sessions</label>
+                    <div className="flex h-10 w-full items-center justify-center rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-500">
+                      {repeatUntil
+                        ? `${occurrenceDates(date, repeat, repeatUntil).length} sessions`
+                        : '—'}
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Athletes */}
               <div>
