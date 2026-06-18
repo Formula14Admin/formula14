@@ -1044,7 +1044,7 @@ function BookingModal({
     const col     = sessionTypeColRef.current.getBoundingClientRect()
     return {
       top:    header.bottom,
-      left:   col.left,
+      left:   modal.left + (modal.width - col.width) / 2,
       width:  col.width,
       height: modal.bottom - header.bottom,
     }
