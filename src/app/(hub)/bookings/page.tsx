@@ -562,6 +562,22 @@ function DatePicker({ value, onChange, accentColor = '#6BA3D6' }: { value: strin
     return () => document.removeEventListener('mousedown', handler)
   }, [open])
 
+  // Keep panel anchored to trigger while modal scrolls
+  useEffect(() => {
+    if (!open) return
+    function reposition() {
+      if (!triggerRef.current) return
+      const r = triggerRef.current.getBoundingClientRect()
+      setPanelStyle({ top: r.bottom + 4, left: r.left, width: r.width })
+    }
+    window.addEventListener('scroll', reposition, true)
+    window.addEventListener('resize', reposition)
+    return () => {
+      window.removeEventListener('scroll', reposition, true)
+      window.removeEventListener('resize', reposition)
+    }
+  }, [open])
+
   const displayText = parsed
     ? parsed.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
     : 'Select date'
@@ -760,6 +776,28 @@ function TimePicker({ value, onChange, options, accentColor = '#6BA3D6' }: {
     }
   }, [open])
 
+  // Keep panel anchored to trigger while modal scrolls
+  useEffect(() => {
+    if (!open) return
+    function reposition() {
+      if (!triggerRef.current) return
+      const r = triggerRef.current.getBoundingClientRect()
+      const GAP = 4, PANEL_MAX_H = 200
+      const spaceBelow = window.innerHeight - r.bottom - GAP
+      const spaceAbove = r.top - GAP
+      const top = spaceBelow >= 120 || spaceBelow >= spaceAbove
+        ? r.bottom + GAP
+        : r.top - Math.min(PANEL_MAX_H, spaceAbove) - GAP
+      setPanelStyle({ top, left: r.left, width: r.width })
+    }
+    window.addEventListener('scroll', reposition, true)
+    window.addEventListener('resize', reposition)
+    return () => {
+      window.removeEventListener('scroll', reposition, true)
+      window.removeEventListener('resize', reposition)
+    }
+  }, [open])
+
   function handleToggle() {
     if (!open && triggerRef.current) {
       const r = triggerRef.current.getBoundingClientRect()
@@ -852,6 +890,28 @@ function SelectPicker({ value, onChange, options, accentColor = '#6BA3D6' }: {
   useEffect(() => {
     if (open && selectedRef.current) {
       selectedRef.current.scrollIntoView({ block: 'nearest' })
+    }
+  }, [open])
+
+  // Keep panel anchored to trigger while modal scrolls
+  useEffect(() => {
+    if (!open) return
+    function reposition() {
+      if (!triggerRef.current) return
+      const r = triggerRef.current.getBoundingClientRect()
+      const GAP = 4, PANEL_MAX_H = 200
+      const spaceBelow = window.innerHeight - r.bottom - GAP
+      const spaceAbove = r.top - GAP
+      const top = spaceBelow >= 120 || spaceBelow >= spaceAbove
+        ? r.bottom + GAP
+        : r.top - Math.min(PANEL_MAX_H, spaceAbove) - GAP
+      setPanelStyle({ top, left: r.left, width: r.width })
+    }
+    window.addEventListener('scroll', reposition, true)
+    window.addEventListener('resize', reposition)
+    return () => {
+      window.removeEventListener('scroll', reposition, true)
+      window.removeEventListener('resize', reposition)
     }
   }, [open])
 
