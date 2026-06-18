@@ -1004,7 +1004,7 @@ function BookingModal({
         ) : (
           <div className="sticky top-0 z-10">
             <div className="relative flex items-center justify-center px-12" style={{ backgroundColor: '#6BA3D6', paddingTop: '19px', paddingBottom: '19px' }}>
-              <span className="text-3xl font-bold text-white">New Booking</span>
+              <img src="/New Booking Header.svg" alt="New Booking" className="block h-full w-auto" style={{ maxHeight: '60px' }} />
               <button
                 onClick={onClose}
                 className="absolute right-3 top-3 rounded-lg p-1.5 text-white/70 transition hover:bg-white/20"
