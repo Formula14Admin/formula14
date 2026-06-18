@@ -1002,16 +1002,19 @@ function BookingModal({
             </div>
           </div>
         ) : (
-          <div className="sticky top-0 z-10 relative" style={{ backgroundColor: '#000000' }}>
-            <div className="mx-auto max-w-md">
-              <img src="/New Booking Header.svg" alt="" className="block w-full" />
+          <div className="sticky top-0 z-10">
+            <div className="relative flex items-center justify-center px-12 py-5" style={{ backgroundColor: '#6BA3D6' }}>
+              <img src="/Updated Primary Logo.png" alt="Formula14" style={{ height: '56px', width: 'auto' }} />
+              <button
+                onClick={onClose}
+                className="absolute right-3 top-3 rounded-lg p-1.5 text-white/70 transition hover:bg-white/20"
+              >
+                <IconX size={18} />
+              </button>
             </div>
-            <button
-              onClick={onClose}
-              className="absolute right-3 top-3 rounded-lg p-1.5 text-white/70 transition hover:bg-white/20"
-            >
-              <IconX size={18} />
-            </button>
+            <div className="bg-white py-3 text-center">
+              <span className="text-base font-bold text-gray-900">New Booking</span>
+            </div>
           </div>
         )}
 
