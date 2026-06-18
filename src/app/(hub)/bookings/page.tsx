@@ -14,8 +14,9 @@ import {
 // ── Grid constants ─────────────────────────────────────────────────────────────
 const START_H  = 6
 const END_H    = 21
-const SLOT_PX  = 48                          // px per 30-min slot
-const TOTAL_PX = (END_H - START_H) * 2 * SLOT_PX  // 1440px
+const SLOT_PX  = 15                               // px per 15-min slot → 60px/hr
+const TOTAL_PX = (END_H - START_H) * 4 * SLOT_PX // 900px total
+const TOP_PAD  = 8                                // px above first slot so 6am isn't clipped
 
 // ── Spaces ─────────────────────────────────────────────────────────────────────
 const SPACES = [
@@ -58,6 +59,8 @@ type Modal =
   | { kind: 'view'; booking: Booking }
   | { kind: 'edit'; booking: Booking }
 
+type HoverInfo = { colKey: string; slotY: number } | null
+
 // ── Date helpers ───────────────────────────────────────────────────────────────
 function ds(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
@@ -83,12 +86,14 @@ function fmtDur(mins: number): string {
   if (!h) return `${m} min`
   return `${h} hr ${m} min`
 }
+// Convert minutes-from-midnight to Y position in the grid (not including TOP_PAD)
 function toY(mins: number): number {
-  return ((mins - START_H * 60) / 30) * SLOT_PX
+  return ((mins - START_H * 60) / 15) * SLOT_PX
 }
-function fromY(y: number, containerH: number): number {
-  const clamped = Math.max(0, Math.min(containerH, y))
-  return Math.round(((clamped / SLOT_PX) * 30 + START_H * 60) / 30) * 30
+// Convert a raw Y click position to snapped 15-min minutes
+function fromY(y: number): number {
+  const clamped = Math.max(0, Math.min(TOTAL_PX, y))
+  return Math.round(((clamped / SLOT_PX) * 15 + START_H * 60) / 15) * 15
 }
 function nowMins(): number {
   const n = new Date(); return n.getHours() * 60 + n.getMinutes()
@@ -127,11 +132,12 @@ function makeSamples(today: string): Booking[] {
 export default function BookingsPage() {
   const today = ds(new Date())
 
-  const [bookings, setBookings] = useState<Booking[]>(() => makeSamples(today))
-  const [anchor,   setAnchor]   = useState<Date>(() => new Date())
-  const [view,     setView]     = useState<'day' | 'week'>('day')
-  const [modal,    setModal]    = useState<Modal>(null)
-  const [nowY,     setNowY]     = useState(() => toY(nowMins()))
+  const [bookings,   setBookings]   = useState<Booking[]>(() => makeSamples(today))
+  const [anchor,     setAnchor]     = useState<Date>(() => new Date())
+  const [view,       setView]       = useState<'day' | 'week'>('day')
+  const [modal,      setModal]      = useState<Modal>(null)
+  const [nowY,       setNowY]       = useState(() => toY(nowMins()))
+  const [hoverInfo,  setHoverInfo]  = useState<HoverInfo>(null)
 
   const gridRef = useRef<HTMLDivElement>(null)
 
@@ -163,9 +169,19 @@ export default function BookingsPage() {
 
   function handleColClick(e: React.MouseEvent<HTMLDivElement>, spaceId: SpaceId | null, date: string) {
     const rect = e.currentTarget.getBoundingClientRect()
-    const raw  = fromY(e.clientY - rect.top, TOTAL_PX)
-    const clamped = Math.max(START_H * 60, Math.min((END_H) * 60 - 30, raw))
+    const raw  = fromY(e.clientY - rect.top)
+    const clamped = Math.max(START_H * 60, Math.min(END_H * 60 - 15, raw))
     setModal({ kind: 'add', spaceId, startMins: clamped, date })
+  }
+
+  function handleMouseMove(e: React.MouseEvent<HTMLDivElement>, colKey: string) {
+    if ((e.target as HTMLElement).closest('[data-booking]')) {
+      setHoverInfo(null)
+      return
+    }
+    const rect = e.currentTarget.getBoundingClientRect()
+    const snapped = Math.max(START_H * 60, Math.min(END_H * 60 - 15, fromY(e.clientY - rect.top)))
+    setHoverInfo({ colKey, slotY: toY(snapped) })
   }
 
   function handleSave(data: Omit<Booking, 'id'> & { id?: string }) {
@@ -211,7 +227,6 @@ export default function BookingsPage() {
         <span className="text-sm font-semibold text-gray-800">{title}</span>
 
         <div className="ml-auto flex items-center gap-2">
-          {/* View toggle */}
           <div className="flex items-center gap-0.5 rounded-lg bg-gray-100 p-1">
             {(['day', 'week'] as const).map(v => (
               <button
@@ -243,7 +258,6 @@ export default function BookingsPage() {
 
         {/* Column headers */}
         <div className="flex shrink-0 border-b border-gray-100">
-          {/* Time gutter header */}
           <div className="w-16 shrink-0 border-r border-gray-100" />
 
           {view === 'day' ? (
@@ -269,30 +283,23 @@ export default function BookingsPage() {
                   className="flex flex-1 flex-col items-center py-2"
                   style={{ borderLeft: i === 0 ? 'none' : '1px solid #f0f0f0' }}
                 >
-                  <span className={`text-[11px] font-medium ${isToday ? 'text-[#6BA3D6]' : 'text-gray-400'}`}>
-                    {dow}
-                  </span>
-                  <span className={`text-sm font-bold ${isToday ? 'text-[#6BA3D6]' : 'text-gray-700'}`}>
-                    {dm}
-                  </span>
+                  <span className={`text-[11px] font-medium ${isToday ? 'text-[#6BA3D6]' : 'text-gray-400'}`}>{dow}</span>
+                  <span className={`text-sm font-bold ${isToday ? 'text-[#6BA3D6]' : 'text-gray-700'}`}>{dm}</span>
                 </div>
               )
             })
           )}
         </div>
 
-        {/* Scrollable grid */}
-        <div ref={gridRef} className="flex flex-1 overflow-y-auto">
+        {/* Scrollable grid — TOP_PAD pushes the 6am row away from the header */}
+        <div ref={gridRef} className="flex flex-1 overflow-y-auto" style={{ paddingTop: TOP_PAD }}>
 
           {/* Time labels */}
           <div className="w-16 shrink-0 select-none border-r border-gray-100">
             {hours.map(h => (
-              <div key={h} className="relative" style={{ height: SLOT_PX * 2 }}>
-                <span
-                  className="absolute right-2 top-0 -translate-y-1/2 text-[11px] leading-none text-gray-400"
-                  style={{ top: 0 }}
-                >
-                  {h === 12 ? '12pm' : h > 12 ? `${h-12}pm` : `${h}am`}
+              <div key={h} className="relative" style={{ height: SLOT_PX * 4 }}>
+                <span className="absolute right-2 top-0 -translate-y-1/2 text-[11px] leading-none text-gray-400">
+                  {h === 12 ? '12pm' : h > 12 ? `${h - 12}pm` : `${h}am`}
                 </span>
               </div>
             ))}
@@ -301,12 +308,15 @@ export default function BookingsPage() {
           {/* Grid + columns */}
           <div className="relative flex flex-1" style={{ minHeight: TOTAL_PX }}>
 
-            {/* Horizontal grid lines (pointer-events:none) */}
+            {/* Horizontal grid lines — 4 slots/hr with 3-tier shading */}
             <div className="pointer-events-none absolute inset-0">
-              {Array.from({ length: (END_H - START_H) * 2 }, (_, i) => (
+              {Array.from({ length: (END_H - START_H) * 4 }, (_, i) => (
                 <div
                   key={i}
-                  style={{ height: SLOT_PX, borderTop: `1px solid ${i % 2 === 0 ? '#e5e7eb' : '#f3f4f6'}` }}
+                  style={{
+                    height: SLOT_PX,
+                    borderTop: `1px solid ${i % 4 === 0 ? '#e5e7eb' : i % 2 === 0 ? '#f0f0f0' : '#f8f8f8'}`,
+                  }}
                 />
               ))}
             </div>
@@ -325,17 +335,28 @@ export default function BookingsPage() {
             {/* Space / day columns */}
             {view === 'day' ? (
               SPACES.map((sp, i) => {
+                const colKey = sp.id
                 const colBookings = bookings.filter(b => b.date === visibleDates[0] && b.spaceId === sp.id)
+                const hoverY = hoverInfo?.colKey === colKey ? hoverInfo.slotY : null
                 return (
                   <div
                     key={sp.id}
-                    className="relative flex-1 cursor-crosshair"
-                    style={{ borderLeft: i === 0 ? 'none' : '1px solid #f0f0f0', height: TOTAL_PX }}
+                    className="relative flex-1"
+                    style={{ borderLeft: i === 0 ? 'none' : '1px solid #f0f0f0', height: TOTAL_PX, cursor: 'default' }}
                     onClick={e => {
                       if ((e.target as HTMLElement).closest('[data-booking]')) return
                       handleColClick(e, sp.id, visibleDates[0])
                     }}
+                    onMouseMove={e => handleMouseMove(e, colKey)}
+                    onMouseLeave={() => setHoverInfo(null)}
                   >
+                    {/* Slot hover highlight */}
+                    {hoverY !== null && (
+                      <div
+                        className="pointer-events-none absolute left-0 right-0 z-10"
+                        style={{ top: hoverY, height: SLOT_PX, backgroundColor: 'rgba(0,0,0,0.05)' }}
+                      />
+                    )}
                     {colBookings.map(b => (
                       <BookingBlock
                         key={b.id}
@@ -351,22 +372,34 @@ export default function BookingsPage() {
               })
             ) : (
               visibleDates.map((d, i) => {
+                const colKey = d
                 const isToday = d === today
                 const colBookings = bookings.filter(b => b.date === d)
+                const hoverY = hoverInfo?.colKey === colKey ? hoverInfo.slotY : null
                 return (
                   <div
                     key={d}
-                    className="relative flex-1 cursor-crosshair"
+                    className="relative flex-1"
                     style={{
                       borderLeft: i === 0 ? 'none' : '1px solid #f0f0f0',
                       height: TOTAL_PX,
+                      cursor: 'default',
                       backgroundColor: isToday ? 'rgba(107,163,214,0.03)' : 'transparent',
                     }}
                     onClick={e => {
                       if ((e.target as HTMLElement).closest('[data-booking]')) return
                       handleColClick(e, null, d)
                     }}
+                    onMouseMove={e => handleMouseMove(e, colKey)}
+                    onMouseLeave={() => setHoverInfo(null)}
                   >
+                    {/* Slot hover highlight */}
+                    {hoverY !== null && (
+                      <div
+                        className="pointer-events-none absolute left-0 right-0 z-10"
+                        style={{ top: hoverY, height: SLOT_PX, backgroundColor: 'rgba(0,0,0,0.05)' }}
+                      />
+                    )}
                     {colBookings.map(b => {
                       const sp = SPACES.find(s => s.id === b.spaceId)!
                       return (
@@ -414,7 +447,7 @@ function BookingBlock({
   onClick: () => void
 }) {
   const top    = toY(booking.startMins)
-  const height = Math.max(SLOT_PX / 2, (booking.duration / 30) * SLOT_PX)
+  const height = Math.max(SLOT_PX, (booking.duration / 15) * SLOT_PX)
   const coach  = booking.coach === 'matt' ? 'Y' : 'J'
 
   const athleteStr = booking.athletes.length === 0 ? '' :
@@ -435,22 +468,18 @@ function BookingBlock({
       className="absolute left-1 right-1 cursor-pointer overflow-hidden rounded-md border transition-opacity hover:opacity-80"
       style={{ top, height, backgroundColor: light, borderColor: color + '50', borderLeftWidth: 3, borderLeftColor: color }}
     >
-      <div className="relative px-1.5 pt-1">
+      <div className="relative px-1.5 pt-0.5">
         <p className="truncate text-[11px] font-bold leading-tight" style={{ color }}>
-          {compact ? typeAbbr || booking.sessionType.slice(0, 3) : booking.sessionType}
+          {compact ? (typeAbbr || booking.sessionType.slice(0, 3)) : booking.sessionType}
         </p>
-        {!compact && height >= 52 && (
-          <>
-            {athleteStr && (
-              <p className="mt-0.5 truncate text-[10px]" style={{ color: color + 'cc' }}>
-                {athleteStr}
-              </p>
-            )}
-          </>
+        {!compact && height >= 40 && athleteStr && (
+          <p className="mt-0.5 truncate text-[10px]" style={{ color: color + 'cc' }}>
+            {athleteStr}
+          </p>
         )}
-        {!compact && (
+        {!compact && height >= 24 && (
           <span
-            className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-black text-white"
+            className="absolute right-1 top-0.5 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-black text-white"
             style={{ backgroundColor: color }}
           >
             {coach}
@@ -496,16 +525,16 @@ function BookingModal({
     onSave({ id: src?.id, date, spaceId, startMins, duration, sessionType, athletes, coach })
   }
 
-  const space = SPACES.find(s => s.id === spaceId)!
+  const space   = SPACES.find(s => s.id === spaceId)!
   const endMins = startMins + duration
 
-  const INPUT  = 'w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 outline-none transition focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/40'
-  const LABEL  = 'mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-400'
+  const INPUT = 'w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 outline-none transition focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/40'
+  const LABEL = 'mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-400'
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
       <div className="relative w-full max-w-md overflow-y-auto rounded-2xl bg-white shadow-2xl" style={{ maxHeight: 'calc(100vh - 64px)' }}>
-        <div className="sticky top-0 z-10 flex items-start justify-between bg-white px-6 pt-6 pb-4 border-b border-gray-100">
+        <div className="sticky top-0 z-10 flex items-start justify-between border-b border-gray-100 bg-white px-6 pb-4 pt-6">
           <div>
             <h2 className="text-base font-bold text-gray-900">
               {isView ? 'Session Details' : modal.kind === 'edit' ? 'Edit Booking' : 'New Booking'}
@@ -610,8 +639,8 @@ function BookingModal({
                 <div>
                   <label className={LABEL}>Start time</label>
                   <select value={startMins} onChange={e => setStartMins(Number(e.target.value))} className={INPUT}>
-                    {Array.from({ length: (END_H - START_H) * 2 }, (_, i) => {
-                      const m = START_H * 60 + i * 30
+                    {Array.from({ length: (END_H - START_H) * 4 }, (_, i) => {
+                      const m = START_H * 60 + i * 15
                       return <option key={m} value={m}>{fmtTime(m)}</option>
                     })}
                   </select>
@@ -629,7 +658,7 @@ function BookingModal({
                 <div>
                   <label className={LABEL}>Duration</label>
                   <select value={duration} onChange={e => setDuration(Number(e.target.value))} className={INPUT}>
-                    {[30, 45, 60, 90, 120, 150, 180].map(d => (
+                    {[15, 30, 45, 60, 90, 120, 150, 180].map(d => (
                       <option key={d} value={d}>{fmtDur(d)}</option>
                     ))}
                   </select>
