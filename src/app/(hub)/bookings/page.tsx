@@ -864,13 +864,17 @@ function TimePicker({ value, onChange, options, accentColor = '#6BA3D6' }: {
 }
 
 // ── Select Picker (string options) ────────────────────────────────────────────
-function SelectPicker({ value, onChange, options, accentColor = '#6BA3D6', getPanelPosition }: {
+function SelectPicker({ value, onChange, options, accentColor = '#6BA3D6', getPanelPosition, multiValues, onChangeMulti, maxSelect }: {
   value: string
   onChange: (v: string) => void
   options: { value: string; label: string; muted?: boolean }[]
   accentColor?: string
   getPanelPosition?: () => { top: number; left: number; width: number; height: number } | null
+  multiValues?: string[]
+  onChangeMulti?: (v: string[]) => void
+  maxSelect?: number
 }) {
+  const multiMode = multiValues !== undefined
   const [open, setOpen] = useState(false)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -940,7 +944,15 @@ function SelectPicker({ value, onChange, options, accentColor = '#6BA3D6', getPa
   }
 
   const selectedOpt = options.find(o => o.value === value)
-  const selectedLabel = selectedOpt?.label ?? value
+
+  const triggerLabel = multiMode
+    ? multiValues!.length === 0
+      ? (options.find(o => o.muted)?.label ?? 'Select')
+      : multiValues!.length === 1
+        ? (options.find(o => o.value === multiValues![0])?.label ?? multiValues![0])
+        : `${multiValues!.length} Athletes selected`
+    : (selectedOpt?.label ?? value)
+  const triggerMuted = multiMode ? multiValues!.length === 0 : !!selectedOpt?.muted
 
   return (
     <div>
@@ -949,9 +961,9 @@ function SelectPicker({ value, onChange, options, accentColor = '#6BA3D6', getPa
         type="button"
         onClick={handleToggle}
         className="flex h-10 w-full items-center justify-center rounded-lg border border-gray-200 bg-white px-3 text-sm outline-none transition focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/40"
-        style={{ color: selectedOpt?.muted ? '#bcbfc5' : '#1f2937' }}
+        style={{ color: triggerMuted ? '#bcbfc5' : '#1f2937' }}
       >
-        {selectedLabel}
+        {triggerLabel}
       </button>
 
       {open && createPortal(
@@ -970,21 +982,35 @@ function SelectPicker({ value, onChange, options, accentColor = '#6BA3D6', getPa
           }}
         >
           {options.map(opt => {
-            const sel = opt.value === value
+            const sel = multiMode ? multiValues!.includes(opt.value) : opt.value === value
+            const atMax = multiMode && maxSelect !== undefined && multiValues!.length >= maxSelect && !sel
             return (
               <button
                 key={opt.value}
                 ref={sel ? selectedRef : null}
                 type="button"
-                onClick={() => { onChange(opt.value); setOpen(false) }}
-                className={`w-full py-1.5 text-center text-sm transition ${
-                  sel ? 'font-semibold text-white' : 'hover:bg-gray-100'
+                onClick={() => {
+                  if (opt.muted) return
+                  if (multiMode) {
+                    if (sel) {
+                      onChangeMulti!(multiValues!.filter(v => v !== opt.value))
+                    } else if (!atMax) {
+                      onChangeMulti!([...multiValues!, opt.value])
+                    }
+                  } else {
+                    onChange(opt.value)
+                    setOpen(false)
+                  }
+                }}
+                className={`flex w-full items-center justify-center gap-2 py-1.5 text-center text-sm transition ${
+                  sel ? 'font-semibold' : atMax ? 'opacity-30' : 'hover:bg-gray-100'
                 }`}
                 style={sel
                   ? { backgroundColor: accentColor, color: 'white' }
                   : { color: opt.muted ? '#bcbfc5' : '#374151' }
                 }
               >
+                {multiMode && sel && <IconCheck size={12} />}
                 {opt.label}
               </button>
             )
@@ -1474,26 +1500,45 @@ function BookingModal({
                         />
                       </div>
                       <div>
-                        <label className={LABEL}>Athlete</label>
-                        <SelectPicker
-                          value={singleAthlete}
-                          onChange={v => { setSingleAthlete(v); if (v !== 'other') setCustomAthlete('') }}
-                          accentColor={accentColor}
-                          options={[
-                            { value: '', label: 'Select Athlete', muted: true },
-                            ...[...ATHLETES].sort().map(a => ({ value: a, label: a })),
-                            { value: 'other', label: 'Other' },
-                          ]}
-                        />
-                        {singleAthlete === 'other' && (
-                          <input
-                            type="text"
-                            value={customAthlete}
-                            onChange={e => setCustomAthlete(e.target.value)}
-                            placeholder="Enter athlete name"
-                            className={`mt-2 ${INPUT}`}
-                            style={{ textAlign: 'center' }}
+                        <label className={LABEL}>
+                          {parseInt(numAthletes) > 1 ? 'Athletes' : 'Athlete'}
+                        </label>
+                        {parseInt(numAthletes) > 1 ? (
+                          <SelectPicker
+                            value=""
+                            onChange={() => {}}
+                            multiValues={athletes}
+                            onChangeMulti={setAthletes}
+                            maxSelect={parseInt(numAthletes)}
+                            accentColor={accentColor}
+                            options={[
+                              { value: '', label: 'Select Athletes', muted: true },
+                              ...[...ATHLETES].sort().map(a => ({ value: a, label: a })),
+                            ]}
                           />
+                        ) : (
+                          <>
+                            <SelectPicker
+                              value={singleAthlete}
+                              onChange={v => { setSingleAthlete(v); if (v !== 'other') setCustomAthlete('') }}
+                              accentColor={accentColor}
+                              options={[
+                                { value: '', label: 'Select Athlete', muted: true },
+                                ...[...ATHLETES].sort().map(a => ({ value: a, label: a })),
+                                { value: 'other', label: 'Other' },
+                              ]}
+                            />
+                            {singleAthlete === 'other' && (
+                              <input
+                                type="text"
+                                value={customAthlete}
+                                onChange={e => setCustomAthlete(e.target.value)}
+                                placeholder="Enter athlete name"
+                                className={`mt-2 ${INPUT}`}
+                                style={{ textAlign: 'center' }}
+                              />
+                            )}
+                          </>
                         )}
                       </div>
                     </div>
