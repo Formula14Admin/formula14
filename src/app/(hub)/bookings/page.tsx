@@ -951,7 +951,7 @@ function BookingModal({
   const [repeatUntil, setRepeatUntil] = useState('')
   const [bookingType, setBookingType] = useState<'member' | 'casual' | 'unavailable'>('member')
   const [numAthletes, setNumAthletes] = useState('')
-  const accentColor = bookingType === 'casual' ? '#6BAD6B' : '#6BA3D6'
+  const accentColor = bookingType === 'casual' ? '#6BAD6B' : bookingType === 'unavailable' ? '#ef4444' : '#6BA3D6'
 
   function handleSpaceChange(id: SpaceId) {
     setSpaceId(id)
@@ -1069,7 +1069,7 @@ function BookingModal({
                     onClick={() => setBookingType(type)}
                     className={`flex-1 py-2.5 text-sm font-semibold transition ${i === 0 ? '' : 'border-l border-gray-200'}`}
                     style={bookingType === type
-                      ? { backgroundColor: type === 'unavailable' ? '#ef4444' : accentColor, color: 'white' }
+                      ? { backgroundColor: accentColor, color: 'white' }
                       : { backgroundColor: 'white', color: '#6b7280' }}
                   >
                     {type === 'member' ? 'Member Booking' : type === 'casual' ? 'Casual Booking' : 'Unavailable'}
@@ -1288,7 +1288,7 @@ function BookingModal({
                     type="button"
                     onClick={handleSave}
                     className="rounded-lg px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90"
-                    style={{ backgroundColor: bookingType === 'unavailable' ? '#ef4444' : accentColor }}
+                    style={{ backgroundColor: accentColor }}
                   >
                     {modal.kind === 'edit' ? 'Save Changes' : bookingType === 'unavailable' ? 'Mark Unavailability' : 'Create Booking'}
                   </button>
