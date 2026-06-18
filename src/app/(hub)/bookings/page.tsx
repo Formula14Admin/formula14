@@ -1033,18 +1033,19 @@ function BookingModal({
   const accentColor = bookingType === 'casual' ? '#6BAD6B' : bookingType === 'unavailable' ? '#ef4444' : '#6BA3D6'
   const isIndividual = bookingType === 'member' && sessionType === 'Individual Work Out'
 
-  const modalRef  = useRef<HTMLDivElement>(null)
-  const headerRef = useRef<HTMLDivElement>(null)
+  const modalRef         = useRef<HTMLDivElement>(null)
+  const headerRef        = useRef<HTMLDivElement>(null)
+  const sessionTypeColRef = useRef<HTMLDivElement>(null)
 
   function getAthletePanelStyle() {
-    if (!modalRef.current || !headerRef.current) return null
-    const modal  = modalRef.current.getBoundingClientRect()
-    const header = headerRef.current.getBoundingClientRect()
-    const PAD = 24
+    if (!modalRef.current || !headerRef.current || !sessionTypeColRef.current) return null
+    const header  = headerRef.current.getBoundingClientRect()
+    const modal   = modalRef.current.getBoundingClientRect()
+    const col     = sessionTypeColRef.current.getBoundingClientRect()
     return {
       top:    header.bottom,
-      left:   modal.left + PAD,
-      width:  modal.width - PAD * 2,
+      left:   col.left,
+      width:  col.width,
       height: modal.bottom - header.bottom,
     }
   }
@@ -1270,7 +1271,7 @@ function BookingModal({
                 <>
                   {/* Row 1: Session Type | Date */}
                   <div className="grid grid-cols-2 gap-3">
-                    <div>
+                    <div ref={sessionTypeColRef}>
                       <label className={LABEL}>Session type</label>
                       <SelectPicker
                         value={sessionType}
@@ -1465,6 +1466,7 @@ function BookingModal({
                         value={singleAthlete}
                         onChange={v => { setSingleAthlete(v); if (v !== 'other') setCustomAthlete('') }}
                         accentColor={accentColor}
+                        getPanelPosition={getAthletePanelStyle}
                         options={[
                           { value: '', label: 'Select Athlete', muted: true },
                           ...[...ATHLETES].sort().map(a => ({ value: a, label: a })),
