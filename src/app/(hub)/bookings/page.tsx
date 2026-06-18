@@ -605,7 +605,7 @@ function BookingModal({
             style={{ backgroundColor: '#6BA3D6' }}
           >
             <div className="relative flex items-center justify-center">
-              <h2 className="text-base font-bold text-white">
+              <h2 className="text-xl text-white" style={{ fontFamily: "'Sprite Graffiti Shadow', cursive" }}>
                 {modal.kind === 'edit' ? 'Edit Booking' : 'New Booking'}
               </h2>
               <button

@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Sprite+Graffiti+Shadow&display=swap');
 
 :root {
   --background: #ffffff;
