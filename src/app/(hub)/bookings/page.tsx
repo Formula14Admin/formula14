@@ -591,7 +591,7 @@ function BookingModal({
                 </div>
                 <div>
                   <p className="text-xs text-gray-400">Coach</p>
-                  <p className="font-semibold text-gray-800">{src!.coach === 'matt' ? 'Matt (You)' : 'Jade'}</p>
+                  <p className="font-semibold text-gray-800">{src!.coach === 'matt' ? 'Matt' : 'Jade'}</p>
                 </div>
                 <div>
                   <p className="text-xs text-gray-400">Athletes</p>
@@ -669,7 +669,7 @@ function BookingModal({
               <div>
                 <label className={LABEL}>Coach</label>
                 <div className="flex gap-2">
-                  {([{ id: 'matt', label: 'Matt (You)' }, { id: 'jade', label: 'Jade' }] as const).map(c => (
+                  {([{ id: 'matt', label: 'Matt' }, { id: 'jade', label: 'Jade' }] as const).map(c => (
                     <button
                       key={c.id}
                       type="button"
