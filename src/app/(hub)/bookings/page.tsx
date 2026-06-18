@@ -825,7 +825,7 @@ function TimePicker({ value, onChange, options }: {
 function SelectPicker({ value, onChange, options }: {
   value: string
   onChange: (v: string) => void
-  options: { value: string; label: string }[]
+  options: { value: string; label: string; muted?: boolean }[]
 }) {
   const [open, setOpen] = useState(false)
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -864,7 +864,8 @@ function SelectPicker({ value, onChange, options }: {
     setOpen(o => !o)
   }
 
-  const selectedLabel = options.find(o => o.value === value)?.label ?? value
+  const selectedOpt = options.find(o => o.value === value)
+  const selectedLabel = selectedOpt?.label ?? value
 
   return (
     <div>
@@ -872,7 +873,8 @@ function SelectPicker({ value, onChange, options }: {
         ref={triggerRef}
         type="button"
         onClick={handleToggle}
-        className="flex h-10 w-full items-center justify-center rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-800 outline-none transition focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/40"
+        className="flex h-10 w-full items-center justify-center rounded-lg border border-gray-200 bg-white px-3 text-sm outline-none transition focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/40"
+        style={{ color: selectedOpt?.muted ? '#d1d5db' : '#1f2937' }}
       >
         {selectedLabel}
       </button>
@@ -901,9 +903,12 @@ function SelectPicker({ value, onChange, options }: {
                 type="button"
                 onClick={() => { onChange(opt.value); setOpen(false) }}
                 className={`w-full py-1.5 text-center text-sm transition ${
-                  sel ? 'font-semibold text-white' : 'text-gray-700 hover:bg-gray-50'
+                  sel ? 'font-semibold text-white' : 'hover:bg-gray-50'
                 }`}
-                style={sel ? { backgroundColor: '#6BA3D6' } : {}}
+                style={sel
+                  ? { backgroundColor: '#6BA3D6', color: 'white' }
+                  : { color: opt.muted ? '#d1d5db' : '#374151' }
+                }
               >
                 {opt.label}
               </button>
@@ -1117,7 +1122,7 @@ function BookingModal({
                     value={coach}
                     onChange={v => setCoach(v as 'matt' | 'jade' | 'other' | '')}
                     options={[
-                      { value: '', label: '—' },
+                      { value: '', label: 'No Coach Required', muted: true },
                       { value: 'matt', label: 'Matt' },
                       { value: 'jade', label: 'Jade' },
                       { value: 'other', label: 'Other' },
