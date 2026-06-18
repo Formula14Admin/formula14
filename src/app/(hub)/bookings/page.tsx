@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import {
   IconChevronLeft,
   IconChevronRight,
@@ -529,6 +530,9 @@ const MONTH_NAMES = [
 function DatePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const [open, setOpen] = useState(false)
   const [view, setView] = useState<'days' | 'months'>('days')
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const [panelStyle, setPanelStyle] = useState({ top: 0, left: 0, width: 0 })
 
   const parsed = value ? new Date(value + 'T12:00:00') : null
   const [viewYear, setViewYear] = useState(() => parsed?.getFullYear() ?? new Date().getFullYear())
@@ -542,6 +546,18 @@ function DatePicker({ value, onChange }: { value: string; onChange: (v: string) 
       setViewMonth(d.getMonth())
     }
   }, [value])
+
+  // Close on outside click
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (
+        !triggerRef.current?.contains(e.target as Node) &&
+        !panelRef.current?.contains(e.target as Node)
+      ) setOpen(false)
+    }
+    if (open) document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
 
   const displayText = parsed
     ? parsed.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
@@ -586,21 +602,35 @@ function DatePicker({ value, onChange }: { value: string; onChange: (v: string) 
     else setViewMonth(m => m + 1)
   }
 
+  function handleToggle() {
+    if (!open && triggerRef.current) {
+      const r = triggerRef.current.getBoundingClientRect()
+      setPanelStyle({ top: r.bottom + 4, left: r.left, width: r.width })
+    }
+    setOpen(o => !o)
+    setView('days')
+  }
+
   return (
     <div>
       {/* Trigger */}
       <button
+        ref={triggerRef}
         type="button"
-        onClick={() => { setOpen(o => !o); setView('days') }}
+        onClick={handleToggle}
         className="flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-800 outline-none transition focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/40"
       >
         <IconCalendar size={14} className="shrink-0 text-gray-400" />
         <span className="truncate">{displayText}</span>
       </button>
 
-      {/* Inline calendar panel */}
-      {open && (
-        <div className="mt-1 rounded-xl border border-gray-200 bg-white shadow-md">
+      {/* Floating calendar portal — renders in document.body to escape modal overflow clipping */}
+      {open && createPortal(
+        <div
+          ref={panelRef}
+          className="rounded-xl border border-gray-200 bg-white shadow-xl"
+          style={{ position: 'fixed', top: panelStyle.top, left: panelStyle.left, width: panelStyle.width, zIndex: 9999, fontFamily: "'Google Sans Flex', sans-serif" }}
+        >
           {view === 'days' ? (
             <>
               {/* Month / year nav */}
@@ -689,7 +719,8 @@ function DatePicker({ value, onChange }: { value: string; onChange: (v: string) 
               </div>
             </>
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )
