@@ -746,7 +746,7 @@ function BookingModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
-      <div className="booking-modal relative w-full max-w-4xl overflow-y-auto rounded-2xl bg-white shadow-2xl" style={{ maxHeight: 'calc(100vh - 64px)', fontFamily: "'Google Sans Flex', sans-serif" }}>
+      <div className="booking-modal relative w-full max-w-[717px] overflow-y-auto rounded-2xl bg-white shadow-2xl" style={{ maxHeight: 'calc(100vh - 64px)', fontFamily: "'Google Sans Flex', sans-serif" }}>
         {/* Header — blue panel for add/edit, white for view */}
         {isView ? (
           <div className="sticky top-0 z-10 flex items-start justify-between border-b border-gray-100 bg-white px-6 pb-4 pt-6">
