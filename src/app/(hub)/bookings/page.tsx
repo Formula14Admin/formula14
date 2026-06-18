@@ -1003,7 +1003,7 @@ function BookingModal({
             </div>
           </div>
         ) : (
-          <div className="sticky top-0 z-10 relative" style={{ backgroundColor: '#6BA3D6' }}>
+          <div className="sticky top-0 z-10 relative" style={{ backgroundColor: '#000000' }}>
             <div className="mx-auto max-w-md">
               <img src="/New Booking Header.svg" alt="" className="block w-full" />
             </div>
