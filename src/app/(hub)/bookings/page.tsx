@@ -600,8 +600,8 @@ function BookingModal({
             </div>
           </div>
         ) : (
-          <div className="sticky top-0 z-10 relative">
-            <img src="/New Booking Header.svg" alt="" className="block w-full" />
+          <div className="sticky top-0 z-10 relative" style={{ backgroundColor: '#6BA3D6' }}>
+            <img src="/New Booking Header.com.svg" alt="" className="block w-full" />
             <button
               onClick={onClose}
               className="absolute right-3 top-3 rounded-lg p-1.5 text-white/70 transition hover:bg-white/20"
