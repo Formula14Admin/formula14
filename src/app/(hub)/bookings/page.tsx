@@ -1261,7 +1261,7 @@ function BookingModal({
                     className="rounded-lg px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90"
                     style={{ backgroundColor: '#6BA3D6' }}
                   >
-                    {modal.kind === 'edit' ? 'Save Changes' : 'Create Booking'}
+                    {modal.kind === 'edit' ? 'Save Changes' : bookingType === 'unavailable' ? 'Mark Unavailability' : 'Create Booking'}
                   </button>
                 </div>
               )}
