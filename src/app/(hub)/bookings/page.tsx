@@ -528,7 +528,7 @@ function BookingModal({
   const space   = SPACES.find(s => s.id === spaceId)!
   const endMins = startMins + duration
 
-  const INPUT = 'w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-center text-sm text-gray-800 outline-none transition focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/40'
+  const INPUT = 'h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-center text-sm text-gray-800 outline-none transition focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/40'
   const LABEL = 'mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-400 text-center'
 
   return (
