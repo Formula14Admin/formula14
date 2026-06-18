@@ -821,6 +821,101 @@ function TimePicker({ value, onChange, options }: {
   )
 }
 
+// ── Select Picker (string options) ────────────────────────────────────────────
+function SelectPicker({ value, onChange, options }: {
+  value: string
+  onChange: (v: string) => void
+  options: { value: string; label: string }[]
+}) {
+  const [open, setOpen] = useState(false)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const selectedRef = useRef<HTMLButtonElement>(null)
+  const [panelStyle, setPanelStyle] = useState({ top: 0, left: 0, width: 0 })
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (
+        !triggerRef.current?.contains(e.target as Node) &&
+        !panelRef.current?.contains(e.target as Node)
+      ) setOpen(false)
+    }
+    if (open) document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  useEffect(() => {
+    if (open && selectedRef.current) {
+      selectedRef.current.scrollIntoView({ block: 'nearest' })
+    }
+  }, [open])
+
+  function handleToggle() {
+    if (!open && triggerRef.current) {
+      const r = triggerRef.current.getBoundingClientRect()
+      const GAP = 4, PANEL_MAX_H = 200
+      const spaceBelow = window.innerHeight - r.bottom - GAP
+      const spaceAbove = r.top - GAP
+      const top = spaceBelow >= 120 || spaceBelow >= spaceAbove
+        ? r.bottom + GAP
+        : r.top - Math.min(PANEL_MAX_H, spaceAbove) - GAP
+      setPanelStyle({ top, left: r.left, width: r.width })
+    }
+    setOpen(o => !o)
+  }
+
+  const selectedLabel = options.find(o => o.value === value)?.label ?? value
+
+  return (
+    <div>
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={handleToggle}
+        className="flex h-10 w-full items-center justify-center rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-800 outline-none transition focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/40"
+      >
+        {selectedLabel}
+      </button>
+
+      {open && createPortal(
+        <div
+          ref={panelRef}
+          className="rounded-xl border border-gray-200 bg-white shadow-xl"
+          style={{
+            position: 'fixed',
+            top: panelStyle.top,
+            left: panelStyle.left,
+            width: panelStyle.width,
+            zIndex: 9999,
+            maxHeight: '200px',
+            overflowY: 'auto',
+            fontFamily: "'Google Sans Flex', sans-serif",
+          }}
+        >
+          {options.map(opt => {
+            const sel = opt.value === value
+            return (
+              <button
+                key={opt.value}
+                ref={sel ? selectedRef : null}
+                type="button"
+                onClick={() => { onChange(opt.value); setOpen(false) }}
+                className={`w-full py-1.5 text-center text-sm transition ${
+                  sel ? 'font-semibold text-white' : 'text-gray-700 hover:bg-gray-50'
+                }`}
+                style={sel ? { backgroundColor: '#6BA3D6' } : {}}
+              >
+                {opt.label}
+              </button>
+            )
+          })}
+        </div>,
+        document.body
+      )}
+    </div>
+  )
+}
+
 // ── Booking Modal ──────────────────────────────────────────────────────────────
 function BookingModal({
   modal, today, onClose, onSave, onDelete, onEdit,
@@ -982,9 +1077,11 @@ function BookingModal({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={LABEL}>Session type</label>
-                  <select value={sessionType} onChange={e => setSessionType(e.target.value)} className={INPUT} style={{ textAlign: 'center', textAlignLast: 'center' }}>
-                    {SESSION_TYPES[spaceId].map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
+                  <SelectPicker
+                    value={sessionType}
+                    onChange={setSessionType}
+                    options={SESSION_TYPES[spaceId].map(t => ({ value: t, label: t }))}
+                  />
                 </div>
                 <div>
                   <label className={LABEL}>Date</label>
@@ -999,7 +1096,7 @@ function BookingModal({
                   <TimePicker
                     value={startMins}
                     onChange={s => { setStartMins(s); if (finishMins <= s) setFinishMins(s + 60) }}
-                    options={Array.from({ length: (END_H - START_H) * 4 }, (_, i) => START_H * 60 + i * 15)}
+                    options={Array.from({ length: 95 }, (_, i) => i * 15)}
                   />
                 </div>
                 <div>
@@ -1007,10 +1104,7 @@ function BookingModal({
                   <TimePicker
                     value={finishMins}
                     onChange={setFinishMins}
-                    options={Array.from({ length: (END_H - START_H) * 4 }, (_, i) => {
-                      const m = START_H * 60 + (i + 1) * 15
-                      return m > startMins && m <= END_H * 60 ? m : null
-                    }).filter((m): m is number => m !== null)}
+                    options={Array.from({ length: 95 }, (_, i) => (i + 1) * 15).filter(m => m > startMins)}
                   />
                 </div>
               </div>
@@ -1019,22 +1113,30 @@ function BookingModal({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={LABEL}>Coach</label>
-                  <select value={coach} onChange={e => setCoach(e.target.value as 'matt' | 'jade' | 'other' | '')} className={INPUT} style={{ textAlign: 'center', textAlignLast: 'center' }}>
-                    <option value="">—</option>
-                    <option value="matt">Matt</option>
-                    <option value="jade">Jade</option>
-                    <option value="other">Other</option>
-                  </select>
+                  <SelectPicker
+                    value={coach}
+                    onChange={v => setCoach(v as 'matt' | 'jade' | 'other' | '')}
+                    options={[
+                      { value: '', label: '—' },
+                      { value: 'matt', label: 'Matt' },
+                      { value: 'jade', label: 'Jade' },
+                      { value: 'other', label: 'Other' },
+                    ]}
+                  />
                 </div>
                 <div>
                   <label className={LABEL}>Repeat</label>
-                  <select value={repeat} onChange={e => { setRepeat(e.target.value as typeof repeat); setRepeatUntil('') }} className={INPUT} style={{ textAlign: 'center', textAlignLast: 'center' }}>
-                    <option value="none">None</option>
-                    <option value="weekly">Weekly</option>
-                    <option value="fortnightly">Fortnightly</option>
-                    <option value="monthly">Monthly</option>
-                    <option value="yearly">Yearly</option>
-                  </select>
+                  <SelectPicker
+                    value={repeat}
+                    onChange={v => { setRepeat(v as typeof repeat); setRepeatUntil('') }}
+                    options={[
+                      { value: 'none', label: 'None' },
+                      { value: 'weekly', label: 'Weekly' },
+                      { value: 'fortnightly', label: 'Fortnightly' },
+                      { value: 'monthly', label: 'Monthly' },
+                      { value: 'yearly', label: 'Yearly' },
+                    ]}
+                  />
                 </div>
               </div>
 
