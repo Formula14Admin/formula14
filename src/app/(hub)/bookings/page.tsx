@@ -864,7 +864,7 @@ function TimePicker({ value, onChange, options, accentColor = '#6BA3D6' }: {
 }
 
 // ── Select Picker (string options) ────────────────────────────────────────────
-function SelectPicker({ value, onChange, options, accentColor = '#6BA3D6', getPanelPosition, multiValues, onChangeMulti, maxSelect }: {
+function SelectPicker({ value, onChange, options, accentColor = '#6BA3D6', getPanelPosition, multiValues, onChangeMulti, maxSelect, panelMaxHeight = 200 }: {
   value: string
   onChange: (v: string) => void
   options: { value: string; label: string; muted?: boolean }[]
@@ -873,6 +873,7 @@ function SelectPicker({ value, onChange, options, accentColor = '#6BA3D6', getPa
   multiValues?: string[]
   onChangeMulti?: (v: string[]) => void
   maxSelect?: number
+  panelMaxHeight?: number
 }) {
   const multiMode = multiValues !== undefined
   const [open, setOpen] = useState(false)
@@ -907,12 +908,12 @@ function SelectPicker({ value, onChange, options, accentColor = '#6BA3D6', getPa
         if (pos) setPanelStyle(pos)
       } else if (triggerRef.current) {
         const r = triggerRef.current.getBoundingClientRect()
-        const GAP = 4, PANEL_MAX_H = 200
+        const GAP = 4
         const spaceBelow = window.innerHeight - r.bottom - GAP
         const spaceAbove = r.top - GAP
-        const top = spaceBelow >= PANEL_MAX_H || spaceBelow >= spaceAbove
+        const top = spaceBelow >= panelMaxHeight || spaceBelow >= spaceAbove
           ? r.bottom + GAP
-          : r.top - Math.min(PANEL_MAX_H, spaceAbove) - GAP
+          : r.top - Math.min(panelMaxHeight, spaceAbove) - GAP
         setPanelStyle({ top, left: r.left, width: r.width })
       }
     }
@@ -922,7 +923,7 @@ function SelectPicker({ value, onChange, options, accentColor = '#6BA3D6', getPa
       window.removeEventListener('scroll', reposition, true)
       window.removeEventListener('resize', reposition)
     }
-  }, [open, getPanelPosition])
+  }, [open, getPanelPosition, panelMaxHeight])
 
   function handleToggle() {
     if (!open) {
@@ -931,12 +932,12 @@ function SelectPicker({ value, onChange, options, accentColor = '#6BA3D6', getPa
         if (pos) setPanelStyle(pos)
       } else if (triggerRef.current) {
         const r = triggerRef.current.getBoundingClientRect()
-        const GAP = 4, PANEL_MAX_H = 200
+        const GAP = 4
         const spaceBelow = window.innerHeight - r.bottom - GAP
         const spaceAbove = r.top - GAP
-        const top = spaceBelow >= PANEL_MAX_H || spaceBelow >= spaceAbove
+        const top = spaceBelow >= panelMaxHeight || spaceBelow >= spaceAbove
           ? r.bottom + GAP
-          : r.top - Math.min(PANEL_MAX_H, spaceAbove) - GAP
+          : r.top - Math.min(panelMaxHeight, spaceAbove) - GAP
         setPanelStyle({ top, left: r.left, width: r.width })
       }
     }
@@ -976,7 +977,7 @@ function SelectPicker({ value, onChange, options, accentColor = '#6BA3D6', getPa
             left: panelStyle.left,
             width: panelStyle.width,
             zIndex: 9999,
-            ...(panelStyle.height ? { height: panelStyle.height } : { maxHeight: '200px' }),
+            ...(panelStyle.height ? { height: panelStyle.height } : { maxHeight: `${panelMaxHeight}px` }),
             overflowY: 'auto',
             fontFamily: "'Google Sans Flex', sans-serif",
           }}
@@ -1493,6 +1494,7 @@ function BookingModal({
                           value={numAthletes}
                           onChange={setNumAthletes}
                           accentColor={accentColor}
+                          panelMaxHeight={260}
                           options={[
                             { value: '', label: 'Select Number Of Athletes', muted: true },
                             ...Array.from({ length: 6 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) })),
