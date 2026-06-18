@@ -806,7 +806,7 @@ function TimePicker({ value, onChange, options }: {
                 type="button"
                 onClick={() => { onChange(mins); setOpen(false) }}
                 className={`w-full py-1.5 text-center text-sm transition ${
-                  sel ? 'font-semibold text-white' : 'text-gray-700 hover:bg-gray-50'
+                  sel ? 'font-semibold text-white' : 'text-gray-700 hover:bg-gray-100'
                 }`}
                 style={sel ? { backgroundColor: '#6BA3D6' } : {}}
               >
@@ -903,7 +903,7 @@ function SelectPicker({ value, onChange, options }: {
                 type="button"
                 onClick={() => { onChange(opt.value); setOpen(false) }}
                 className={`w-full py-1.5 text-center text-sm transition ${
-                  sel ? 'font-semibold text-white' : 'hover:bg-gray-50'
+                  sel ? 'font-semibold text-white' : 'hover:bg-gray-100'
                 }`}
                 style={sel
                   ? { backgroundColor: '#6BA3D6', color: 'white' }
