@@ -1379,20 +1379,7 @@ function BookingModal({
                       />
                     </div>
                     <div>
-                      {bookingType === 'casual' && sessionType !== 'Individual Work Out' ? (
-                        <>
-                          <label className={LABEL}>Number of Athletes</label>
-                          <SelectPicker
-                            value={numAthletes}
-                            onChange={setNumAthletes}
-                            accentColor={accentColor}
-                            options={[
-                              { value: '', label: 'Select Number Of Athletes', muted: true },
-                              ...Array.from({ length: 10 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) })),
-                            ]}
-                          />
-                        </>
-                      ) : (
+                      {bookingType === 'member' && (
                         <>
                           <label className={LABEL}>Repeat</label>
                           <SelectPicker
@@ -1693,13 +1680,6 @@ function BookingModal({
                     </button>
                     <button
                       type="button"
-                      onClick={handleReset}
-                      className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50"
-                    >
-                      Refresh Booking
-                    </button>
-                    <button
-                      type="button"
                       onClick={onClose}
                       className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50"
                     >
@@ -1719,13 +1699,6 @@ function BookingModal({
                     className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50"
                   >
                     Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleReset}
-                    className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50"
-                  >
-                    Refresh Booking
                   </button>
                   <button
                     type="button"

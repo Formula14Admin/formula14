@@ -14,6 +14,7 @@ import {
   IconId,
   IconSchool,
   IconNotebook,
+  IconBallBasketball,
   IconLogout,
 } from '@tabler/icons-react'
 
@@ -38,6 +39,7 @@ const NAV = [
     items: [
       { label: 'Boards', href: '/boards', icon: IconLayoutKanban },
       { label: 'Forms', href: '/forms', icon: IconForms },
+      { label: 'Pocket Plays', href: '/pocket-plays', icon: IconBallBasketball },
       { label: 'Learning Lab', href: '/learning-lab', icon: IconSchool },
       { label: 'Journal', href: '/journal', icon: IconNotebook },
     ],
