@@ -1204,7 +1204,10 @@ function BookingModal({
                   <button
                     key={type}
                     type="button"
-                    onClick={() => setBookingType(type)}
+                    onClick={() => {
+                      setBookingType(type)
+                      if (type === 'member' && sessionType === 'Team Training') setSessionType('')
+                    }}
                     className={`flex-1 py-2.5 text-sm font-semibold transition ${i === 0 ? '' : 'border-l border-gray-200'}`}
                     style={bookingType === type
                       ? { backgroundColor: accentColor, color: 'white' }
@@ -1317,7 +1320,9 @@ function BookingModal({
                         accentColor={accentColor}
                         options={[
                           { value: '', label: 'Select A Session Type', muted: true },
-                          ...SESSION_TYPES[spaceId].map(t => ({ value: t, label: t })),
+                          ...SESSION_TYPES[spaceId]
+                            .filter(t => !(bookingType === 'member' && t === 'Team Training'))
+                            .map(t => ({ value: t, label: t })),
                         ]}
                       />
                     </div>
