@@ -56,6 +56,23 @@ type Booking = {
   bookingType: 'member' | 'casual' | 'unavailable'
 }
 
+type CasualAthleteEntry = {
+  id: string
+  type: 'new' | 'existing' | ''
+  name: string; gender: string; age: string
+  repClub: string; repClubOther: string
+  playingHistory: string; sessionGoals: string
+  existingId: string
+}
+
+function newCasualAthlete(): CasualAthleteEntry {
+  return {
+    id: Math.random().toString(36).slice(2),
+    type: '', name: '', gender: '', age: '',
+    repClub: '', repClubOther: '', playingHistory: '', sessionGoals: '', existingId: '',
+  }
+}
+
 type Modal =
   | null
   | { kind: 'add';  spaceId: SpaceId | null; startMins: number; date: string }
@@ -1051,17 +1068,10 @@ function BookingModal({
   const [repeat,      setRepeat]      = useState<'none' | 'weekly' | 'fortnightly' | 'monthly' | 'yearly'>('none')
   const [repeatUntil, setRepeatUntil] = useState('')
   const [bookingType, setBookingType] = useState<'member' | 'casual' | 'unavailable'>('member')
-  const [casualAthleteType, setCasualAthleteType] = useState<'new' | 'existing' | ''>('')
+  const [casualAthletes, setCasualAthletes] = useState<CasualAthleteEntry[]>([newCasualAthlete()])
   const [numAthletes, setNumAthletes] = useState('')
   const [singleAthlete,  setSingleAthlete]  = useState('')
   const [customAthlete,  setCustomAthlete]  = useState('')
-  const [athleteName,           setAthleteName]           = useState('')
-  const [athleteGender,         setAthleteGender]         = useState('')
-  const [athleteAge,            setAthleteAge]            = useState('')
-  const [athleteRepClub,        setAthleteRepClub]        = useState('')
-  const [athleteRepClubOther,   setAthleteRepClubOther]   = useState('')
-  const [athletePlayingHistory, setAthletePlayingHistory] = useState('')
-  const [athleteSessionGoals,   setAthleteSessionGoals]   = useState('')
   const accentColor = bookingType === 'casual' ? '#6BAD6B' : bookingType === 'unavailable' ? '#ef4444' : '#6BA3D6'
   const isIndividual = bookingType === 'member' && sessionType === 'Individual Work Out'
 
@@ -1080,17 +1090,10 @@ function BookingModal({
     setCoach('')
     setRepeat('none')
     setRepeatUntil('')
-    setCasualAthleteType('')
+    setCasualAthletes([newCasualAthlete()])
     setNumAthletes('')
     setSingleAthlete('')
     setCustomAthlete('')
-    setAthleteName('')
-    setAthleteGender('')
-    setAthleteAge('')
-    setAthleteRepClub('')
-    setAthleteRepClubOther('')
-    setAthletePlayingHistory('')
-    setAthleteSessionGoals('')
   }
 
   function handleSpaceChange(id: SpaceId) {
@@ -1428,124 +1431,159 @@ function BookingModal({
                   )}
 
                   {/* Athletes */}
-                  {bookingType === 'casual' && spaceId !== 'meeting' ? (
-                    /* ── Casual (non-meeting): New / Existing Athlete toggle ── */
-                    <div className="space-y-3">
-                      {/* Toggle */}
-                      <div className="flex overflow-hidden rounded-xl border border-gray-200">
-                        {(['new', 'existing'] as const).map((type, i) => (
-                          <button
-                            key={type}
-                            type="button"
-                            onClick={() => setCasualAthleteType(type)}
-                            className={`flex-1 py-2.5 text-sm font-semibold transition ${i > 0 ? 'border-l border-gray-200' : ''}`}
-                            style={casualAthleteType === type
-                              ? { backgroundColor: accentColor, color: 'white' }
-                              : { backgroundColor: 'white', color: '#6b7280' }}
-                          >
-                            {type === 'new' ? 'New Athlete' : 'Existing Athlete'}
-                          </button>
+                  {bookingType === 'casual' && spaceId !== 'meeting' ? (() => {
+                    const isMulti = sessionType !== 'Individual Work Out'
+                    const visibleAthletes = isMulti ? casualAthletes : casualAthletes.slice(0, 1)
+                    const upd = (id: string, patch: Partial<CasualAthleteEntry>) =>
+                      setCasualAthletes(prev => prev.map(a => a.id === id ? { ...a, ...patch } : a))
+                    return (
+                      <div className="space-y-3">
+                        {visibleAthletes.map((entry, idx) => (
+                          <div key={entry.id} className="rounded-xl border border-gray-200 p-3 space-y-3">
+                            {/* Card header */}
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                                Athlete {idx + 1}
+                              </span>
+                              {isMulti && casualAthletes.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => setCasualAthletes(prev => prev.filter(a => a.id !== entry.id))}
+                                  className="rounded p-0.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+                                >
+                                  <IconX size={14} />
+                                </button>
+                              )}
+                            </div>
+
+                            {/* New / Existing toggle */}
+                            <div className="flex overflow-hidden rounded-xl border border-gray-200">
+                              {(['new', 'existing'] as const).map((type, i) => (
+                                <button
+                                  key={type}
+                                  type="button"
+                                  onClick={() => upd(entry.id, { type })}
+                                  className={`flex-1 py-2 text-sm font-semibold transition ${i > 0 ? 'border-l border-gray-200' : ''}`}
+                                  style={entry.type === type
+                                    ? { backgroundColor: accentColor, color: 'white' }
+                                    : { backgroundColor: 'white', color: '#6b7280' }}
+                                >
+                                  {type === 'new' ? 'New Athlete' : 'Existing Athlete'}
+                                </button>
+                              ))}
+                            </div>
+
+                            {/* New Athlete: intake form */}
+                            {entry.type === 'new' && (
+                              <div className="space-y-3">
+                                <div>
+                                  <label className={LABEL}>Name</label>
+                                  <input type="text" value={entry.name}
+                                    onChange={e => upd(entry.id, { name: e.target.value })}
+                                    placeholder="Full name" className={INPUT} />
+                                </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                  <div>
+                                    <label className={LABEL}>Gender</label>
+                                    <SelectPicker
+                                      value={entry.gender}
+                                      onChange={v => upd(entry.id, { gender: v })}
+                                      accentColor={accentColor}
+                                      options={[
+                                        { value: '', label: 'Select Gender', muted: true },
+                                        { value: 'male', label: 'Male' },
+                                        { value: 'female', label: 'Female' },
+                                        { value: 'prefer_not', label: 'Prefer not to say' },
+                                      ]}
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className={LABEL}>Age</label>
+                                    <input type="number" min="1" max="120" value={entry.age}
+                                      onChange={e => upd(entry.id, { age: e.target.value })}
+                                      placeholder="Age" className={INPUT} style={{ textAlign: 'center' }} />
+                                  </div>
+                                </div>
+                                <div>
+                                  <label className={LABEL}>Rep Club</label>
+                                  <SelectPicker
+                                    value={entry.repClub}
+                                    onChange={v => upd(entry.id, { repClub: v, repClubOther: v !== 'other' ? '' : entry.repClubOther })}
+                                    accentColor={accentColor}
+                                    options={[
+                                      { value: '', label: 'Select Rep Club', muted: true },
+                                      { value: 'spba',    label: 'Southern Peninsula Basketball Association' },
+                                      { value: 'breakers',label: 'Mornington Breakers' },
+                                      { value: 'wba',     label: 'Westernport Basketball Association' },
+                                      { value: 'blues',   label: 'Frankston Blues' },
+                                      { value: 'bobcats', label: 'Frankston Bobcats' },
+                                      { value: 'chelsea', label: 'Chelsea Basketball' },
+                                      { value: 'none',    label: 'Not currently playing rep' },
+                                      { value: 'other',   label: 'Other' },
+                                    ]}
+                                  />
+                                </div>
+                                {entry.repClub === 'other' && (
+                                  <div>
+                                    <label className={LABEL}>Club Name</label>
+                                    <input type="text" value={entry.repClubOther}
+                                      onChange={e => upd(entry.id, { repClubOther: e.target.value })}
+                                      placeholder="Enter club name" className={INPUT} />
+                                  </div>
+                                )}
+                                <div>
+                                  <label className={LABEL}>Brief Playing History</label>
+                                  <textarea value={entry.playingHistory}
+                                    onChange={e => upd(entry.id, { playingHistory: e.target.value })}
+                                    rows={3}
+                                    placeholder="e.g. 3 years domestic, currently in U16s..."
+                                    className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 outline-none transition resize-none focus:border-[#6BAD6B] focus:ring-1 focus:ring-[#6BAD6B]/40"
+                                  />
+                                </div>
+                                <div>
+                                  <label className={LABEL}>What is the player trying to get out of this session?</label>
+                                  <textarea value={entry.sessionGoals}
+                                    onChange={e => upd(entry.id, { sessionGoals: e.target.value })}
+                                    rows={3}
+                                    placeholder="e.g. Improve ball handling, prepare for trials..."
+                                    className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 outline-none transition resize-none focus:border-[#6BAD6B] focus:ring-1 focus:ring-[#6BAD6B]/40"
+                                  />
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Existing Athlete: dropdown */}
+                            {entry.type === 'existing' && (
+                              <div>
+                                <label className={LABEL}>Select Athlete</label>
+                                <SelectPicker
+                                  value={entry.existingId}
+                                  onChange={v => upd(entry.id, { existingId: v })}
+                                  accentColor={accentColor}
+                                  centerOnTrigger
+                                  options={[
+                                    { value: '', label: 'Select Athlete', muted: true },
+                                    ...[...ATHLETES].sort().map(a => ({ value: a, label: a })),
+                                  ]}
+                                />
+                              </div>
+                            )}
+                          </div>
                         ))}
+
+                        {/* Add Athlete button — multi-athlete sessions only */}
+                        {isMulti && (
+                          <button
+                            type="button"
+                            onClick={() => setCasualAthletes(prev => [...prev, newCasualAthlete()])}
+                            className="w-full rounded-xl border border-dashed border-gray-300 py-2.5 text-sm font-semibold text-gray-400 transition hover:border-gray-400 hover:text-gray-600"
+                          >
+                            + Add Athlete
+                          </button>
+                        )}
                       </div>
-
-                      {/* New Athlete: intake form */}
-                      {casualAthleteType === 'new' && (
-                        <>
-                          <div>
-                            <label className={LABEL}>Name</label>
-                            <input type="text" value={athleteName} onChange={e => setAthleteName(e.target.value)}
-                              placeholder="Full name" className={INPUT} />
-                          </div>
-                          <div className="grid grid-cols-2 gap-3">
-                            <div>
-                              <label className={LABEL}>Gender</label>
-                              <SelectPicker
-                                value={athleteGender}
-                                onChange={setAthleteGender}
-                                accentColor={accentColor}
-                                options={[
-                                  { value: '', label: 'Select Gender', muted: true },
-                                  { value: 'male', label: 'Male' },
-                                  { value: 'female', label: 'Female' },
-                                  { value: 'prefer_not', label: 'Prefer not to say' },
-                                ]}
-                              />
-                            </div>
-                            <div>
-                              <label className={LABEL}>Age</label>
-                              <input type="number" min="1" max="120" value={athleteAge}
-                                onChange={e => setAthleteAge(e.target.value)}
-                                placeholder="Age" className={INPUT} style={{ textAlign: 'center' }} />
-                            </div>
-                          </div>
-                          <div>
-                            <label className={LABEL}>Rep Club</label>
-                            <SelectPicker
-                              value={athleteRepClub}
-                              onChange={v => { setAthleteRepClub(v); if (v !== 'other') setAthleteRepClubOther('') }}
-                              accentColor={accentColor}
-                              options={[
-                                { value: '', label: 'Select Rep Club', muted: true },
-                                { value: 'spba',    label: 'Southern Peninsula Basketball Association' },
-                                { value: 'breakers',label: 'Mornington Breakers' },
-                                { value: 'wba',     label: 'Westernport Basketball Association' },
-                                { value: 'blues',   label: 'Frankston Blues' },
-                                { value: 'bobcats', label: 'Frankston Bobcats' },
-                                { value: 'chelsea', label: 'Chelsea Basketball' },
-                                { value: 'none',    label: 'Not currently playing rep' },
-                                { value: 'other',   label: 'Other' },
-                              ]}
-                            />
-                          </div>
-                          {athleteRepClub === 'other' && (
-                            <div>
-                              <label className={LABEL}>Club Name</label>
-                              <input type="text" value={athleteRepClubOther}
-                                onChange={e => setAthleteRepClubOther(e.target.value)}
-                                placeholder="Enter club name" className={INPUT} />
-                            </div>
-                          )}
-                          <div>
-                            <label className={LABEL}>Brief Playing History</label>
-                            <textarea
-                              value={athletePlayingHistory}
-                              onChange={e => setAthletePlayingHistory(e.target.value)}
-                              rows={3}
-                              placeholder="e.g. 3 years domestic, currently in U16s..."
-                              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 outline-none transition resize-none focus:border-[#6BAD6B] focus:ring-1 focus:ring-[#6BAD6B]/40"
-                            />
-                          </div>
-                          <div>
-                            <label className={LABEL}>What is the player trying to get out of this session?</label>
-                            <textarea
-                              value={athleteSessionGoals}
-                              onChange={e => setAthleteSessionGoals(e.target.value)}
-                              rows={3}
-                              placeholder="e.g. Improve ball handling, prepare for trials..."
-                              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 outline-none transition resize-none focus:border-[#6BAD6B] focus:ring-1 focus:ring-[#6BAD6B]/40"
-                            />
-                          </div>
-                        </>
-                      )}
-
-                      {/* Existing Athlete: dropdown */}
-                      {casualAthleteType === 'existing' && (
-                        <div>
-                          <label className={LABEL}>Select Athlete</label>
-                          <SelectPicker
-                            value={singleAthlete}
-                            onChange={setSingleAthlete}
-                            accentColor={accentColor}
-                            centerOnTrigger
-                            options={[
-                              { value: '', label: 'Select Athlete', muted: true },
-                              ...[...ATHLETES].sort().map(a => ({ value: a, label: a })),
-                            ]}
-                          />
-                        </div>
-                      )}
-                    </div>
-                  ) : bookingType === 'member' && ['Volume Shooting', 'Casual Shooting', 'Small Group Session'].includes(sessionType) ? (
+                    )
+                  })() : bookingType === 'member' && ['Volume Shooting', 'Casual Shooting', 'Small Group Session'].includes(sessionType) ? (
                     /* ── Member Volume/Casual Shooting / Small Group: number of athletes + athlete picker ── */
                     <div className="grid grid-cols-2 gap-3">
                       <div>
