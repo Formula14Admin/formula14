@@ -1438,22 +1438,39 @@ function BookingModal({
                       setCasualAthletes(prev => prev.map(a => a.id === id ? { ...a, ...patch } : a))
                     return (
                       <div className="space-y-3">
-                        {visibleAthletes.map((entry, idx) => (
+                        {/* Number of Athletes — multi-athlete sessions only */}
+                        {isMulti && (
+                          <div>
+                            <label className={LABEL}>Number of Athletes</label>
+                            <SelectPicker
+                              value={numAthletes}
+                              onChange={v => {
+                                setNumAthletes(v)
+                                const n = parseInt(v) || 0
+                                setCasualAthletes(prev => {
+                                  if (n > prev.length) return [...prev, ...Array.from({ length: n - prev.length }, () => newCasualAthlete())]
+                                  if (n < prev.length) return prev.slice(0, n)
+                                  return prev
+                                })
+                              }}
+                              accentColor={accentColor}
+                              panelMaxHeight={360}
+                              options={[
+                                { value: '', label: 'Select Number Of Athletes', muted: true },
+                                ...Array.from({ length: 10 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) })),
+                              ]}
+                            />
+                          </div>
+                        )}
+
+                        {/* Athlete cards */}
+                        {(!isMulti || numAthletes) && visibleAthletes.map((entry, idx) => (
                           <div key={entry.id} className="rounded-xl border border-gray-200 p-3 space-y-3">
                             {/* Card header */}
                             <div className="flex items-center justify-between">
                               <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">
                                 Athlete {idx + 1}
                               </span>
-                              {isMulti && casualAthletes.length > 1 && (
-                                <button
-                                  type="button"
-                                  onClick={() => setCasualAthletes(prev => prev.filter(a => a.id !== entry.id))}
-                                  className="rounded p-0.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
-                                >
-                                  <IconX size={14} />
-                                </button>
-                              )}
                             </div>
 
                             {/* New / Existing toggle */}
@@ -1571,16 +1588,6 @@ function BookingModal({
                           </div>
                         ))}
 
-                        {/* Add Athlete button — multi-athlete sessions only */}
-                        {isMulti && (
-                          <button
-                            type="button"
-                            onClick={() => setCasualAthletes(prev => [...prev, newCasualAthlete()])}
-                            className="w-full rounded-xl border border-dashed border-gray-300 py-2.5 text-sm font-semibold text-gray-400 transition hover:border-gray-400 hover:text-gray-600"
-                          >
-                            + Add Athlete
-                          </button>
-                        )}
                       </div>
                     )
                   })() : bookingType === 'member' && ['Volume Shooting', 'Casual Shooting', 'Small Group Session'].includes(sessionType) ? (
