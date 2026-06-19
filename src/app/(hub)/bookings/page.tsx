@@ -1074,7 +1074,6 @@ function BookingModal({
     setCoach('')
     setRepeat('none')
     setRepeatUntil('')
-    setBookingType('member')
     setNumAthletes('')
     setSingleAthlete('')
     setCustomAthlete('')
