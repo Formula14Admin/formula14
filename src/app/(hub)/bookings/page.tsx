@@ -1068,7 +1068,11 @@ function BookingModal({
   const headerRef = useRef<HTMLDivElement>(null)
 
   function handleReset() {
-    const defaultStart = modal.kind === 'add' ? modal.startMins : src!.startMins
+    const origDate  = modal.kind === 'add' ? modal.date       : src!.date
+    const origStart = modal.kind === 'add' ? modal.startMins  : src!.startMins
+    setDate(origDate)
+    setStartMins(origStart)
+    setFinishMins(origStart + 60)
     setSessionType('')
     setAthletes([])
     setCoach('')
@@ -1084,7 +1088,6 @@ function BookingModal({
     setAthleteRepClubOther('')
     setAthletePlayingHistory('')
     setAthleteSessionGoals('')
-    setFinishMins(defaultStart + 60)
   }
 
   function handleSpaceChange(id: SpaceId) {
@@ -1632,6 +1635,7 @@ function BookingModal({
                   </button>
                   <button
                     type="button"
+                    onClick={handleReset}
                     className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50"
                   >
                     Refresh Booking
