@@ -1379,7 +1379,7 @@ function BookingModal({
                       />
                     </div>
                     <div>
-                      {bookingType === 'casual' ? (
+                      {bookingType === 'casual' && sessionType !== 'Individual Work Out' ? (
                         <>
                           <label className={LABEL}>Number of Athletes</label>
                           <SelectPicker
