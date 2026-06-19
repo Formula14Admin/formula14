@@ -1068,6 +1068,7 @@ function BookingModal({
   const headerRef = useRef<HTMLDivElement>(null)
 
   function handleReset() {
+    modalRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
     const origDate  = modal.kind === 'add' ? modal.date       : src!.date
     const origStart = modal.kind === 'add' ? modal.startMins  : src!.startMins
     setDate(origDate)
