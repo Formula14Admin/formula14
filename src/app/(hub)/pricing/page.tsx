@@ -9,12 +9,9 @@ import {
   IconX,
   IconAlertTriangle,
   IconPlus,
-  IconTrash,
-  IconPencil,
   IconCurrencyDollar,
   IconSettings,
   IconShieldCheck,
-  IconCreditCard,
   IconChevronDown,
   IconChevronUp,
   IconRefresh,
@@ -128,8 +125,6 @@ const ATHLETES: AthleteRecord[] = [
   { id: 'a9',  name: 'Sam Liu',          paymentMethod: 'automatic' },
   { id: 'a10', name: 'Zara Obi',         paymentMethod: 'pay-at-venue' },
 ]
-
-function uid() { return Math.random().toString(36).slice(2, 9) }
 
 const INIT_PRICING: SessionPricingConfig[] = [
   {
@@ -337,18 +332,13 @@ function Toggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function PricingPage() {
-  const [pricingConfigs, setPricingConfigs] = useState<SessionPricingConfig[]>(INIT_PRICING)
+  const pricingConfigs = INIT_PRICING
   const [settings, setSettings] = useState<PricingSettings>(INIT_SETTINGS)
   const [sessions, setSessions] = useState<Session[]>(INIT_SESSIONS)
   const [tab, setTab] = useState<'sessions' | 'pricing' | 'summary'>('sessions')
   const [expandedSession, setExpandedSession] = useState<string | null>(null)
   const [sessionFilter, setSessionFilter] = useState<'all' | 'upcoming' | 'locked' | 'completed'>('all')
   const [addingTo, setAddingTo] = useState<string | null>(null)
-
-  // Tier editing
-  const [editingConfig, setEditingConfig] = useState<SessionType | null>(null)
-  const [editingTierId, setEditingTierId] = useState<string | 'new' | null>(null)
-  const [tierForm, setTierForm] = useState({ min: '', max: '', price: '' })
 
   const now = DEMO_NOW
 
@@ -416,70 +406,6 @@ export default function PricingPage() {
       return { ...s, athletes: [...s.athletes, { athleteId, attendanceStatus: null, paymentStatus: 'pending', lockedPrice: null }] }
     }))
     setAddingTo(null)
-  }
-
-  function saveTier(sessionType: SessionType) {
-    const min = parseInt(tierForm.min)
-    const max = tierForm.max.trim() === '' ? null : parseInt(tierForm.max)
-    const price = parseFloat(tierForm.price)
-    if (isNaN(min) || isNaN(price)) return
-    setPricingConfigs(prev => prev.map(c => {
-      if (c.sessionType !== sessionType) return c
-      if (editingTierId === 'new') {
-        return { ...c, tiers: [...c.tiers, { id: uid(), min, max, pricePerAthlete: price }] }
-      }
-      return { ...c, tiers: c.tiers.map(t => t.id === editingTierId ? { ...t, min, max, pricePerAthlete: price } : t) }
-    }))
-    setEditingTierId(null)
-    setTierForm({ min: '', max: '', price: '' })
-  }
-
-  function startEditTier(sessionType: SessionType, tier: PricingTier) {
-    setEditingConfig(sessionType)
-    setEditingTierId(tier.id)
-    setTierForm({ min: String(tier.min), max: tier.max != null ? String(tier.max) : '', price: String(tier.pricePerAthlete) })
-  }
-
-  function startNewTier(sessionType: SessionType) {
-    setEditingConfig(sessionType)
-    setEditingTierId('new')
-    setTierForm({ min: '', max: '', price: '' })
-  }
-
-  function deleteTier(sessionType: SessionType, tierId: string) {
-    setPricingConfigs(prev => prev.map(c => c.sessionType !== sessionType ? c : {
-      ...c, tiers: c.tiers.filter(t => t.id !== tierId),
-    }))
-  }
-
-  // ── Tier edit row (reused for new + existing) ────────────────────────────
-
-  function TierEditRow({ sessionType }: { sessionType: SessionType }) {
-    return (
-      <tr className="border-b border-gray-100 bg-blue-50/40">
-        <td className="py-2 pr-2">
-          <div className="flex items-center gap-1">
-            <input type="number" placeholder="Min" value={tierForm.min} onChange={e => setTierForm(f => ({ ...f, min: e.target.value }))} className="w-14 rounded border border-gray-200 px-2 py-1 text-xs outline-none focus:border-[#6BA3D6]" />
-            <span className="text-gray-400 text-xs">–</span>
-            <input type="number" placeholder="Max" value={tierForm.max} onChange={e => setTierForm(f => ({ ...f, max: e.target.value }))} className="w-14 rounded border border-gray-200 px-2 py-1 text-xs outline-none focus:border-[#6BA3D6]" />
-            <span className="text-gray-400 text-xs ml-1">(blank = no limit)</span>
-          </div>
-        </td>
-        <td className="py-2 pr-2">
-          <div className="flex items-center gap-1">
-            <span className="text-gray-400 text-xs">$</span>
-            <input type="number" placeholder="0" value={tierForm.price} onChange={e => setTierForm(f => ({ ...f, price: e.target.value }))} className="w-16 rounded border border-gray-200 px-2 py-1 text-xs outline-none focus:border-[#6BA3D6]" />
-            <span className="text-gray-400 text-xs">/each</span>
-          </div>
-        </td>
-        <td className="py-2">
-          <div className="flex items-center gap-1">
-            <button onClick={() => saveTier(sessionType)} className="rounded px-2 py-1 text-xs font-medium text-white" style={{ backgroundColor: ACCENT }}>Save</button>
-            <button onClick={() => setEditingTierId(null)} className="rounded px-2 py-1 text-xs font-medium text-gray-500 hover:bg-gray-100">Cancel</button>
-          </div>
-        </td>
-      </tr>
-    )
   }
 
   // ── Render ───────────────────────────────────────────────────────────────
@@ -897,17 +823,10 @@ export default function PricingPage() {
               const typeColor = SESSION_TYPE_COLORS[config.sessionType]
               return (
                 <div key={config.sessionType} className="rounded-xl border border-gray-200 bg-white p-5">
-                  <div className="mb-4 flex items-center justify-between">
+                  <div className="mb-4">
                     <span className="rounded-full px-2.5 py-0.5 text-xs font-semibold" style={{ backgroundColor: typeColor.bg, color: typeColor.color }}>
                       {SESSION_TYPE_LABELS[config.sessionType]}
                     </span>
-                    <button
-                      onClick={() => startNewTier(config.sessionType)}
-                      className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium text-white transition-opacity hover:opacity-90"
-                      style={{ backgroundColor: ACCENT }}
-                    >
-                      <IconPlus size={12} /> Add Tier
-                    </button>
                   </div>
 
                   <table className="w-full text-sm">
@@ -915,43 +834,25 @@ export default function PricingPage() {
                       <tr className="border-b border-gray-100">
                         <th className="pb-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Athletes</th>
                         <th className="pb-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Price / Athlete</th>
-                        <th className="pb-2 w-16" />
                       </tr>
                     </thead>
                     <tbody>
                       {config.tiers.map(tier => (
-                        editingTierId === tier.id && editingConfig === config.sessionType
-                          ? <TierEditRow key={tier.id} sessionType={config.sessionType} />
-                          : (
-                            <tr key={tier.id} className="group border-b border-gray-100">
-                              <td className="py-2 text-gray-700">
-                                {tier.max === null
-                                  ? `${tier.min}+ athletes`
-                                  : tier.min === tier.max
-                                  ? `${tier.min} athlete`
-                                  : `${tier.min}–${tier.max} athletes`}
-                              </td>
-                              <td className="py-2 font-semibold text-gray-900">${tier.pricePerAthlete.toFixed(0)} / each</td>
-                              <td className="py-2">
-                                <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                                  <button onClick={() => startEditTier(config.sessionType, tier)} className="rounded p-1 text-gray-400 transition-colors hover:text-[#6BA3D6]">
-                                    <IconPencil size={13} />
-                                  </button>
-                                  <button onClick={() => deleteTier(config.sessionType, tier.id)} className="rounded p-1 text-gray-400 transition-colors hover:text-red-500">
-                                    <IconTrash size={13} />
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          )
+                        <tr key={tier.id} className="border-b border-gray-100">
+                          <td className="py-2 text-gray-700">
+                            {tier.max === null
+                              ? `${tier.min}+ athletes`
+                              : tier.min === tier.max
+                              ? `${tier.min} athlete`
+                              : `${tier.min}–${tier.max} athletes`}
+                          </td>
+                          <td className="py-2 font-semibold text-gray-900">${tier.pricePerAthlete.toFixed(0)} / each</td>
+                        </tr>
                       ))}
-                      {editingTierId === 'new' && editingConfig === config.sessionType && (
-                        <TierEditRow sessionType={config.sessionType} />
-                      )}
-                      {config.tiers.length === 0 && !(editingTierId === 'new' && editingConfig === config.sessionType) && (
+                      {config.tiers.length === 0 && (
                         <tr>
-                          <td colSpan={3} className="py-4 text-center text-xs text-gray-400">
-                            No tiers configured — click Add Tier above
+                          <td colSpan={2} className="py-4 text-center text-xs text-gray-400">
+                            No tiers configured
                           </td>
                         </tr>
                       )}
