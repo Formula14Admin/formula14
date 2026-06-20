@@ -1490,7 +1490,7 @@ function BookingModal({
                                 <label className={LABEL}>Team Name</label>
                                 <input type="text" value={casualTeam.teamName}
                                   onChange={e => upd({ teamName: e.target.value })}
-                                  placeholder="e.g. Frankston Bobcats U14 Boys"
+                                  placeholder="e.g. Red Hill Jump Jets"
                                   className={INPUT} />
                               </div>
                               <div className="grid grid-cols-2 gap-3">
