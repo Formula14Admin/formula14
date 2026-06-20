@@ -1391,6 +1391,29 @@ function BookingModal({
                           />
                         </>
                       )}
+                      {bookingType === 'casual' && sessionType !== 'Individual Work Out' && (
+                        <>
+                          <label className={LABEL}>Number of Athletes</label>
+                          <SelectPicker
+                            value={numAthletes}
+                            onChange={v => {
+                              setNumAthletes(v)
+                              const n = parseInt(v) || 0
+                              setCasualAthletes(prev => {
+                                if (n > prev.length) return [...prev, ...Array.from({ length: n - prev.length }, () => newCasualAthlete())]
+                                if (n < prev.length) return prev.slice(0, n)
+                                return prev
+                              })
+                            }}
+                            accentColor={accentColor}
+                            panelMaxHeight={360}
+                            options={[
+                              { value: '', label: 'Select Number Of Athletes', muted: true },
+                              ...Array.from({ length: 10 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) })),
+                            ]}
+                          />
+                        </>
+                      )}
                     </div>
                   </div>
 
@@ -1420,31 +1443,6 @@ function BookingModal({
                       setCasualAthletes(prev => prev.map(a => a.id === id ? { ...a, ...patch } : a))
                     return (
                       <div className="space-y-3">
-                        {/* Number of Athletes — multi-athlete sessions only */}
-                        {isMulti && (
-                          <div>
-                            <label className={LABEL}>Number of Athletes</label>
-                            <SelectPicker
-                              value={numAthletes}
-                              onChange={v => {
-                                setNumAthletes(v)
-                                const n = parseInt(v) || 0
-                                setCasualAthletes(prev => {
-                                  if (n > prev.length) return [...prev, ...Array.from({ length: n - prev.length }, () => newCasualAthlete())]
-                                  if (n < prev.length) return prev.slice(0, n)
-                                  return prev
-                                })
-                              }}
-                              accentColor={accentColor}
-                              panelMaxHeight={360}
-                              options={[
-                                { value: '', label: 'Select Number Of Athletes', muted: true },
-                                ...Array.from({ length: 10 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) })),
-                              ]}
-                            />
-                          </div>
-                        )}
-
                         {/* Athlete cards */}
                         {(!isMulti || numAthletes) && visibleAthletes.map((entry, idx) => (
                           <div key={entry.id} className="rounded-xl border border-gray-200 p-3 space-y-3">
