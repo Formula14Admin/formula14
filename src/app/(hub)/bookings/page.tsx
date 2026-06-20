@@ -1612,7 +1612,7 @@ function BookingModal({
                               onChange={() => {}}
                               multiValues={athletes}
                               onChangeMulti={setAthletes}
-                              maxSelect={6}
+                              maxSelect={Math.max(1, 6 - memberCasuals.length)}
                               accentColor={accentColor}
                               centerOnTrigger
                               options={[
@@ -1735,12 +1735,14 @@ function BookingModal({
                           </div>
                         ))}
 
-                        {/* Add Casual Member button */}
-                        <button type="button" onClick={addMemberCasual}
-                          className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-200 py-2.5 text-sm font-semibold text-gray-400 transition hover:border-gray-400 hover:text-gray-500">
-                          <IconPlus size={15} />
-                          Add Casual Member
-                        </button>
+                        {/* Add Casual Member button — only when total < 6 */}
+                        {athletes.length + memberCasuals.length < 6 && (
+                          <button type="button" onClick={addMemberCasual}
+                            className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-200 py-2.5 text-sm font-semibold text-gray-400 transition hover:border-gray-400 hover:text-gray-500">
+                            <IconPlus size={15} />
+                            Add Casual Member
+                          </button>
+                        )}
                       </div>
                     )
                   })() : sessionType === 'Individual Work Out' ? (
