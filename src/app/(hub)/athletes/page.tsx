@@ -21,7 +21,7 @@ import {
 
 type Position = 'PG' | 'SG' | 'SF' | 'PF' | 'C' | ''
 type Gender = 'Male' | 'Female' | 'Other'
-type MembershipPlan = 'foundation' | 'elite' | 'pro'
+type MembershipPlan = 'bronze' | 'silver' | 'gold' | 'platinum'
 type MembershipStatus = 'active' | 'cancelling' | 'overdue' | 'inactive'
 
 interface RecentSession {
@@ -66,10 +66,14 @@ const POSITION_COLOR: Record<string, string> = {
 }
 
 const PLAN_INFO: Record<MembershipPlan, { label: string; price: number; monthlyQuota: number | null; color: string }> = {
-  foundation: { label: 'Foundation', price: 39, monthlyQuota: 8,  color: '#64B5F6' },
-  elite:      { label: 'Elite',      price: 59, monthlyQuota: 16, color: '#6BA3D6' },
-  pro:        { label: 'Pro',        price: 79, monthlyQuota: null, color: '#7C3AED' },
+  bronze:   { label: 'Bronze',   price: 35,  monthlyQuota: 8,    color: '#B87333' },
+  silver:   { label: 'Silver',   price: 50,  monthlyQuota: 12,   color: '#64748B' },
+  gold:     { label: 'Gold',     price: 75,  monthlyQuota: 20,   color: '#D4A843' },
+  platinum: { label: 'Platinum', price: 100, monthlyQuota: null, color: '#7C3AED' },
 }
+
+const MEMBER_CARD = { bg: '#EFF6FF', border: '#BFDBFE', selectedBorder: ACCENT }
+const CASUAL_CARD = { bg: '#F0FDF4', border: '#BBF7D0', selectedBorder: '#16a34a' }
 
 const STATUS_STYLE: Record<MembershipStatus, { bg: string; color: string; dot: string; label: string }> = {
   active:     { bg: '#dcfce7', color: '#15803d', dot: '#22c55e', label: 'Active' },
@@ -99,7 +103,7 @@ const INIT_ATHLETES: Athlete[] = [
     dob: '2009-08-15', gender: 'Male', position: 'PG',
     repClub: 'Ringwood Hawks', school: 'Whitefriars College',
     joined: '2024-02-12',
-    membership: { plan: 'foundation', status: 'active' },
+    membership: { plan: 'bronze', status: 'active' },
     sessionsTotal: 68, sessionsThisMonth: 6, lastSession: '2026-06-17',
     goals: 'Improve point guard decision-making under pressure. Work on left-hand drive and pick-and-roll reads.',
     coachNotes: 'Strong work ethic, always early to sessions. Tendency to over-dribble when pressured — keep reinforcing quick-release decisions. Huge upside.',
@@ -117,7 +121,7 @@ const INIT_ATHLETES: Athlete[] = [
     dob: '2008-11-03', gender: 'Male', position: 'SG',
     repClub: 'Melbourne Tigers', school: 'De La Salle College',
     joined: '2023-08-07',
-    membership: { plan: 'elite', status: 'active' },
+    membership: { plan: 'silver', status: 'active' },
     sessionsTotal: 142, sessionsThisMonth: 10, lastSession: '2026-06-18',
     goals: 'Sharpen off-ball movement and catch-and-shoot mechanics. Improve defensive positioning on ball screens.',
     coachNotes: 'Athletically gifted. Needs to trust his shot more in game situations — practice numbers don\'t match his in-game hesitation. Great teammate and leader.',
@@ -135,7 +139,7 @@ const INIT_ATHLETES: Athlete[] = [
     dob: '2011-02-22', gender: 'Female', position: 'PF',
     repClub: 'Dandenong Rangers', school: 'Killester College',
     joined: '2024-05-20',
-    membership: { plan: 'pro', status: 'active' },
+    membership: { plan: 'gold', status: 'active' },
     sessionsTotal: 89, sessionsThisMonth: 8, lastSession: '2026-06-17',
     goals: 'Develop face-up game from the elbow. Improve free throw consistency (targeting 75%+ this season).',
     coachNotes: 'One of the most coachable athletes we have. Hard worker who raises the intensity around her. Targeting U18 representative squad next season — she\'ll be ready.',
@@ -153,7 +157,7 @@ const INIT_ATHLETES: Athlete[] = [
     dob: '2007-05-10', gender: 'Male', position: 'C',
     repClub: 'Knox Raiders', school: 'Mount Waverley Secondary College',
     joined: '2023-11-14',
-    membership: { plan: 'elite', status: 'active' },
+    membership: { plan: 'gold', status: 'active' },
     sessionsTotal: 116, sessionsThisMonth: 7, lastSession: '2026-06-16',
     goals: 'Develop post footwork and drop-step finishes. Build conditioning for full-game fitness at senior level.',
     coachNotes: 'Big body with excellent touch around the rim. Conditioning is the current ceiling — committed to off-session gym work which is showing results. Will be a dominant force if he stays consistent.',
@@ -189,7 +193,7 @@ const INIT_ATHLETES: Athlete[] = [
     dob: '2009-04-17', gender: 'Male', position: 'SG',
     repClub: 'Waverley Falcons', school: 'St Kevin\'s College',
     joined: '2024-09-02',
-    membership: { plan: 'foundation', status: 'overdue' },
+    membership: { plan: 'bronze', status: 'overdue' },
     sessionsTotal: 41, sessionsThisMonth: 4, lastSession: '2026-06-11',
     goals: 'Develop primary ball-handling skills and improve 3-point range. Build consistency across all sessions.',
     coachNotes: 'Has missed the last two sessions and has an overdue payment. Outstanding athlete when engaged — quick learner with great athleticism. Need to connect with the family about commitment.',
@@ -207,7 +211,7 @@ const INIT_ATHLETES: Athlete[] = [
     dob: '2008-07-28', gender: 'Male', position: 'PG',
     repClub: 'Berwick Miners', school: 'Padua College',
     joined: '2023-06-19',
-    membership: { plan: 'elite', status: 'active' },
+    membership: { plan: 'silver', status: 'active' },
     sessionsTotal: 158, sessionsThisMonth: 9, lastSession: '2026-06-18',
     goals: 'Develop court vision and assist mentality. Reduce turnovers in transition. Push to U20 representative level.',
     coachNotes: 'Very high basketball IQ — reads the game a step ahead. Working on reducing tunnel vision and seeing the pass before the drive. Best long-term prospect in our current group.',
@@ -225,7 +229,7 @@ const INIT_ATHLETES: Athlete[] = [
     dob: '2011-01-14', gender: 'Female', position: 'SF',
     repClub: 'Nunawading Spectres', school: 'Sacré Cœur',
     joined: '2024-07-15',
-    membership: { plan: 'elite', status: 'active' },
+    membership: { plan: 'silver', status: 'active' },
     sessionsTotal: 73, sessionsThisMonth: 8, lastSession: '2026-06-17',
     goals: 'Become more assertive attacking the basket. Develop floater and pull-up jumper off live dribble penetration.',
     coachNotes: 'Technical skills are excellent. Needs to build the confidence to take the game over — her instinct is to defer too early. Showed great improvement last month. Keep pushing her to be decisive.',
@@ -243,7 +247,7 @@ const INIT_ATHLETES: Athlete[] = [
     dob: '2010-06-05', gender: 'Male', position: 'PF',
     repClub: 'Box Hill Braves', school: 'Box Hill High School',
     joined: '2024-01-22',
-    membership: { plan: 'pro', status: 'active' },
+    membership: { plan: 'platinum', status: 'active' },
     sessionsTotal: 104, sessionsThisMonth: 12, lastSession: '2026-06-19',
     goals: 'Expand offensive range to include mid-post game. Improve rebounding positioning and outlet passing.',
     coachNotes: 'Our most sessions-per-month athlete — hungrier than anyone to improve. Strong hands and excellent body positioning. Starting to monitor for burnout; reminding him recovery is part of training.',
@@ -261,7 +265,7 @@ const INIT_ATHLETES: Athlete[] = [
     dob: '2012-03-08', gender: 'Female', position: 'C',
     repClub: 'Dandenong Panthers', school: 'Killester College',
     joined: '2025-04-07',
-    membership: { plan: 'foundation', status: 'active' },
+    membership: { plan: 'bronze', status: 'active' },
     sessionsTotal: 29, sessionsThisMonth: 5, lastSession: '2026-06-16',
     goals: 'Learn proper post footwork and establish herself in the paint. Build confidence against physical defenders.',
     coachNotes: 'Youngest athlete in our program at 14. Shows maturity beyond her years. Long-term development project — potential is very high. Keep sessions positive and focused on fundamentals.',
@@ -350,7 +354,7 @@ function MembershipBadge({ membership }: { membership: Athlete['membership'] }) 
   if (!membership.plan || !membership.status) {
     return (
       <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold"
-        style={{ backgroundColor: '#f3f4f6', color: '#6b7280' }}>
+        style={{ backgroundColor: '#F0FDF4', color: '#16a34a', border: '1px solid #BBF7D0' }}>
         Casual
       </span>
     )
@@ -407,12 +411,17 @@ function AthleteCard({ athlete, selected, onClick }: {
 }) {
   const age = calcAge(athlete.dob)
   const group = ageGroup(athlete.dob)
+  const isMember = !!athlete.membership.plan
+  const card = isMember ? MEMBER_CARD : CASUAL_CARD
   return (
     <button
       type="button"
       onClick={onClick}
-      className="w-full rounded-2xl border-2 bg-white p-4 text-left transition hover:shadow-md"
-      style={{ borderColor: selected ? ACCENT : '#e5e7eb' }}
+      className="w-full rounded-2xl border-2 p-4 text-left transition hover:shadow-md"
+      style={{
+        backgroundColor: card.bg,
+        borderColor: selected ? card.selectedBorder : card.border,
+      }}
     >
       {/* Top row: avatar + name + position */}
       <div className="flex items-start gap-3">
@@ -474,20 +483,22 @@ export default function AthletesPage() {
   const selected = athletes.find((a) => a.id === selectedId) ?? null
 
   const filtered = useMemo(() => {
-    return athletes.filter((a) => {
-      // Status filter
-      if (statusFilter === 'member' && !a.membership.plan) return false
-      if (statusFilter === 'casual' && a.membership.plan) return false
-      // Position filter
-      if (posFilter !== 'all' && a.position !== posFilter) return false
-      // Search
-      if (search) {
-        const q = search.toLowerCase()
-        const hay = `${a.firstName} ${a.lastName} ${a.email} ${a.repClub} ${a.school}`.toLowerCase()
-        if (!hay.includes(q)) return false
-      }
-      return true
-    })
+    return athletes
+      .filter((a) => {
+        if (statusFilter === 'member' && !a.membership.plan) return false
+        if (statusFilter === 'casual' && a.membership.plan) return false
+        if (posFilter !== 'all' && a.position !== posFilter) return false
+        if (search) {
+          const q = search.toLowerCase()
+          const hay = `${a.firstName} ${a.lastName} ${a.email} ${a.repClub} ${a.school}`.toLowerCase()
+          if (!hay.includes(q)) return false
+        }
+        return true
+      })
+      .sort((a, b) => {
+        const last = a.lastName.localeCompare(b.lastName)
+        return last !== 0 ? last : a.firstName.localeCompare(b.firstName)
+      })
   }, [athletes, search, statusFilter, posFilter])
 
   // Stats
