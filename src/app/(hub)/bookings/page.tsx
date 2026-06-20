@@ -38,15 +38,13 @@ const PROGRAM_GROUPS: Record<string, string[]> = {
   'Development Programs': [
     'Performance Lab',
     'Domestic Academy',
-    'Representative Academy',
-    'Position Specific Training',
+    'Snipers Club',
+    'Shooters Lab',
   ],
   'Social Programs': [
     'Walking Basketball',
-    'Mid Day Ladies',
     'Mid Day Ladies Comp',
-    'Beginner Adult Basketball',
-    'Mums Shoot Around',
+    'Adult Beginner School',
   ],
 }
 const ALL_PROGRAM_NAMES = Object.values(PROGRAM_GROUPS).flat()
@@ -243,7 +241,7 @@ function makeSamples(today: string): Booking[] {
     { id:'sm1', date:today, spaceId:'shooting', startMins:10*60,     duration:60, sessionType:'Shooting Machine Rental', athletes:['Liam Carter'],    coach:'', bookingType:'casual' },
     { id:'sm2', date:tm,    spaceId:'shooting', startMins:13*60+30,  duration:45, sessionType:'Shooting Machine Rental', athletes:['Jordan Williams'], coach:'', bookingType:'casual' },
     // Program demos
-    { id:'pg1', date:today, spaceId:'secondary', startMins:12*60, duration:60, sessionType:'Mid Day Ladies',    athletes:[], coach:'jade', bookingType:'casual' },
+    { id:'pg1', date:today, spaceId:'secondary', startMins:12*60, duration:60, sessionType:'Mid Day Ladies Comp', athletes:[], coach:'jade', bookingType:'casual' },
     { id:'pg2', date:tm,    spaceId:'primary',   startMins:10*60, duration:60, sessionType:'Domestic Academy',  athletes:['Aisha Thompson','Devon Knox','Tyler Ross','Priya Mehta','Sam Liu','Zara Obi'], coach:'matt', bookingType:'member' },
   ]
 }

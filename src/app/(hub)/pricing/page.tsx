@@ -162,19 +162,11 @@ const INIT_PRICING: SessionPricingConfig[] = [
   },
   {
     sessionType: 'development-programs',
-    tiers: [
-      { id: 'dp1', min: 1, max: 1, pricePerAthlete: 80 },
-      { id: 'dp2', min: 2, max: 2, pricePerAthlete: 70 },
-      { id: 'dp3', min: 3, max: 4, pricePerAthlete: 60 },
-    ],
+    tiers: [], // program-based pricing — see PROGRAM_PRICING below
   },
   {
     sessionType: 'social-programs',
-    tiers: [
-      { id: 'sp1', min: 1, max: 1, pricePerAthlete: 40 },
-      { id: 'sp2', min: 2, max: 2, pricePerAthlete: 35 },
-      { id: 'sp3', min: 3, max: 6, pricePerAthlete: 30 },
-    ],
+    tiers: [], // program-based pricing — see PROGRAM_PRICING below
   },
 ]
 
@@ -184,6 +176,21 @@ const VOLUME_SHOOTING_PRICES = [
   { duration: 45, label: '45 minutes', price: 40 },
   { duration: 60, label: '60 minutes', price: 50 },
 ]
+
+// Development & Social Programs — per-program flat pricing
+const PROGRAM_PRICING: Record<'development-programs' | 'social-programs', { name: string; price: number; max: number }[]> = {
+  'development-programs': [
+    { name: 'Performance Lab',  price: 20, max: 15 },
+    { name: 'Domestic Academy', price: 20, max: 15 },
+    { name: 'Snipers Club',     price: 20, max: 15 },
+    { name: 'Shooters Lab',     price: 20, max: 15 },
+  ],
+  'social-programs': [
+    { name: 'Walking Basketball',    price: 15, max: 20 },
+    { name: 'Mid Day Ladies Comp',   price: 15, max: 20 },
+    { name: 'Adult Beginner School', price: 15, max: 20 },
+  ],
+}
 
 
 const INIT_SETTINGS: PricingSettings = {
@@ -863,6 +870,25 @@ export default function PricingPage() {
                         </tr>
                       </tfoot>
                     </table>
+                  ) : (config.sessionType === 'development-programs' || config.sessionType === 'social-programs') ? (
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-100">
+                          <th className="pb-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Program</th>
+                          <th className="pb-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Price</th>
+                          <th className="pb-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Max Athletes</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {PROGRAM_PRICING[config.sessionType].map(prog => (
+                          <tr key={prog.name} className="border-b border-gray-100">
+                            <td className="py-2 font-medium text-gray-900">{prog.name}</td>
+                            <td className="py-2 font-semibold text-gray-900">${prog.price} / each</td>
+                            <td className="py-2 text-gray-600">{prog.max}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   ) : (
                     <table className="w-full text-sm">
                       <thead>
@@ -948,7 +974,9 @@ export default function PricingPage() {
                 <tbody>
                   {pricingConfigs.map(config => {
                     const typeColor = SESSION_TYPE_COLORS[config.sessionType]
-                    const isVolume = config.sessionType === 'volume-shooting'
+                    const isVolume   = config.sessionType === 'volume-shooting'
+                    const isPrograms = config.sessionType === 'development-programs' || config.sessionType === 'social-programs'
+                    const progList   = isPrograms ? PROGRAM_PRICING[config.sessionType as 'development-programs' | 'social-programs'] : null
                     return (
                       <tr key={config.sessionType} className="border-b border-gray-100">
                         <td className="py-2.5">
@@ -959,6 +987,10 @@ export default function PricingPage() {
                         {isVolume ? (
                           <td colSpan={8} className="py-2.5 text-xs text-gray-500">
                             Duration-based flat fee — 30 min $30 · 45 min $40 · 60 min $50
+                          </td>
+                        ) : isPrograms && progList ? (
+                          <td colSpan={8} className="py-2.5 text-xs text-gray-500">
+                            {progList.map(p => `${p.name} $${p.price}`).join(' · ')} — max {progList[0].max} per session
                           </td>
                         ) : (
                           [1, 2, 3, 4, 5, 8, 10, 12].map(n => {
