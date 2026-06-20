@@ -33,10 +33,28 @@ const SPACES = [
 
 type SpaceId = typeof SPACES[number]['id']
 
+// ── Program groups ─────────────────────────────────────────────────────────────
+const PROGRAM_GROUPS: Record<string, string[]> = {
+  'Development Programs': [
+    'Performance Lab',
+    'Domestic Academy',
+    'Representative Academy',
+    'Position Specific Training',
+  ],
+  'Social Programs': [
+    'Walking Basketball',
+    'Mid Day Ladies',
+    'Mid Day Ladies Comp',
+    'Beginner Adult Basketball',
+    'Mums Shoot Around',
+  ],
+}
+const ALL_PROGRAM_NAMES = Object.values(PROGRAM_GROUPS).flat()
+
 // ── Session types per space ────────────────────────────────────────────────────
 const SESSION_TYPES: Record<SpaceId, string[]> = {
-  primary:   ['Casual Shooting', 'Individual Work Out', 'Small Group Session', 'Team Training', 'Volume Shooting', 'Development Programs', 'Social Programs'],
-  secondary: ['Casual Shooting', 'Individual Work Out', 'Small Group Session', 'Team Training', 'Volume Shooting', 'Development Programs', 'Social Programs'],
+  primary:   ['Casual Shooting', 'Individual Work Out', 'Small Group Session', 'Team Training', 'Volume Shooting', ...ALL_PROGRAM_NAMES],
+  secondary: ['Casual Shooting', 'Individual Work Out', 'Small Group Session', 'Team Training', 'Volume Shooting', ...ALL_PROGRAM_NAMES],
   shooting:  ['Casual Shooting', 'Shooting Machine Rental', 'Individual Work Out', 'Small Group Session', 'Team Training', 'Volume Shooting'],
   meeting:   ['Coach Meeting', 'Film Review', 'Goal Setting', 'Meeting (General)', 'Parent Meeting', 'Player Meeting', 'Team Meeting'],
 }
@@ -225,8 +243,8 @@ function makeSamples(today: string): Booking[] {
     { id:'sm1', date:today, spaceId:'shooting', startMins:10*60,     duration:60, sessionType:'Shooting Machine Rental', athletes:['Liam Carter'],    coach:'', bookingType:'casual' },
     { id:'sm2', date:tm,    spaceId:'shooting', startMins:13*60+30,  duration:45, sessionType:'Shooting Machine Rental', athletes:['Jordan Williams'], coach:'', bookingType:'casual' },
     // Program demos
-    { id:'pg1', date:today, spaceId:'secondary', startMins:12*60, duration:60, sessionType:'Social Programs',       athletes:[], coach:'jade', bookingType:'casual' },
-    { id:'pg2', date:tm,    spaceId:'primary',   startMins:10*60, duration:60, sessionType:'Development Programs',  athletes:['Aisha Thompson','Devon Knox','Tyler Ross','Priya Mehta','Sam Liu','Zara Obi'], coach:'matt', bookingType:'member' },
+    { id:'pg1', date:today, spaceId:'secondary', startMins:12*60, duration:60, sessionType:'Mid Day Ladies',    athletes:[], coach:'jade', bookingType:'casual' },
+    { id:'pg2', date:tm,    spaceId:'primary',   startMins:10*60, duration:60, sessionType:'Domestic Academy',  athletes:['Aisha Thompson','Devon Knox','Tyler Ross','Priya Mehta','Sam Liu','Zara Obi'], coach:'matt', bookingType:'member' },
   ]
 }
 
@@ -1254,6 +1272,20 @@ function BookingModal({
   const isIndividual = bookingType === 'member' && sessionType === 'Individual Work Out'
   const isMachineRental = sessionType === 'Shooting Machine Rental'
 
+  const sessionTypeOpts: Array<{ value: string; label: string; muted?: boolean; header?: boolean }> = [
+    { value: '', label: 'Select A Session Type', muted: true },
+    ...SESSION_TYPES[spaceId]
+      .filter(t => !(bookingType === 'member' && t === 'Team Training'))
+      .filter(t => !ALL_PROGRAM_NAMES.includes(t))
+      .map(t => ({ value: t, label: t })),
+    ...Object.entries(PROGRAM_GROUPS)
+      .filter(([, progs]) => progs.some(p => SESSION_TYPES[spaceId].includes(p)))
+      .flatMap(([cat, progs]) => [
+        { value: `--${cat}--`, label: cat, header: true },
+        ...progs.filter(p => SESSION_TYPES[spaceId].includes(p)).map(p => ({ value: p, label: p })),
+      ]),
+  ]
+
   const modalRef  = useRef<HTMLDivElement>(null)
   const headerRef = useRef<HTMLDivElement>(null)
 
@@ -1618,13 +1650,8 @@ function BookingModal({
                           }
                         }}
                         accentColor={accentColor}
-                        options={[
-                          { value: '', label: 'Select A Session Type', muted: true },
-                          ...SESSION_TYPES[spaceId]
-                            .filter(t => !(bookingType === 'member' && t === 'Team Training'))
-                            .map(t => ({ value: t, label: t })),
-                        ]}
-                        panelMaxHeight={240}
+                        options={sessionTypeOpts}
+                        panelMaxHeight={260}
                       />
                     </div>
                     <div>
@@ -2041,7 +2068,7 @@ function BookingModal({
 
                       </div>
                     )
-                  })() : bookingType === 'member' && ['Volume Shooting', 'Casual Shooting', 'Small Group Session', 'Development Programs', 'Social Programs'].includes(sessionType) ? (() => {
+                  })() : bookingType === 'member' && (['Volume Shooting', 'Casual Shooting', 'Small Group Session', ...ALL_PROGRAM_NAMES] as string[]).includes(sessionType) ? (() => {
                     const addMemberCasual    = () => setMemberCasuals(prev => [...prev, newCasualAthlete()])
                     const removeMemberCasual = (id: string) => setMemberCasuals(prev => prev.filter(a => a.id !== id))
                     const updMemberCasual    = (id: string, patch: Partial<CasualAthleteEntry>) =>
