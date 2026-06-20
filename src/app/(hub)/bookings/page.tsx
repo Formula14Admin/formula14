@@ -32,9 +32,9 @@ type SpaceId = typeof SPACES[number]['id']
 
 // ── Session types per space ────────────────────────────────────────────────────
 const SESSION_TYPES: Record<SpaceId, string[]> = {
-  primary:   ['Casual Shooting', 'Individual Work Out', 'Programs', 'Small Group Session', 'Team Training', 'Volume Shooting'],
-  secondary: ['Casual Shooting', 'Individual Work Out', 'Programs', 'Small Group Session', 'Team Training', 'Volume Shooting'],
-  shooting:  ['Casual Shooting', 'Individual Work Out', 'Programs', 'Small Group Session', 'Team Training', 'Volume Shooting'],
+  primary:   ['Casual Shooting', 'Individual Work Out', 'Small Group Session', 'Team Training', 'Volume Shooting'],
+  secondary: ['Casual Shooting', 'Individual Work Out', 'Small Group Session', 'Team Training', 'Volume Shooting'],
+  shooting:  ['Casual Shooting', 'Individual Work Out', 'Small Group Session', 'Team Training', 'Volume Shooting'],
   meeting:   ['Coach Meeting', 'Film Review', 'Goal Setting', 'Meeting (General)', 'Parent Meeting', 'Player Meeting', 'Team Meeting'],
 }
 
@@ -148,14 +148,14 @@ function makeSamples(today: string): Booking[] {
     { id:'b1',  date:today, spaceId:'primary',   startMins:7*60,     duration:60,  sessionType:'Individual Work Out', athletes:['Liam Carter'],                                              coach:'matt', bookingType:'member' },
     { id:'b2',  date:today, spaceId:'primary',   startMins:8*60+30,  duration:90,  sessionType:'Small Group Session', athletes:['Jordan Williams','Aisha Thompson','Devon Knox'],             coach:'matt', bookingType:'member' },
     { id:'b3',  date:today, spaceId:'secondary', startMins:9*60,     duration:120, sessionType:'Team Training',       athletes:['Liam Carter','Jordan Williams','Marcus Davies','Priya Mehta','Tyler Ross'], coach:'jade', bookingType:'member' },
-    { id:'b4',  date:today, spaceId:'primary',   startMins:11*60,    duration:60,  sessionType:'Program',             athletes:['Marcus Davies'],                                             coach:'matt', bookingType:'member' },
+    { id:'b4',  date:today, spaceId:'primary',   startMins:11*60,    duration:60,  sessionType:'Programs',            athletes:[],                                                           coach:'matt', bookingType:'unavailable' },
     { id:'b5',  date:today, spaceId:'secondary', startMins:14*60,    duration:90,  sessionType:'Small Group Session', athletes:['Aisha Thompson','Kai Okafor','Sam Liu'],                     coach:'jade', bookingType:'member' },
     { id:'b6',  date:today, spaceId:'shooting',  startMins:16*60+30, duration:60,  sessionType:'Volume Shooting',     athletes:['Devon Knox'],                                               coach:'matt', bookingType:'member' },
     { id:'b7',  date:today, spaceId:'meeting',   startMins:17*60,    duration:60,  sessionType:'Coach Meeting',       athletes:[],                                                           coach:'matt', bookingType:'member' },
     { id:'b8',  date:today, spaceId:'primary',   startMins:18*60,    duration:90,  sessionType:'Team Training',       athletes:['Liam Carter','Jordan Williams','Aisha Thompson','Tyler Ross','Zara Obi'], coach:'matt', bookingType:'member' },
     { id:'b9',  date:yd,   spaceId:'primary',   startMins:9*60,     duration:60,  sessionType:'Individual Work Out', athletes:['Tyler Ross'],                                               coach:'jade', bookingType:'member' },
     { id:'b10', date:yd,   spaceId:'meeting',   startMins:15*60,    duration:60,  sessionType:'Film Review',         athletes:['Jordan Williams','Marcus Davies'],                          coach:'matt', bookingType:'member' },
-    { id:'b11', date:d2,   spaceId:'secondary', startMins:10*60,    duration:90,  sessionType:'Program',             athletes:['Priya Mehta','Sam Liu'],                                    coach:'matt', bookingType:'member' },
+    { id:'b11', date:d2,   spaceId:'secondary', startMins:10*60,    duration:90,  sessionType:'Programs',            athletes:[],                                                           coach:'matt', bookingType:'unavailable' },
     { id:'b12', date:d2,   spaceId:'shooting',  startMins:14*60,    duration:60,  sessionType:'Volume Shooting',     athletes:['Kai Okafor'],                                              coach:'jade', bookingType:'member' },
     { id:'b13', date:tm,   spaceId:'primary',   startMins:8*60,     duration:90,  sessionType:'Small Group Session', athletes:['Liam Carter','Jordan Williams','Aisha Thompson'],           coach:'matt', bookingType:'member' },
     { id:'b14', date:tm,   spaceId:'meeting',   startMins:13*60,    duration:60,  sessionType:'Goal Setting',        athletes:['Devon Knox'],                                               coach:'jade', bookingType:'member' },
@@ -521,7 +521,7 @@ function BookingBlock({
     >
       <div className="relative px-1.5 pt-0.5">
         <p className="truncate text-[11px] font-bold leading-tight" style={{ color: chipColor }}>
-          {booking.bookingType === 'unavailable' ? 'Unavailable' : compact ? (typeAbbr || booking.sessionType.slice(0, 3)) : booking.sessionType}
+          {booking.bookingType === 'unavailable' ? (booking.sessionType || 'Unavailable') : compact ? (typeAbbr || booking.sessionType.slice(0, 3)) : booking.sessionType}
         </p>
         {!compact && height >= 40 && athleteStr && booking.bookingType !== 'unavailable' && (
           <p className="mt-0.5 truncate text-[10px]" style={{ color: chipColor + 'cc' }}>
@@ -1085,7 +1085,7 @@ function BookingModal({
     setDate(origDate)
     setStartMins(origStart)
     setFinishMins(origStart + 60)
-    setSessionType('')
+    setSessionType(bookingType === 'unavailable' ? 'Unavailable' : '')
     setAthletes([])
     setCoach('')
     setRepeat('none')
@@ -1210,6 +1210,7 @@ function BookingModal({
                     onClick={() => {
                       setBookingType(type)
                       if (type === 'member' && sessionType === 'Team Training') setSessionType('')
+                      if (type === 'unavailable') setSessionType('Unavailable')
                     }}
                     className={`flex-1 py-2.5 text-sm font-semibold transition ${i === 0 ? '' : 'border-l border-gray-200'}`}
                     style={bookingType === type
@@ -1248,6 +1249,26 @@ function BookingModal({
 
               {bookingType === 'unavailable' ? (
                 <>
+                  {/* Unavailable Reason toggle */}
+                  <div>
+                    <label className={LABEL}>Reason</label>
+                    <div className="flex overflow-hidden rounded-xl border border-gray-200">
+                      {(['Unavailable', 'Programs'] as const).map((reason, i) => (
+                        <button
+                          key={reason}
+                          type="button"
+                          onClick={() => setSessionType(reason)}
+                          className={`flex-1 py-2 text-sm font-semibold transition ${i > 0 ? 'border-l border-gray-200' : ''}`}
+                          style={sessionType === reason
+                            ? { backgroundColor: accentColor, color: 'white' }
+                            : { backgroundColor: 'white', color: '#6b7280' }}
+                        >
+                          {reason}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
                   {/* Unavailable Row 1: Date | Repeat */}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
