@@ -12,6 +12,7 @@ import {
   IconForms,
   IconReportMoney,
   IconId,
+  IconCreditCard,
   IconSchool,
   IconNotebook,
   IconBallBasketball,
@@ -30,8 +31,9 @@ const NAV = [
   {
     section: 'FINANCE',
     items: [
-      { label: 'Bookkeeping', href: '/bookkeeping', icon: IconReportMoney },
-      { label: 'Memberships', href: '/memberships', icon: IconId },
+      { label: 'Bookkeeping',         href: '/bookkeeping', icon: IconReportMoney },
+      { label: 'Memberships',         href: '/memberships', icon: IconId },
+      { label: 'Pricing & Payments',  href: '/pricing',     icon: IconCreditCard },
     ],
   },
   {
