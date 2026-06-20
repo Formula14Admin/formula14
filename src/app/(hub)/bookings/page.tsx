@@ -43,6 +43,17 @@ const ATHLETES = [
   'Devon Knox', 'Kai Okafor', 'Tyler Ross', 'Priya Mehta', 'Sam Liu', 'Zara Obi',
 ]
 
+const TEAMS = [
+  'Frankston Bobcats U12 Boys',
+  'Frankston Bobcats U14 Girls',
+  'SPBA Raptors U16 Boys',
+  'Mornington Breakers U14 Boys',
+  'Peninsula Storm U18 Girls',
+  'Chelsea Basketball U12 Mixed',
+  'Westernport Wolves Senior Men',
+  'Frankston Blues U20 Women',
+]
+
 // ── Types ──────────────────────────────────────────────────────────────────────
 type Booking = {
   id: string
@@ -71,6 +82,21 @@ function newCasualAthlete(): CasualAthleteEntry {
     type: '', name: '', gender: '', age: '',
     repClub: '', repClubOther: '', playingHistory: '', sessionGoals: '', existingId: '',
   }
+}
+
+type CasualTeamEntry = {
+  type: 'new' | 'existing' | ''
+  teamName: string
+  association: string
+  ageGroup: string
+  numPlayers: string
+  headCoach: string
+  sessionGoals: string
+  existingTeam: string
+}
+
+function newCasualTeam(): CasualTeamEntry {
+  return { type: '', teamName: '', association: '', ageGroup: '', numPlayers: '', headCoach: '', sessionGoals: '', existingTeam: '' }
 }
 
 type Modal =
@@ -1069,6 +1095,7 @@ function BookingModal({
   const [repeatUntil, setRepeatUntil] = useState('')
   const [bookingType, setBookingType] = useState<'member' | 'casual' | 'unavailable'>('member')
   const [casualAthletes, setCasualAthletes] = useState<CasualAthleteEntry[]>([newCasualAthlete()])
+  const [casualTeam,     setCasualTeam]     = useState<CasualTeamEntry>(newCasualTeam())
   const [memberCasuals,  setMemberCasuals]  = useState<CasualAthleteEntry[]>([])
   const [singleAthlete,  setSingleAthlete]  = useState('')
   const [customAthlete,  setCustomAthlete]  = useState('')
@@ -1091,6 +1118,7 @@ function BookingModal({
     setRepeat('none')
     setRepeatUntil('')
     setCasualAthletes([newCasualAthlete()])
+    setCasualTeam(newCasualTeam())
     setMemberCasuals([])
     setSingleAthlete('')
     setCustomAthlete('')
@@ -1436,8 +1464,113 @@ function BookingModal({
                     </div>
                   )}
 
-                  {/* Athletes */}
+                  {/* Athletes / Team */}
                   {bookingType === 'casual' && spaceId !== 'meeting' ? (() => {
+                    if (sessionType === 'Team Training') {
+                      const upd = (patch: Partial<CasualTeamEntry>) => setCasualTeam(prev => ({ ...prev, ...patch }))
+                      return (
+                        <div className="space-y-3">
+                          {/* New Team / Existing Team toggle */}
+                          <div className="flex overflow-hidden rounded-xl border border-gray-200">
+                            {(['new', 'existing'] as const).map((type, i) => (
+                              <button key={type} type="button"
+                                onClick={() => upd({ type })}
+                                className={`flex-1 py-2 text-sm font-semibold transition ${i > 0 ? 'border-l border-gray-200' : ''}`}
+                                style={casualTeam.type === type
+                                  ? { backgroundColor: accentColor, color: 'white' }
+                                  : { backgroundColor: 'white', color: '#6b7280' }}>
+                                {type === 'new' ? 'New Team' : 'Existing Team'}
+                              </button>
+                            ))}
+                          </div>
+
+                          {casualTeam.type === 'new' && (
+                            <div className="space-y-3">
+                              <div>
+                                <label className={LABEL}>Team Name</label>
+                                <input type="text" value={casualTeam.teamName}
+                                  onChange={e => upd({ teamName: e.target.value })}
+                                  placeholder="e.g. Frankston Bobcats U14 Boys"
+                                  className={INPUT} />
+                              </div>
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <label className={LABEL}>Association</label>
+                                  <SelectPicker value={casualTeam.association}
+                                    onChange={v => upd({ association: v })}
+                                    accentColor={accentColor}
+                                    options={[
+                                      { value: '', label: 'Select Association', muted: true },
+                                      { value: 'spba',     label: 'Southern Peninsula Basketball Association' },
+                                      { value: 'breakers', label: 'Mornington Breakers' },
+                                      { value: 'wba',      label: 'Westernport Basketball Association' },
+                                      { value: 'blues',    label: 'Frankston Blues' },
+                                      { value: 'bobcats',  label: 'Frankston Bobcats' },
+                                      { value: 'chelsea',  label: 'Chelsea Basketball' },
+                                      { value: 'other',    label: 'Other' },
+                                    ]} />
+                                </div>
+                                <div>
+                                  <label className={LABEL}>Age Group</label>
+                                  <SelectPicker value={casualTeam.ageGroup}
+                                    onChange={v => upd({ ageGroup: v })}
+                                    accentColor={accentColor}
+                                    options={[
+                                      { value: '', label: 'Select Age Group', muted: true },
+                                      { value: 'u10',         label: 'Under 10' },
+                                      { value: 'u12',         label: 'Under 12' },
+                                      { value: 'u14',         label: 'Under 14' },
+                                      { value: 'u16',         label: 'Under 16' },
+                                      { value: 'u18',         label: 'Under 18' },
+                                      { value: 'u20',         label: 'Under 20' },
+                                      { value: 'senior_men',  label: 'Senior Men' },
+                                      { value: 'senior_women',label: 'Senior Women' },
+                                      { value: 'open',        label: 'Open' },
+                                    ]} />
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <label className={LABEL}>Number of Players</label>
+                                  <input type="number" min="1" max="20" value={casualTeam.numPlayers}
+                                    onChange={e => upd({ numPlayers: e.target.value })}
+                                    placeholder="e.g. 10" className={INPUT} style={{ textAlign: 'center' }} />
+                                </div>
+                                <div>
+                                  <label className={LABEL}>Head Coach / Contact</label>
+                                  <input type="text" value={casualTeam.headCoach}
+                                    onChange={e => upd({ headCoach: e.target.value })}
+                                    placeholder="Full name" className={INPUT} />
+                                </div>
+                              </div>
+                              <div>
+                                <label className={LABEL}>What is the team trying to get out of this session?</label>
+                                <textarea value={casualTeam.sessionGoals}
+                                  onChange={e => upd({ sessionGoals: e.target.value })}
+                                  rows={3}
+                                  placeholder="e.g. Pre-season conditioning, offensive plays, defensive rotations..."
+                                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 outline-none transition resize-none focus:border-[#6BAD6B] focus:ring-1 focus:ring-[#6BAD6B]/40" />
+                              </div>
+                            </div>
+                          )}
+
+                          {casualTeam.type === 'existing' && (
+                            <div>
+                              <label className={LABEL}>Select Team</label>
+                              <SelectPicker value={casualTeam.existingTeam}
+                                onChange={v => upd({ existingTeam: v })}
+                                accentColor={accentColor}
+                                centerOnTrigger
+                                options={[
+                                  { value: '', label: 'Select Team', muted: true },
+                                  ...TEAMS.map(t => ({ value: t, label: t })),
+                                ]} />
+                            </div>
+                          )}
+                        </div>
+                      )
+                    }
+
                     const isMulti = sessionType !== 'Individual Work Out'
                     const visibleAthletes = isMulti ? casualAthletes : casualAthletes.slice(0, 1)
                     const upd = (id: string, patch: Partial<CasualAthleteEntry>) =>
