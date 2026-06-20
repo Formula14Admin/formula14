@@ -156,11 +156,7 @@ const INIT_PRICING: SessionPricingConfig[] = [
   },
   {
     sessionType: 'volume-shooting',
-    tiers: [
-      { id: 't13', min: 1, max: 1, pricePerAthlete: 55 },
-      { id: 't14', min: 2, max: 2, pricePerAthlete: 50 },
-      { id: 't15', min: 3, max: 5, pricePerAthlete: 45 },
-    ],
+    tiers: [], // duration-based pricing — see VOLUME_SHOOTING_PRICES below
   },
   {
     sessionType: 'programs',
@@ -170,6 +166,13 @@ const INIT_PRICING: SessionPricingConfig[] = [
       { id: 't18', min: 3, max: 4, pricePerAthlete: 60 },
     ],
   },
+]
+
+// Volume Shooting = Shooting Machine — priced by duration, not athlete count
+const VOLUME_SHOOTING_PRICES = [
+  { duration: 30, label: '30 minutes', price: 30 },
+  { duration: 45, label: '45 minutes', price: 40 },
+  { duration: 60, label: '60 minutes', price: 50 },
 ]
 
 const INIT_SETTINGS: PricingSettings = {
@@ -827,35 +830,57 @@ export default function PricingPage() {
                     </span>
                   </div>
 
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-gray-100">
-                        <th className="pb-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Athletes</th>
-                        <th className="pb-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Price / Athlete</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {config.tiers.map(tier => (
-                        <tr key={tier.id} className="border-b border-gray-100">
-                          <td className="py-2 text-gray-700">
-                            {tier.max === null
-                              ? `${tier.min}+ athletes`
-                              : tier.min === tier.max
-                              ? `${tier.min} athlete`
-                              : `${tier.min}–${tier.max} athletes`}
-                          </td>
-                          <td className="py-2 font-semibold text-gray-900">${tier.pricePerAthlete.toFixed(0)} / each</td>
+                  {config.sessionType === 'volume-shooting' ? (
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-100">
+                          <th className="pb-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Duration</th>
+                          <th className="pb-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Flat Price</th>
                         </tr>
-                      ))}
-                      {config.tiers.length === 0 && (
+                      </thead>
+                      <tbody>
+                        {VOLUME_SHOOTING_PRICES.map(row => (
+                          <tr key={row.duration} className="border-b border-gray-100">
+                            <td className="py-2 text-gray-700">{row.label}</td>
+                            <td className="py-2 font-semibold text-gray-900">${row.price}.00</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
                         <tr>
-                          <td colSpan={2} className="py-4 text-center text-xs text-gray-400">
-                            No tiers configured
-                          </td>
+                          <td colSpan={2} className="pt-2 text-xs text-gray-400">Flat booking fee — not per athlete</td>
                         </tr>
-                      )}
-                    </tbody>
-                  </table>
+                      </tfoot>
+                    </table>
+                  ) : (
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-100">
+                          <th className="pb-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Athletes</th>
+                          <th className="pb-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Price / Athlete</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {config.tiers.map(tier => (
+                          <tr key={tier.id} className="border-b border-gray-100">
+                            <td className="py-2 text-gray-700">
+                              {tier.max === null
+                                ? `${tier.min}+ athletes`
+                                : tier.min === tier.max
+                                ? `${tier.min} athlete`
+                                : `${tier.min}–${tier.max} athletes`}
+                            </td>
+                            <td className="py-2 font-semibold text-gray-900">${tier.pricePerAthlete.toFixed(0)} / each</td>
+                          </tr>
+                        ))}
+                        {config.tiers.length === 0 && (
+                          <tr>
+                            <td colSpan={2} className="py-4 text-center text-xs text-gray-400">No tiers configured</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  )}
                 </div>
               )
             })}
@@ -911,6 +936,7 @@ export default function PricingPage() {
                 <tbody>
                   {pricingConfigs.map(config => {
                     const typeColor = SESSION_TYPE_COLORS[config.sessionType]
+                    const isVolume = config.sessionType === 'volume-shooting'
                     return (
                       <tr key={config.sessionType} className="border-b border-gray-100">
                         <td className="py-2.5">
@@ -918,14 +944,20 @@ export default function PricingPage() {
                             {SESSION_TYPE_LABELS[config.sessionType]}
                           </span>
                         </td>
-                        {[1, 2, 3, 4, 5, 8, 10, 12].map(n => {
-                          const price = getPriceForCount(config.tiers, n)
-                          return (
-                            <td key={n} className="py-2.5 text-center text-gray-700">
-                              {price != null ? `$${price}` : <span className="text-gray-300">—</span>}
-                            </td>
-                          )
-                        })}
+                        {isVolume ? (
+                          <td colSpan={8} className="py-2.5 text-xs text-gray-500">
+                            Duration-based flat fee — 30 min $30 · 45 min $40 · 60 min $50
+                          </td>
+                        ) : (
+                          [1, 2, 3, 4, 5, 8, 10, 12].map(n => {
+                            const price = getPriceForCount(config.tiers, n)
+                            return (
+                              <td key={n} className="py-2.5 text-center text-gray-700">
+                                {price != null ? `$${price}` : <span className="text-gray-300">—</span>}
+                              </td>
+                            )
+                          })
+                        )}
                       </tr>
                     )
                   })}
