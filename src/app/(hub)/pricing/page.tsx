@@ -23,7 +23,7 @@ import {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type SessionType = 'small-group' | 'individual' | 'team-training' | 'casual-shooting' | 'volume-shooting' | 'programs'
+type SessionType = 'small-group' | 'individual' | 'team-training' | 'casual-shooting' | 'volume-shooting' | 'development-programs' | 'social-programs'
 type AttendanceStatus = 'attended' | 'no-show' | 'excused' | null
 type PaymentStatus = 'paid' | 'payment-required' | 'overdue' | 'waived' | 'refunded' | 'pending'
 type PaymentMethod = 'automatic' | 'pay-at-venue'
@@ -76,21 +76,23 @@ const ACCENT = '#6BA3D6'
 const DEMO_NOW = new Date('2026-06-20T11:00:00')
 
 const SESSION_TYPE_LABELS: Record<SessionType, string> = {
-  'small-group': 'Small Group Session',
-  'individual': 'Individual Work Out',
-  'team-training': 'Team Training',
-  'casual-shooting': 'Casual Shooting',
-  'volume-shooting': 'Volume Shooting',
-  'programs': 'Programs',
+  'small-group':          'Small Group Session',
+  'individual':           'Individual Work Out',
+  'team-training':        'Team Training',
+  'casual-shooting':      'Casual Shooting',
+  'volume-shooting':      'Volume Shooting',
+  'development-programs': 'Development Programs',
+  'social-programs':      'Social Programs',
 }
 
 const SESSION_TYPE_COLORS: Record<SessionType, { bg: string; color: string }> = {
-  'small-group':      { bg: '#dbeafe', color: '#1d4ed8' },
-  'individual':       { bg: '#dcfce7', color: '#15803d' },
-  'team-training':    { bg: '#ede9fe', color: '#6d28d9' },
-  'casual-shooting':  { bg: '#fef3c7', color: '#b45309' },
-  'volume-shooting':  { bg: '#fee2e2', color: '#b91c1c' },
-  'programs':         { bg: '#ccfbf1', color: '#0f766e' },
+  'small-group':          { bg: '#dbeafe', color: '#1d4ed8' },
+  'individual':           { bg: '#dcfce7', color: '#15803d' },
+  'team-training':        { bg: '#ede9fe', color: '#6d28d9' },
+  'casual-shooting':      { bg: '#fef3c7', color: '#b45309' },
+  'volume-shooting':      { bg: '#fee2e2', color: '#b91c1c' },
+  'development-programs': { bg: '#ccfbf1', color: '#0f766e' },
+  'social-programs':      { bg: '#fce7f3', color: '#be185d' },
 }
 
 const PAY_STATUS: Record<PaymentStatus, { bg: string; color: string; label: string }> = {
@@ -159,11 +161,19 @@ const INIT_PRICING: SessionPricingConfig[] = [
     tiers: [], // duration-based pricing — see VOLUME_SHOOTING_PRICES below
   },
   {
-    sessionType: 'programs',
+    sessionType: 'development-programs',
     tiers: [
-      { id: 't16', min: 1, max: 1, pricePerAthlete: 80 },
-      { id: 't17', min: 2, max: 2, pricePerAthlete: 70 },
-      { id: 't18', min: 3, max: 4, pricePerAthlete: 60 },
+      { id: 'dp1', min: 1, max: 1, pricePerAthlete: 80 },
+      { id: 'dp2', min: 2, max: 2, pricePerAthlete: 70 },
+      { id: 'dp3', min: 3, max: 4, pricePerAthlete: 60 },
+    ],
+  },
+  {
+    sessionType: 'social-programs',
+    tiers: [
+      { id: 'sp1', min: 1, max: 1, pricePerAthlete: 40 },
+      { id: 'sp2', min: 2, max: 2, pricePerAthlete: 35 },
+      { id: 'sp3', min: 3, max: 6, pricePerAthlete: 30 },
     ],
   },
 ]
@@ -174,6 +184,7 @@ const VOLUME_SHOOTING_PRICES = [
   { duration: 45, label: '45 minutes', price: 40 },
   { duration: 60, label: '60 minutes', price: 50 },
 ]
+
 
 const INIT_SETTINGS: PricingSettings = {
   lockoutMinutes: 120,
@@ -818,7 +829,7 @@ export default function PricingPage() {
             </div>
           </div>
 
-          {/* Per-type pricing grids */}
+          {/* Per-type pricing grids — standard session types */}
           <div className="grid grid-cols-2 gap-4">
             {pricingConfigs.map(config => {
               const typeColor = SESSION_TYPE_COLORS[config.sessionType]
@@ -885,6 +896,7 @@ export default function PricingPage() {
               )
             })}
           </div>
+
         </div>
       )}
 

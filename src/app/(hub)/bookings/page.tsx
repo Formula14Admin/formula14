@@ -35,8 +35,8 @@ type SpaceId = typeof SPACES[number]['id']
 
 // ── Session types per space ────────────────────────────────────────────────────
 const SESSION_TYPES: Record<SpaceId, string[]> = {
-  primary:   ['Casual Shooting', 'Individual Work Out', 'Small Group Session', 'Team Training', 'Volume Shooting'],
-  secondary: ['Casual Shooting', 'Individual Work Out', 'Small Group Session', 'Team Training', 'Volume Shooting'],
+  primary:   ['Casual Shooting', 'Individual Work Out', 'Small Group Session', 'Team Training', 'Volume Shooting', 'Development Programs', 'Social Programs'],
+  secondary: ['Casual Shooting', 'Individual Work Out', 'Small Group Session', 'Team Training', 'Volume Shooting', 'Development Programs', 'Social Programs'],
   shooting:  ['Casual Shooting', 'Shooting Machine Rental', 'Individual Work Out', 'Small Group Session', 'Team Training', 'Volume Shooting'],
   meeting:   ['Coach Meeting', 'Film Review', 'Goal Setting', 'Meeting (General)', 'Parent Meeting', 'Player Meeting', 'Team Meeting'],
 }
@@ -224,6 +224,9 @@ function makeSamples(today: string): Booking[] {
     // Shooting Machine Rental demos
     { id:'sm1', date:today, spaceId:'shooting', startMins:10*60,     duration:60, sessionType:'Shooting Machine Rental', athletes:['Liam Carter'],    coach:'', bookingType:'casual' },
     { id:'sm2', date:tm,    spaceId:'shooting', startMins:13*60+30,  duration:45, sessionType:'Shooting Machine Rental', athletes:['Jordan Williams'], coach:'', bookingType:'casual' },
+    // Program demos
+    { id:'pg1', date:today, spaceId:'secondary', startMins:12*60, duration:60, sessionType:'Social Programs',       athletes:[], coach:'jade', bookingType:'casual' },
+    { id:'pg2', date:tm,    spaceId:'primary',   startMins:10*60, duration:60, sessionType:'Development Programs',  athletes:['Aisha Thompson','Devon Knox','Tyler Ross','Priya Mehta','Sam Liu','Zara Obi'], coach:'matt', bookingType:'member' },
   ]
 }
 
@@ -1042,7 +1045,7 @@ function TimePicker({ value, onChange, options, accentColor = '#6BA3D6' }: {
 function SelectPicker({ value, onChange, options, accentColor = '#6BA3D6', getPanelPosition, multiValues, onChangeMulti, maxSelect, panelMaxHeight = 200, centerOnTrigger = false }: {
   value: string
   onChange: (v: string) => void
-  options: { value: string; label: string; muted?: boolean }[]
+  options: { value: string; label: string; muted?: boolean; header?: boolean }[]
   accentColor?: string
   getPanelPosition?: () => { top: number; left: number; width: number; height: number } | null
   multiValues?: string[]
@@ -1160,6 +1163,13 @@ function SelectPicker({ value, onChange, options, accentColor = '#6BA3D6', getPa
           }}
         >
           {options.map(opt => {
+            if (opt.header) {
+              return (
+                <div key={opt.value} className="border-t border-gray-100 mt-0.5 px-3 pt-2 pb-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-gray-400">
+                  {opt.label}
+                </div>
+              )
+            }
             const sel = multiMode
               ? (opt.value === '' ? multiValues!.length === 0 : multiValues!.includes(opt.value))
               : opt.value === value
@@ -1614,6 +1624,7 @@ function BookingModal({
                             .filter(t => !(bookingType === 'member' && t === 'Team Training'))
                             .map(t => ({ value: t, label: t })),
                         ]}
+                        panelMaxHeight={240}
                       />
                     </div>
                     <div>
@@ -2030,7 +2041,7 @@ function BookingModal({
 
                       </div>
                     )
-                  })() : bookingType === 'member' && ['Volume Shooting', 'Casual Shooting', 'Small Group Session'].includes(sessionType) ? (() => {
+                  })() : bookingType === 'member' && ['Volume Shooting', 'Casual Shooting', 'Small Group Session', 'Development Programs', 'Social Programs'].includes(sessionType) ? (() => {
                     const addMemberCasual    = () => setMemberCasuals(prev => [...prev, newCasualAthlete()])
                     const removeMemberCasual = (id: string) => setMemberCasuals(prev => prev.filter(a => a.id !== id))
                     const updMemberCasual    = (id: string, patch: Partial<CasualAthleteEntry>) =>
