@@ -150,9 +150,7 @@ const INIT_PRICING: SessionPricingConfig[] = [
   {
     sessionType: 'team-training',
     tiers: [
-      { id: 't7',  min: 1,  max: 5,    pricePerAthlete: 30 },
-      { id: 't8',  min: 6,  max: 10,   pricePerAthlete: 25 },
-      { id: 't9',  min: 11, max: null, pricePerAthlete: 20 },
+      { id: 't7', min: 7, max: 10, pricePerAthlete: 80 },
     ],
   },
   {
@@ -216,21 +214,21 @@ const INIT_SESSIONS: Session[] = [
     completedAt: null,
     lockedPricePerAthlete: 75,
   },
-  // Locked — Team Training, 9am today. Already past start, awaiting completion.
+  // Locked — Small Group Session, 9am today (4 athletes → Small Group, not Team Training). Awaiting completion.
   {
     id: 's3',
     date: '2026-06-20',
     startTime: '09:00',
-    sessionType: 'team-training',
+    sessionType: 'small-group',
     athletes: [
-      { athleteId: 'a5', attendanceStatus: null, paymentStatus: 'pending', lockedPrice: 30 },
-      { athleteId: 'a6', attendanceStatus: null, paymentStatus: 'pending', lockedPrice: 30 },
-      { athleteId: 'a7', attendanceStatus: null, paymentStatus: 'pending', lockedPrice: 30 },
-      { athleteId: 'a8', attendanceStatus: null, paymentStatus: 'pending', lockedPrice: 30 },
+      { athleteId: 'a5', attendanceStatus: null, paymentStatus: 'pending', lockedPrice: 35 },
+      { athleteId: 'a6', attendanceStatus: null, paymentStatus: 'pending', lockedPrice: 35 },
+      { athleteId: 'a7', attendanceStatus: null, paymentStatus: 'pending', lockedPrice: 35 },
+      { athleteId: 'a8', attendanceStatus: null, paymentStatus: 'pending', lockedPrice: 35 },
     ],
     status: 'locked',
     completedAt: null,
-    lockedPricePerAthlete: 30,
+    lockedPricePerAthlete: 35,
   },
   // Upcoming — Casual Shooting, 10am tomorrow.
   {
