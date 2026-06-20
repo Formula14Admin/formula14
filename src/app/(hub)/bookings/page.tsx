@@ -13,6 +13,7 @@ import {
   IconCalendar,
   IconRepeat,
   IconInfoCircle,
+  IconAlertCircle,
 } from '@tabler/icons-react'
 
 // ── Grid constants ─────────────────────────────────────────────────────────────
@@ -56,6 +57,26 @@ const TEAMS = [
   'Frankston Blues U20 Women',
 ]
 
+// ── Tier priority (Casual Shooting) ───────────────────────────────────────────
+type MemberTier = 'bronze' | 'silver' | 'gold' | 'platinum'
+
+const TIER_PRIORITY: Record<MemberTier | 'casual', number> = {
+  casual:   0,
+  bronze:   1,
+  silver:   2,
+  gold:     3,
+  platinum: 4,
+}
+
+const TIER_COLORS: Record<MemberTier, string> = {
+  bronze:   '#B87333',
+  silver:   '#64748B',
+  gold:     '#D4A843',
+  platinum: '#7C3AED',
+}
+
+const CASUAL_SHOOTING_MAX = 6
+
 // ── Types ──────────────────────────────────────────────────────────────────────
 type Booking = {
   id: string
@@ -68,6 +89,7 @@ type Booking = {
   coach: 'matt' | 'jade' | 'other' | ''
   bookingType: 'member' | 'casual' | 'unavailable'
   seriesId?: string
+  memberTier?: MemberTier
 }
 
 type CasualAthleteEntry = {
@@ -190,6 +212,12 @@ function makeSamples(today: string): Booking[] {
     { id:'b13', date:tm,   spaceId:'primary',   startMins:8*60,     duration:90,  sessionType:'Small Group Session', athletes:['Liam Carter','Jordan Williams','Aisha Thompson'],           coach:'matt', bookingType:'member' },
     { id:'b14', date:tm,   spaceId:'meeting',   startMins:13*60,    duration:60,  sessionType:'Goal Setting',        athletes:['Devon Knox'],                                               coach:'jade', bookingType:'member' },
     { id:'b15', date:d2f,  spaceId:'secondary', startMins:11*60,    duration:60,  sessionType:'Team Training',       athletes:['Tyler Ross','Priya Mehta','Zara Obi'],                     coach:'matt', bookingType:'member' },
+    // Casual Shooting demo — 5/6 capacity on primary today for bump testing
+    { id:'cs1', date:today, spaceId:'primary', startMins:7*60+30, duration:60, sessionType:'Casual Shooting', athletes:['Zara Obi'],     coach:'', bookingType:'member',   memberTier:'platinum' },
+    { id:'cs2', date:today, spaceId:'primary', startMins:9*60,    duration:60, sessionType:'Casual Shooting', athletes:['Priya Mehta'],  coach:'', bookingType:'member',   memberTier:'gold' },
+    { id:'cs3', date:today, spaceId:'primary', startMins:12*60,   duration:60, sessionType:'Casual Shooting', athletes:['Tyler Ross'],   coach:'', bookingType:'member',   memberTier:'silver' },
+    { id:'cs4', date:today, spaceId:'primary', startMins:13*60,   duration:60, sessionType:'Casual Shooting', athletes:['Marcus Davies'],coach:'', bookingType:'casual' },
+    { id:'cs5', date:today, spaceId:'primary', startMins:15*60,   duration:60, sessionType:'Casual Shooting', athletes:['Sam Liu'],      coach:'', bookingType:'casual' },
   ]
 }
 
@@ -203,6 +231,7 @@ export default function BookingsPage() {
   const [modal,      setModal]      = useState<Modal>(null)
   const [nowY,       setNowY]       = useState(() => toY(nowMins()))
   const [hoverInfo,  setHoverInfo]  = useState<HoverInfo>(null)
+  const [toast,      setToast]      = useState<string | null>(null)
 
   const gridRef = useRef<HTMLDivElement>(null)
 
@@ -249,10 +278,47 @@ export default function BookingsPage() {
     setHoverInfo({ colKey, slotY: toY(snapped), slotMins: snapped })
   }
 
+  function showToast(msg: string) {
+    setToast(msg)
+    setTimeout(() => setToast(null), 4500)
+  }
+
   function handleSave(items: (Omit<Booking, 'id'> & { id?: string })[]) {
+    let bumpMsg: string | null = null
     setBookings(prev => {
       let next = [...prev]
       for (const data of items) {
+        // Bump logic for new Casual Shooting bookings
+        if (data.sessionType === 'Casual Shooting' && !data.id) {
+          const existing = next.filter(b =>
+            b.spaceId === data.spaceId &&
+            b.date === data.date &&
+            b.sessionType === 'Casual Shooting'
+          )
+          if (existing.length >= CASUAL_SHOOTING_MAX) {
+            const newPri = data.memberTier ? TIER_PRIORITY[data.memberTier] : TIER_PRIORITY.casual
+            const sorted = [...existing].sort((a, b_) => {
+              const pa = a.memberTier ? TIER_PRIORITY[a.memberTier] : TIER_PRIORITY.casual
+              const pb = b_.memberTier ? TIER_PRIORITY[b_.memberTier] : TIER_PRIORITY.casual
+              return pa - pb
+            })
+            const lowest = sorted[0]
+            const lowestPri = lowest.memberTier ? TIER_PRIORITY[lowest.memberTier] : TIER_PRIORITY.casual
+            if (newPri > lowestPri) {
+              next = next.filter(b => b.id !== lowest.id)
+              const athleteName = lowest.athletes[0] ?? 'A booking'
+              const fromLabel = lowest.memberTier
+                ? lowest.memberTier.charAt(0).toUpperCase() + lowest.memberTier.slice(1)
+                : 'Casual'
+              const toLabel = data.memberTier
+                ? data.memberTier.charAt(0).toUpperCase() + data.memberTier.slice(1)
+                : 'Casual'
+              bumpMsg = `${athleteName} was bumped from Casual Shooting — ${toLabel} tier replaced ${fromLabel}.`
+              next = [...next, { ...data, id: uid() } as Booking]
+            }
+            continue
+          }
+        }
         if (data.id) {
           next = next.map(b => b.id === data.id ? { ...data, id: data.id! } as Booking : b)
         } else {
@@ -262,6 +328,7 @@ export default function BookingsPage() {
       return next
     })
     setModal(null)
+    if (bumpMsg) showToast(bumpMsg)
   }
 
   function handleDelete(id: string) {
@@ -420,6 +487,15 @@ export default function BookingsPage() {
               SPACES.map((sp, i) => {
                 const colKey = sp.id
                 const colBookings = bookings.filter(b => b.date === visibleDates[0] && b.spaceId === sp.id)
+                const csBookings = colBookings.filter(b => b.sessionType === 'Casual Shooting')
+                const csCount = csBookings.length
+                const csTierCounts = csBookings.reduce<Record<string, number>>((acc, b) => {
+                  const k = b.memberTier ? b.memberTier.charAt(0).toUpperCase() + b.memberTier.slice(1) : 'Casual'
+                  acc[k] = (acc[k] ?? 0) + 1
+                  return acc
+                }, {})
+                const csTierLabel = Object.entries(csTierCounts).map(([k, v]) => `${v} ${k}`).join(', ')
+                const csSlotInfo = csCount > 0 ? `${csCount}/${CASUAL_SHOOTING_MAX} — ${csTierLabel}` : undefined
                 const hoverMatch = hoverInfo?.colKey === colKey ? hoverInfo : null
                 return (
                   <div
@@ -451,6 +527,7 @@ export default function BookingsPage() {
                         color={sp.color}
                         light={sp.light}
                         compact={false}
+                        slotInfo={b.sessionType === 'Casual Shooting' ? csSlotInfo : undefined}
                         onClick={() => setModal({ kind: 'view', booking: b })}
                       />
                     ))}
@@ -463,6 +540,19 @@ export default function BookingsPage() {
                 const isToday = d === today
                 const colBookings = bookings.filter(b => b.date === d)
                 const hoverMatch = hoverInfo?.colKey === colKey ? hoverInfo : null
+                // Per-space Casual Shooting slot info for week view
+                const csInfoBySpace = SPACES.reduce<Record<string, string | undefined>>((acc, sp) => {
+                  const cs = colBookings.filter(b => b.spaceId === sp.id && b.sessionType === 'Casual Shooting')
+                  if (cs.length > 0) {
+                    const counts = cs.reduce<Record<string, number>>((a, b) => {
+                      const k = b.memberTier ? b.memberTier.charAt(0).toUpperCase() + b.memberTier.slice(1) : 'Casual'
+                      a[k] = (a[k] ?? 0) + 1
+                      return a
+                    }, {})
+                    acc[sp.id] = `${cs.length}/${CASUAL_SHOOTING_MAX} — ${Object.entries(counts).map(([k, v]) => `${v} ${k}`).join(', ')}`
+                  }
+                  return acc
+                }, {})
                 return (
                   <div
                     key={d}
@@ -500,6 +590,7 @@ export default function BookingsPage() {
                           color={sp.color}
                           light={sp.light}
                           compact
+                          slotInfo={b.sessionType === 'Casual Shooting' ? csInfoBySpace[b.spaceId] : undefined}
                           onClick={() => setModal({ kind: 'view', booking: b })}
                         />
                       )
@@ -526,19 +617,34 @@ export default function BookingsPage() {
           onEditSeries={b => setModal({ kind: 'editSeries', booking: b })}
         />
       )}
+
+      {/* ── Toast ── */}
+      <ToastNotification message={toast} />
+    </div>
+  )
+}
+
+// ── Toast Notification ────────────────────────────────────────────────────────
+function ToastNotification({ message }: { message: string | null }) {
+  if (!message) return null
+  return (
+    <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 flex items-center gap-3 rounded-xl bg-gray-900 px-5 py-3 text-sm font-medium text-white shadow-2xl">
+      <IconAlertCircle size={16} className="shrink-0 text-amber-400" />
+      {message}
     </div>
   )
 }
 
 // ── Booking Block ──────────────────────────────────────────────────────────────
 function BookingBlock({
-  booking, color, light, compact, onClick,
+  booking, color, light, compact, onClick, slotInfo,
 }: {
   booking: Booking
   color: string
   light: string
   compact: boolean
   onClick: () => void
+  slotInfo?: string
 }) {
   const top    = toY(booking.startMins)
   const height = Math.max(SLOT_PX, (booking.duration / 15) * SLOT_PX)
@@ -561,6 +667,7 @@ function BookingBlock({
     <div
       data-booking="1"
       onClick={e => { e.stopPropagation(); onClick() }}
+      title={slotInfo}
       className="absolute left-1 right-1 cursor-pointer overflow-hidden rounded-md border transition-opacity hover:opacity-80"
       style={{ top, height, backgroundColor: chipLight, borderColor: chipColor + '50', borderLeftWidth: 3, borderLeftColor: chipColor }}
     >
@@ -1125,6 +1232,7 @@ function BookingModal({
   const [memberCasuals,  setMemberCasuals]  = useState<CasualAthleteEntry[]>([])
   const [singleAthlete,  setSingleAthlete]  = useState('')
   const [customAthlete,  setCustomAthlete]  = useState('')
+  const [memberTier,     setMemberTier]     = useState<MemberTier | ''>('')
   const accentColor = bookingType === 'casual' ? '#6BAD6B' : bookingType === 'unavailable' ? '#ef4444' : '#6BA3D6'
   const isIndividual = bookingType === 'member' && sessionType === 'Individual Work Out'
 
@@ -1148,6 +1256,7 @@ function BookingModal({
     setMemberCasuals([])
     setSingleAthlete('')
     setCustomAthlete('')
+    setMemberTier('')
   }
 
   function handleSpaceChange(id: SpaceId) {
@@ -1167,7 +1276,7 @@ function BookingModal({
     const effectiveAthletes = isIndividual
       ? (singleAthlete === 'other' ? (customAthlete.trim() ? [customAthlete.trim()] : []) : singleAthlete ? [singleAthlete] : [])
       : [...athletes, ...memberCasualNames]
-    const base = { spaceId, startMins, duration, sessionType, athletes: effectiveAthletes, coach, bookingType }
+    const base = { spaceId, startMins, duration, sessionType, athletes: effectiveAthletes, coach, bookingType, memberTier: memberTier || undefined }
     if (editSeriesFuture) {
       onSaveFrom(src!.date, src!.seriesId!, base)
     } else if (repeat === 'none' || !repeatUntil) {
@@ -1857,6 +1966,28 @@ function BookingModal({
                       setMemberCasuals(prev => prev.map(a => a.id === id ? { ...a, ...patch } : a))
                     return (
                       <div className="space-y-3">
+                        {/* Tier selector — only for Casual Shooting */}
+                        {sessionType === 'Casual Shooting' && (
+                          <div>
+                            <label className={LABEL}>Member Tier</label>
+                            <div className="grid grid-cols-4 gap-2">
+                              {(['bronze', 'silver', 'gold', 'platinum'] as MemberTier[]).map(tier => (
+                                <button
+                                  key={tier}
+                                  type="button"
+                                  onClick={() => setMemberTier(prev => prev === tier ? '' : tier)}
+                                  className={`rounded-lg border px-3 py-2 text-center text-xs font-bold uppercase tracking-wide transition ${
+                                    memberTier === tier ? 'border-transparent text-white' : 'border-gray-200 text-gray-500 hover:border-gray-300 hover:bg-gray-50'
+                                  }`}
+                                  style={memberTier === tier ? { backgroundColor: TIER_COLORS[tier] } : {}}
+                                >
+                                  {tier.charAt(0).toUpperCase() + tier.slice(1)}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
                         {/* Athlete multi-select — left column */}
                         <div className="grid grid-cols-2 gap-3">
                           <div>

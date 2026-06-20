@@ -17,7 +17,7 @@ import {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type Plan = 'foundation' | 'elite' | 'pro'
+type Plan = 'bronze' | 'silver' | 'gold' | 'platinum'
 type MemberStatus = 'active' | 'cancelling' | 'overdue' | 'inactive'
 type BillingStatus = 'paid' | 'failed' | 'upcoming'
 
@@ -53,16 +53,20 @@ const PLAN_INFO: Record<Plan, {
   tagline: string
   color: string
 }> = {
-  foundation: {
-    label: 'Foundation', price: 39, sessionsPerWeek: 2,
-    monthlyQuota: 8, tagline: '2 sessions per week', color: '#64B5F6',
+  bronze: {
+    label: 'Bronze', price: 35, sessionsPerWeek: 2,
+    monthlyQuota: 8, tagline: '2 sessions per week', color: '#B87333',
   },
-  elite: {
-    label: 'Elite', price: 59, sessionsPerWeek: 4,
-    monthlyQuota: 16, tagline: '4 sessions per week', color: '#6BA3D6',
+  silver: {
+    label: 'Silver', price: 50, sessionsPerWeek: 3,
+    monthlyQuota: 12, tagline: '3 sessions per week', color: '#64748B',
   },
-  pro: {
-    label: 'Pro', price: 79, sessionsPerWeek: null,
+  gold: {
+    label: 'Gold', price: 75, sessionsPerWeek: 5,
+    monthlyQuota: 20, tagline: '5 sessions per week', color: '#D4A843',
+  },
+  platinum: {
+    label: 'Platinum', price: 100, sessionsPerWeek: null,
     monthlyQuota: null, tagline: 'Unlimited sessions', color: '#7C3AED',
   },
 }
@@ -98,98 +102,98 @@ const INIT_MEMBERS: Member[] = [
     id: 'm1',
     firstName: 'Jordan', lastName: 'Mitchell',
     email: 'jordan.mitchell@gmail.com',
-    plan: 'pro', status: 'active',
+    plan: 'platinum', status: 'active',
     started: '2026-01-05', nextCharge: '2026-06-22',
     outstanding: 0, sessionsThisMonth: 10,
     notes: 'Focused on 3-point shooting improvement. Prefers afternoon sessions.',
     billing: [
-      { id: 'b1-u', date: '2026-06-22', amount: 79, status: 'upcoming' },
-      { id: 'b1-1', date: '2026-06-15', amount: 79, status: 'paid' },
-      { id: 'b1-2', date: '2026-06-08', amount: 79, status: 'paid' },
-      { id: 'b1-3', date: '2026-06-01', amount: 79, status: 'paid' },
-      { id: 'b1-4', date: '2026-05-25', amount: 79, status: 'paid' },
-      { id: 'b1-5', date: '2026-05-18', amount: 79, status: 'paid' },
+      { id: 'b1-u', date: '2026-06-22', amount: 100, status: 'upcoming' },
+      { id: 'b1-1', date: '2026-06-15', amount: 100, status: 'paid' },
+      { id: 'b1-2', date: '2026-06-08', amount: 100, status: 'paid' },
+      { id: 'b1-3', date: '2026-06-01', amount: 100, status: 'paid' },
+      { id: 'b1-4', date: '2026-05-25', amount: 100, status: 'paid' },
+      { id: 'b1-5', date: '2026-05-18', amount: 100, status: 'paid' },
     ],
   },
   {
     id: 'm2',
     firstName: 'Mia', lastName: 'Chen',
     email: 'mia.chen@outlook.com',
-    plan: 'elite', status: 'active',
+    plan: 'gold', status: 'active',
     started: '2025-12-01', nextCharge: '2026-06-22',
     outstanding: 0, sessionsThisMonth: 11,
     notes: 'Working on ball handling and finishing around the rim.',
     billing: [
-      { id: 'b2-u', date: '2026-06-22', amount: 59, status: 'upcoming' },
-      { id: 'b2-1', date: '2026-06-15', amount: 59, status: 'paid' },
-      { id: 'b2-2', date: '2026-06-08', amount: 59, status: 'paid' },
-      { id: 'b2-3', date: '2026-06-01', amount: 59, status: 'paid' },
-      { id: 'b2-4', date: '2026-05-25', amount: 59, status: 'paid' },
-      { id: 'b2-5', date: '2026-05-18', amount: 59, status: 'paid' },
+      { id: 'b2-u', date: '2026-06-22', amount: 75, status: 'upcoming' },
+      { id: 'b2-1', date: '2026-06-15', amount: 75, status: 'paid' },
+      { id: 'b2-2', date: '2026-06-08', amount: 75, status: 'paid' },
+      { id: 'b2-3', date: '2026-06-01', amount: 75, status: 'paid' },
+      { id: 'b2-4', date: '2026-05-25', amount: 75, status: 'paid' },
+      { id: 'b2-5', date: '2026-05-18', amount: 75, status: 'paid' },
     ],
   },
   {
     id: 'm3',
     firstName: 'Tyler', lastName: 'Brooks',
     email: 'tyler.brooks@gmail.com',
-    plan: 'foundation', status: 'overdue',
+    plan: 'bronze', status: 'overdue',
     started: '2026-03-02', nextCharge: '2026-06-22',
-    outstanding: 39, sessionsThisMonth: 5,
+    outstanding: 35, sessionsThisMonth: 5,
     notes: '',
     billing: [
-      { id: 'b3-u', date: '2026-06-22', amount: 39, status: 'upcoming' },
-      { id: 'b3-f', date: '2026-06-15', amount: 39, status: 'failed' },
-      { id: 'b3-2', date: '2026-06-08', amount: 39, status: 'paid' },
-      { id: 'b3-3', date: '2026-06-01', amount: 39, status: 'paid' },
-      { id: 'b3-4', date: '2026-05-25', amount: 39, status: 'paid' },
-      { id: 'b3-5', date: '2026-05-18', amount: 39, status: 'paid' },
+      { id: 'b3-u', date: '2026-06-22', amount: 35, status: 'upcoming' },
+      { id: 'b3-f', date: '2026-06-15', amount: 35, status: 'failed' },
+      { id: 'b3-2', date: '2026-06-08', amount: 35, status: 'paid' },
+      { id: 'b3-3', date: '2026-06-01', amount: 35, status: 'paid' },
+      { id: 'b3-4', date: '2026-05-25', amount: 35, status: 'paid' },
+      { id: 'b3-5', date: '2026-05-18', amount: 35, status: 'paid' },
     ],
   },
   {
     id: 'm4',
     firstName: 'Emma', lastName: 'Walsh',
     email: 'emma.walsh@icloud.com',
-    plan: 'elite', status: 'cancelling',
+    plan: 'silver', status: 'cancelling',
     started: '2025-09-01', nextCharge: '2026-06-22',
     outstanding: 0, sessionsThisMonth: 8,
     notes: 'Moving interstate. Cancellation requested 17 Jun 2026 — effective end of current cycle.',
     billing: [
-      { id: 'b4-u', date: '2026-06-22', amount: 59, status: 'upcoming' },
-      { id: 'b4-1', date: '2026-06-15', amount: 59, status: 'paid' },
-      { id: 'b4-2', date: '2026-06-08', amount: 59, status: 'paid' },
-      { id: 'b4-3', date: '2026-06-01', amount: 59, status: 'paid' },
-      { id: 'b4-4', date: '2026-05-25', amount: 59, status: 'paid' },
-      { id: 'b4-5', date: '2026-05-18', amount: 59, status: 'paid' },
+      { id: 'b4-u', date: '2026-06-22', amount: 50, status: 'upcoming' },
+      { id: 'b4-1', date: '2026-06-15', amount: 50, status: 'paid' },
+      { id: 'b4-2', date: '2026-06-08', amount: 50, status: 'paid' },
+      { id: 'b4-3', date: '2026-06-01', amount: 50, status: 'paid' },
+      { id: 'b4-4', date: '2026-05-25', amount: 50, status: 'paid' },
+      { id: 'b4-5', date: '2026-05-18', amount: 50, status: 'paid' },
     ],
   },
   {
     id: 'm5',
     firstName: 'Liam', lastName: 'Nguyen',
     email: 'liam.nguyen@gmail.com',
-    plan: 'foundation', status: 'active',
+    plan: 'bronze', status: 'active',
     started: '2026-06-01', nextCharge: '2026-06-22',
     outstanding: 0, sessionsThisMonth: 3,
     notes: 'New member. Beginner level — focus on fundamentals.',
     billing: [
-      { id: 'b5-u', date: '2026-06-22', amount: 39, status: 'upcoming' },
-      { id: 'b5-1', date: '2026-06-15', amount: 39, status: 'paid' },
-      { id: 'b5-2', date: '2026-06-08', amount: 39, status: 'paid' },
-      { id: 'b5-3', date: '2026-06-01', amount: 39, status: 'paid' },
+      { id: 'b5-u', date: '2026-06-22', amount: 35, status: 'upcoming' },
+      { id: 'b5-1', date: '2026-06-15', amount: 35, status: 'paid' },
+      { id: 'b5-2', date: '2026-06-08', amount: 35, status: 'paid' },
+      { id: 'b5-3', date: '2026-06-01', amount: 35, status: 'paid' },
     ],
   },
   {
     id: 'm6',
     firstName: 'Sophie', lastName: 'Davis',
     email: 'sophie.davis@hotmail.com',
-    plan: 'pro', status: 'inactive',
+    plan: 'platinum', status: 'inactive',
     started: '2025-06-02', nextCharge: null,
     outstanding: 0, sessionsThisMonth: 0,
     notes: 'On extended break. May return later in the year.',
     billing: [
-      { id: 'b6-1', date: '2026-04-27', amount: 79, status: 'paid' },
-      { id: 'b6-2', date: '2026-04-20', amount: 79, status: 'paid' },
-      { id: 'b6-3', date: '2026-04-13', amount: 79, status: 'paid' },
-      { id: 'b6-4', date: '2026-04-06', amount: 79, status: 'paid' },
+      { id: 'b6-1', date: '2026-04-27', amount: 100, status: 'paid' },
+      { id: 'b6-2', date: '2026-04-20', amount: 100, status: 'paid' },
+      { id: 'b6-3', date: '2026-04-13', amount: 100, status: 'paid' },
+      { id: 'b6-4', date: '2026-04-06', amount: 100, status: 'paid' },
     ],
   },
 ]
@@ -358,6 +362,23 @@ function PlanCard({
   )
 }
 
+function FamilyAccountCard() {
+  return (
+    <div className="flex items-center justify-between rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 p-3">
+      <div>
+        <span className="text-[11px] font-bold uppercase tracking-wide text-gray-400">Family Account</span>
+        <div className="mt-0.5 flex items-baseline gap-0.5">
+          <span className="text-lg font-bold text-gray-300">$100</span>
+          <span className="text-xs font-normal text-gray-300">/wk</span>
+        </div>
+      </div>
+      <span className="rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-gray-400">
+        Details coming soon
+      </span>
+    </div>
+  )
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function MembershipsPage() {
@@ -373,7 +394,7 @@ export default function MembershipsPage() {
   const [newFirst, setNewFirst] = useState('')
   const [newLast, setNewLast] = useState('')
   const [newEmail, setNewEmail] = useState('')
-  const [newPlan, setNewPlan] = useState<Plan>('foundation')
+  const [newPlan, setNewPlan] = useState<Plan>('bronze')
   const [newStarted, setNewStarted] = useState('')
   const [newNotes, setNewNotes] = useState('')
 
@@ -434,7 +455,7 @@ export default function MembershipsPage() {
     setMembers((prev) => [...prev, m])
     setShowAddModal(false)
     setNewFirst(''); setNewLast(''); setNewEmail('')
-    setNewPlan('foundation'); setNewStarted(''); setNewNotes('')
+    setNewPlan('bronze'); setNewStarted(''); setNewNotes('')
   }
 
   function openRow(id: string) {
@@ -835,10 +856,13 @@ export default function MembershipsPage() {
                         />
                       </button>
                       {showChangePlan && (
-                        <div className="grid grid-cols-3 gap-2">
-                          {(['foundation', 'elite', 'pro'] as Plan[]).map((p) => (
-                            <PlanCard key={p} plan={p} selected={m.plan === p} onClick={() => handleChangePlan(p)} compact />
-                          ))}
+                        <div className="space-y-2">
+                          <div className="grid grid-cols-2 gap-2">
+                            {(['bronze', 'silver', 'gold', 'platinum'] as Plan[]).map((p) => (
+                              <PlanCard key={p} plan={p} selected={m.plan === p} onClick={() => handleChangePlan(p)} compact />
+                            ))}
+                          </div>
+                          <FamilyAccountCard />
                         </div>
                       )}
                     </div>
@@ -903,10 +927,13 @@ export default function MembershipsPage() {
 
               <div>
                 <label className={LABEL}>Plan</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {(['foundation', 'elite', 'pro'] as Plan[]).map((p) => (
-                    <PlanCard key={p} plan={p} selected={newPlan === p} onClick={() => setNewPlan(p)} />
-                  ))}
+                <div className="space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    {(['bronze', 'silver', 'gold', 'platinum'] as Plan[]).map((p) => (
+                      <PlanCard key={p} plan={p} selected={newPlan === p} onClick={() => setNewPlan(p)} />
+                    ))}
+                  </div>
+                  <FamilyAccountCard />
                 </div>
               </div>
 
