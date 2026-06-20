@@ -1555,16 +1555,26 @@ function BookingModal({
                           )}
 
                           {casualTeam.type === 'existing' && (
-                            <div>
-                              <label className={LABEL}>Select Team</label>
-                              <SelectPicker value={casualTeam.existingTeam}
-                                onChange={v => upd({ existingTeam: v })}
-                                accentColor={accentColor}
-                                centerOnTrigger
-                                options={[
-                                  { value: '', label: 'Select Team', muted: true },
-                                  ...TEAMS.map(t => ({ value: t, label: t })),
-                                ]} />
+                            <div className="space-y-3">
+                              <div>
+                                <label className={LABEL}>Select Team</label>
+                                <SelectPicker value={casualTeam.existingTeam}
+                                  onChange={v => upd({ existingTeam: v })}
+                                  accentColor={accentColor}
+                                  centerOnTrigger
+                                  options={[
+                                    { value: '', label: 'Select Team', muted: true },
+                                    ...TEAMS.map(t => ({ value: t, label: t })),
+                                  ]} />
+                              </div>
+                              <div>
+                                <label className={LABEL}>What is the team trying to get out of this session?</label>
+                                <textarea value={casualTeam.sessionGoals}
+                                  onChange={e => upd({ sessionGoals: e.target.value })}
+                                  rows={3}
+                                  placeholder="e.g. Pre-season conditioning, offensive plays, defensive rotations..."
+                                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 outline-none transition resize-none focus:border-[#6BAD6B] focus:ring-1 focus:ring-[#6BAD6B]/40" />
+                              </div>
                             </div>
                           )}
                         </div>
