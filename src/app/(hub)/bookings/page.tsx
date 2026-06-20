@@ -11,6 +11,8 @@ import {
   IconPlus,
   IconCheck,
   IconCalendar,
+  IconRepeat,
+  IconInfoCircle,
 } from '@tabler/icons-react'
 
 // ── Grid constants ─────────────────────────────────────────────────────────────
@@ -65,6 +67,7 @@ type Booking = {
   athletes: string[]
   coach: 'matt' | 'jade' | 'other' | ''
   bookingType: 'member' | 'casual' | 'unavailable'
+  seriesId?: string
 }
 
 type CasualAthleteEntry = {
@@ -104,6 +107,7 @@ type Modal =
   | { kind: 'add';  spaceId: SpaceId | null; startMins: number; date: string }
   | { kind: 'view'; booking: Booking }
   | { kind: 'edit'; booking: Booking }
+  | { kind: 'editSeries'; booking: Booking }
 
 type HoverInfo = { colKey: string; slotY: number; slotMins: number } | null
 
@@ -262,6 +266,18 @@ export default function BookingsPage() {
 
   function handleDelete(id: string) {
     setBookings(prev => prev.filter(b => b.id !== id))
+    setModal(null)
+  }
+
+  function handleDeleteFrom(seriesId: string, fromDate: string) {
+    setBookings(prev => prev.filter(b => !(b.seriesId === seriesId && b.date >= fromDate)))
+    setModal(null)
+  }
+
+  function handleSaveFrom(fromDate: string, seriesId: string, updates: Omit<Booking, 'id' | 'date' | 'seriesId'>) {
+    setBookings(prev => prev.map(b =>
+      b.seriesId === seriesId && b.date >= fromDate ? { ...b, ...updates } : b
+    ))
     setModal(null)
   }
 
@@ -504,7 +520,10 @@ export default function BookingsPage() {
           onClose={() => setModal(null)}
           onSave={handleSave}
           onDelete={handleDelete}
+          onDeleteFrom={handleDeleteFrom}
+          onSaveFrom={handleSaveFrom}
           onEdit={b => setModal({ kind: 'edit', booking: b })}
+          onEditSeries={b => setModal({ kind: 'editSeries', booking: b })}
         />
       )}
     </div>
@@ -1072,17 +1091,22 @@ function SelectPicker({ value, onChange, options, accentColor = '#6BA3D6', getPa
 
 // ── Booking Modal ──────────────────────────────────────────────────────────────
 function BookingModal({
-  modal, today, onClose, onSave, onDelete, onEdit,
+  modal, today, onClose, onSave, onDelete, onDeleteFrom, onSaveFrom, onEdit, onEditSeries,
 }: {
   modal: NonNullable<Modal>
   today: string
   onClose: () => void
   onSave: (items: (Omit<Booking, 'id'> & { id?: string })[]) => void
   onDelete: (id: string) => void
+  onDeleteFrom: (seriesId: string, fromDate: string) => void
+  onSaveFrom:   (fromDate: string, seriesId: string, updates: Omit<Booking, 'id' | 'date' | 'seriesId'>) => void
   onEdit: (b: Booking) => void
+  onEditSeries: (b: Booking) => void
 }) {
-  const isView = modal.kind === 'view'
-  const src    = (modal.kind === 'edit' || modal.kind === 'view') ? modal.booking : null
+  const isView          = modal.kind === 'view'
+  const editSeriesFuture = modal.kind === 'editSeries'
+  const src = (modal.kind === 'edit' || modal.kind === 'view' || modal.kind === 'editSeries')
+    ? modal.booking : null
 
   const [spaceId,     setSpaceId]     = useState<SpaceId>(modal.kind === 'add' ? (modal.spaceId ?? 'primary') : src!.spaceId)
   const [date,        setDate]        = useState(modal.kind === 'add' ? modal.date : src!.date)
@@ -1094,6 +1118,8 @@ function BookingModal({
   const [repeat,      setRepeat]      = useState<'none' | 'weekly' | 'fortnightly' | 'monthly' | 'yearly'>('none')
   const [repeatUntil, setRepeatUntil] = useState('')
   const [bookingType, setBookingType] = useState<'member' | 'casual' | 'unavailable'>('member')
+  const [seriesPrompt, setSeriesPrompt] = useState<'edit' | 'delete' | null>(null)
+  const [seriesScope,  setSeriesScope]  = useState<'single' | 'future'>('single')
   const [casualAthletes, setCasualAthletes] = useState<CasualAthleteEntry[]>([newCasualAthlete()])
   const [casualTeam,     setCasualTeam]     = useState<CasualTeamEntry>(newCasualTeam())
   const [memberCasuals,  setMemberCasuals]  = useState<CasualAthleteEntry[]>([])
@@ -1142,11 +1168,27 @@ function BookingModal({
       ? (singleAthlete === 'other' ? (customAthlete.trim() ? [customAthlete.trim()] : []) : singleAthlete ? [singleAthlete] : [])
       : [...athletes, ...memberCasualNames]
     const base = { spaceId, startMins, duration, sessionType, athletes: effectiveAthletes, coach, bookingType }
-    if (repeat === 'none' || !repeatUntil) {
-      onSave([{ ...base, date, id: src?.id }])
+    if (editSeriesFuture) {
+      onSaveFrom(src!.date, src!.seriesId!, base)
+    } else if (repeat === 'none' || !repeatUntil) {
+      onSave([{ ...base, date, id: src?.id, seriesId: src?.seriesId }])
     } else {
+      const newSeriesId = uid()
       const dates = occurrenceDates(date, repeat, repeatUntil)
-      onSave(dates.map(d => ({ ...base, date: d })))
+      onSave(dates.map(d => ({ ...base, date: d, seriesId: newSeriesId })))
+    }
+  }
+
+  function handleSeriesConfirm() {
+    if (!src || !seriesPrompt) return
+    if (seriesPrompt === 'delete') {
+      if (seriesScope === 'single') onDelete(src.id)
+      else onDeleteFrom(src.seriesId!, src.date)
+    } else {
+      setSeriesPrompt(null)
+      setSeriesScope('single')
+      if (seriesScope === 'single') onEdit(src)
+      else onEditSeries(src)
     }
   }
 
@@ -1170,13 +1212,13 @@ function BookingModal({
             </div>
             <div className="flex items-center gap-1">
               <button
-                onClick={() => onEdit(src!)}
+                onClick={() => src!.seriesId ? setSeriesPrompt('edit') : onEdit(src!)}
                 className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-sm font-medium text-gray-600 transition hover:bg-gray-100"
               >
                 <IconEdit size={14} /> Edit
               </button>
               <button
-                onClick={() => onDelete(src!.id)}
+                onClick={() => src!.seriesId ? setSeriesPrompt('delete') : onDelete(src!.id)}
                 className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-sm font-medium text-red-500 transition hover:bg-red-50"
               >
                 <IconTrash size={14} /> Delete
@@ -1188,7 +1230,16 @@ function BookingModal({
           </div>
         ) : (
           <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-100 bg-white px-6 py-4" ref={headerRef}>
-            <h2 className="text-base font-bold text-gray-900">New Booking</h2>
+            <div>
+              <h2 className="text-base font-bold text-gray-900">
+                {editSeriesFuture ? 'Edit Recurring Booking' : 'New Booking'}
+              </h2>
+              {editSeriesFuture && (
+                <p className="mt-0.5 text-xs text-gray-400">
+                  Changes apply from {parse(src!.date).toLocaleDateString('en-AU', { day: 'numeric', month: 'long' })} onwards
+                </p>
+              )}
+            </div>
             <button onClick={onClose} className="rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100">
               <IconX size={18} />
             </button>
@@ -1198,6 +1249,53 @@ function BookingModal({
         <div className="px-6 py-5">
           {/* ── View mode ── */}
           {isView ? (
+            seriesPrompt ? (
+              /* ── Series scope prompt ── */
+              <div className="space-y-5">
+                <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+                  <p className="text-sm font-bold text-gray-800">
+                    {seriesPrompt === 'edit' ? 'Edit recurring booking' : 'Cancel recurring booking'}
+                  </p>
+                  <p className="mt-0.5 text-xs text-gray-500">
+                    {parse(src!.date).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })}
+                  </p>
+                </div>
+                <div className="space-y-2.5">
+                  {(['single', 'future'] as const).map(scope => (
+                    <label key={scope}
+                      className="flex cursor-pointer items-start gap-3 rounded-xl border border-gray-200 px-4 py-3 transition hover:border-gray-300 hover:bg-gray-50">
+                      <input type="radio" name="seriesScope" value={scope}
+                        checked={seriesScope === scope}
+                        onChange={() => setSeriesScope(scope)}
+                        className="mt-0.5 h-4 w-4 shrink-0 accent-[#6BA3D6]" />
+                      <div>
+                        <p className="text-sm font-semibold text-gray-800">
+                          {scope === 'single' ? 'This booking only' : 'This and all future bookings'}
+                        </p>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          {scope === 'single'
+                            ? 'Only this occurrence is affected'
+                            : 'All occurrences from this date forward are affected'}
+                        </p>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => { setSeriesPrompt(null); setSeriesScope('single') }}
+                    className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50">
+                    Back
+                  </button>
+                  <button
+                    onClick={handleSeriesConfirm}
+                    className="rounded-lg px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+                    style={{ backgroundColor: seriesPrompt === 'delete' ? '#ef4444' : '#6BA3D6' }}>
+                    {seriesPrompt === 'edit' ? 'Continue' : 'Cancel Booking'}
+                  </button>
+                </div>
+              </div>
+            ) : (
             <div className="space-y-4">
               <div className="flex items-center gap-3 rounded-xl p-3.5" style={{ backgroundColor: space.light }}>
                 <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: space.color }} />
@@ -1205,6 +1303,12 @@ function BookingModal({
                   <p className="text-sm font-bold leading-snug" style={{ color: space.color }}>{src!.sessionType}</p>
                   <p className="text-xs text-gray-500">{space.label}</p>
                 </div>
+                {src!.seriesId && (
+                  <div className="ml-auto flex items-center gap-1.5 rounded-full bg-white/80 px-2.5 py-1 text-xs font-semibold" style={{ color: space.color }}>
+                    <IconRepeat size={11} />
+                    Repeating
+                  </div>
+                )}
               </div>
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
@@ -1229,9 +1333,16 @@ function BookingModal({
                 </div>
               </div>
             </div>
+            )
           ) : (
             /* ── Add / Edit form ── */
             <div className="space-y-4">
+              {editSeriesFuture && (
+                <div className="flex items-center gap-2.5 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-700">
+                  <IconInfoCircle size={16} className="shrink-0" />
+                  Editing all bookings in this series from {parse(src!.date).toLocaleDateString('en-AU', { day: 'numeric', month: 'long' })} onwards.
+                </div>
+              )}
               {/* Booking type toggle */}
               <div className="flex overflow-hidden rounded-xl border border-gray-200">
                 {(['member', 'casual', 'unavailable'] as const).map((type, i) => (
@@ -1426,7 +1537,7 @@ function BookingModal({
                       />
                     </div>
                     <div>
-                      {bookingType === 'member' && (
+                      {bookingType === 'member' && !editSeriesFuture && (
                         <>
                           <label className={LABEL}>Repeat</label>
                           <SelectPicker
@@ -1446,8 +1557,8 @@ function BookingModal({
                     </div>
                   </div>
 
-                  {/* Row 4: Repeat details — only shown when repeat is set and not casual */}
-                  {bookingType !== 'casual' && repeat !== 'none' && (
+                  {/* Row 4: Repeat details — only shown when repeat is set, not casual, not editing series */}
+                  {bookingType !== 'casual' && repeat !== 'none' && !editSeriesFuture && (
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <label className={LABEL}>Ends on</label>
@@ -1928,7 +2039,7 @@ function BookingModal({
                       className="rounded-lg px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90"
                       style={{ backgroundColor: accentColor }}
                     >
-                      {modal.kind === 'edit' ? 'Save Changes' : 'Create Booking'}
+                      {(modal.kind === 'edit' || editSeriesFuture) ? 'Save Changes' : 'Create Booking'}
                     </button>
                     <button
                       type="button"
@@ -1972,7 +2083,7 @@ function BookingModal({
                     className="rounded-lg px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90"
                     style={{ backgroundColor: accentColor }}
                   >
-                    {modal.kind === 'edit' ? 'Save Changes' : bookingType === 'unavailable' ? 'Mark Unavailability' : 'Create Booking'}
+                    {(modal.kind === 'edit' || editSeriesFuture) ? 'Save Changes' : bookingType === 'unavailable' ? 'Mark Unavailability' : 'Create Booking'}
                   </button>
                 </div>
               )}
