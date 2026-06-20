@@ -144,8 +144,7 @@ const INIT_PRICING: SessionPricingConfig[] = [
   {
     sessionType: 'individual',
     tiers: [
-      { id: 't5', min: 1, max: 1, pricePerAthlete: 65 },
-      { id: 't6', min: 2, max: 2, pricePerAthlete: 60 },
+      { id: 't5', min: 1, max: 1, pricePerAthlete: 75 },
     ],
   },
   {
@@ -211,11 +210,11 @@ const INIT_SESSIONS: Session[] = [
     startTime: '12:00',
     sessionType: 'individual',
     athletes: [
-      { athleteId: 'a4', attendanceStatus: null, paymentStatus: 'pending', lockedPrice: 65 },
+      { athleteId: 'a4', attendanceStatus: null, paymentStatus: 'pending', lockedPrice: 75 },
     ],
     status: 'locked',
     completedAt: null,
-    lockedPricePerAthlete: 65,
+    lockedPricePerAthlete: 75,
   },
   // Locked — Team Training, 9am today. Already past start, awaiting completion.
   {
