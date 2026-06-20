@@ -1391,29 +1391,6 @@ function BookingModal({
                           />
                         </>
                       )}
-                      {bookingType === 'casual' && sessionType !== 'Individual Work Out' && (
-                        <>
-                          <label className={LABEL}>Number of Athletes</label>
-                          <SelectPicker
-                            value={numAthletes}
-                            onChange={v => {
-                              setNumAthletes(v)
-                              const n = parseInt(v) || 0
-                              setCasualAthletes(prev => {
-                                if (n > prev.length) return [...prev, ...Array.from({ length: n - prev.length }, () => newCasualAthlete())]
-                                if (n < prev.length) return prev.slice(0, n)
-                                return prev
-                              })
-                            }}
-                            accentColor={accentColor}
-                            panelMaxHeight={360}
-                            options={[
-                              { value: '', label: 'Select Number Of Athletes', muted: true },
-                              ...Array.from({ length: 10 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) })),
-                            ]}
-                          />
-                        </>
-                      )}
                     </div>
                   </div>
 
@@ -1441,16 +1418,29 @@ function BookingModal({
                     const visibleAthletes = isMulti ? casualAthletes : casualAthletes.slice(0, 1)
                     const upd = (id: string, patch: Partial<CasualAthleteEntry>) =>
                       setCasualAthletes(prev => prev.map(a => a.id === id ? { ...a, ...patch } : a))
+                    const removeAthlete = (id: string) =>
+                      setCasualAthletes(prev => prev.filter(a => a.id !== id))
+                    const addAthlete = () =>
+                      setCasualAthletes(prev => [...prev, newCasualAthlete()])
                     return (
                       <div className="space-y-3">
                         {/* Athlete cards */}
-                        {(!isMulti || numAthletes) && visibleAthletes.map((entry, idx) => (
+                        {visibleAthletes.map((entry, idx) => (
                           <div key={entry.id} className="rounded-xl border border-gray-200 p-3 space-y-3">
                             {/* Card header */}
                             <div className="flex items-center justify-between">
                               <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">
                                 Athlete {idx + 1}
                               </span>
+                              {isMulti && casualAthletes.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => removeAthlete(entry.id)}
+                                  className="rounded-lg p-1 text-gray-300 transition hover:bg-red-50 hover:text-red-400"
+                                >
+                                  <IconX size={14} />
+                                </button>
+                              )}
                             </div>
 
                             {/* New / Existing toggle */}
@@ -1567,6 +1557,18 @@ function BookingModal({
                             )}
                           </div>
                         ))}
+
+                        {/* Add Athlete button — multi-athlete sessions, max 6 */}
+                        {isMulti && casualAthletes.length < 6 && (
+                          <button
+                            type="button"
+                            onClick={addAthlete}
+                            className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-200 py-2.5 text-sm font-semibold text-gray-400 transition hover:border-gray-400 hover:text-gray-500"
+                          >
+                            <IconPlus size={15} />
+                            Add Athlete
+                          </button>
+                        )}
 
                       </div>
                     )
