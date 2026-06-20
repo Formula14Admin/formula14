@@ -1069,7 +1069,6 @@ function BookingModal({
   const [repeatUntil, setRepeatUntil] = useState('')
   const [bookingType, setBookingType] = useState<'member' | 'casual' | 'unavailable'>('member')
   const [casualAthletes, setCasualAthletes] = useState<CasualAthleteEntry[]>([newCasualAthlete()])
-  const [numAthletes, setNumAthletes] = useState('')
   const [singleAthlete,  setSingleAthlete]  = useState('')
   const [customAthlete,  setCustomAthlete]  = useState('')
   const accentColor = bookingType === 'casual' ? '#6BAD6B' : bookingType === 'unavailable' ? '#ef4444' : '#6BA3D6'
@@ -1091,7 +1090,6 @@ function BookingModal({
     setRepeat('none')
     setRepeatUntil('')
     setCasualAthletes([newCasualAthlete()])
-    setNumAthletes('')
     setSingleAthlete('')
     setCustomAthlete('')
   }
@@ -1378,7 +1376,7 @@ function BookingModal({
                     </div>
                   </div>
 
-                  {/* Row 3: Coach | Repeat or Number of Athletes */}
+                  {/* Row 3: Coach | Repeat */}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className={LABEL}>Coach</label>
@@ -1594,63 +1592,22 @@ function BookingModal({
                       </div>
                     )
                   })() : bookingType === 'member' && ['Volume Shooting', 'Casual Shooting', 'Small Group Session'].includes(sessionType) ? (
-                    /* ── Member Volume/Casual Shooting / Small Group: number of athletes + athlete picker ── */
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className={LABEL}>Number of Athletes</label>
-                        <SelectPicker
-                          value={numAthletes}
-                          onChange={setNumAthletes}
-                          accentColor={accentColor}
-                          panelMaxHeight={260}
-                          options={[
-                            { value: '', label: 'Select Number Of Athletes', muted: true },
-                            ...Array.from({ length: 6 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) })),
-                          ]}
-                        />
-                      </div>
-                      <div>
-                        <label className={LABEL}>Athlete</label>
-                        {parseInt(numAthletes) > 1 ? (
-                          <SelectPicker
-                            value=""
-                            onChange={() => {}}
-                            multiValues={athletes}
-                            onChangeMulti={setAthletes}
-                            maxSelect={parseInt(numAthletes)}
-                            accentColor={accentColor}
-                            centerOnTrigger
-                            options={[
-                              { value: '', label: 'Select Athlete', muted: true },
-                              ...[...ATHLETES].sort().map(a => ({ value: a, label: a })),
-                            ]}
-                          />
-                        ) : (
-                          <>
-                            <SelectPicker
-                              value={singleAthlete}
-                              onChange={v => { setSingleAthlete(v); if (v !== 'other') setCustomAthlete('') }}
-                              accentColor={accentColor}
-                              centerOnTrigger
-                              options={[
-                                { value: '', label: 'Select Athlete', muted: true },
-                                ...[...ATHLETES].sort().map(a => ({ value: a, label: a })),
-                                { value: 'other', label: 'Other' },
-                              ]}
-                            />
-                            {singleAthlete === 'other' && (
-                              <input
-                                type="text"
-                                value={customAthlete}
-                                onChange={e => setCustomAthlete(e.target.value)}
-                                placeholder="Enter athlete name"
-                                className={`mt-2 ${INPUT}`}
-                                style={{ textAlign: 'center' }}
-                              />
-                            )}
-                          </>
-                        )}
-                      </div>
+                    /* ── Member group sessions: multi-select athlete (up to 6) ── */
+                    <div>
+                      <label className={LABEL}>Athlete</label>
+                      <SelectPicker
+                        value=""
+                        onChange={() => {}}
+                        multiValues={athletes}
+                        onChangeMulti={setAthletes}
+                        maxSelect={6}
+                        accentColor={accentColor}
+                        centerOnTrigger
+                        options={[
+                          { value: '', label: 'Select Athlete', muted: true },
+                          ...[...ATHLETES].sort().map(a => ({ value: a, label: a })),
+                        ]}
+                      />
                     </div>
                   ) : sessionType === 'Individual Work Out' ? (
                     /* ── Member Individual Work Out: single athlete dropdown ── */
