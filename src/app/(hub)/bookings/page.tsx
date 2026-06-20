@@ -37,9 +37,12 @@ type SpaceId = typeof SPACES[number]['id']
 const SESSION_TYPES: Record<SpaceId, string[]> = {
   primary:   ['Casual Shooting', 'Individual Work Out', 'Small Group Session', 'Team Training', 'Volume Shooting'],
   secondary: ['Casual Shooting', 'Individual Work Out', 'Small Group Session', 'Team Training', 'Volume Shooting'],
-  shooting:  ['Casual Shooting', 'Individual Work Out', 'Small Group Session', 'Team Training', 'Volume Shooting'],
+  shooting:  ['Casual Shooting', 'Shooting Machine Rental', 'Individual Work Out', 'Small Group Session', 'Team Training', 'Volume Shooting'],
   meeting:   ['Coach Meeting', 'Film Review', 'Goal Setting', 'Meeting (General)', 'Parent Meeting', 'Player Meeting', 'Team Meeting'],
 }
+
+// Shooting Machine Rental: price by duration (minutes)
+const MACHINE_RENTAL_PRICES: Record<number, number> = { 30: 30, 45: 40, 60: 50 }
 
 const ATHLETES = [
   'Liam Carter', 'Jordan Williams', 'Aisha Thompson', 'Marcus Davies',
@@ -218,6 +221,9 @@ function makeSamples(today: string): Booking[] {
     { id:'cs3', date:today, spaceId:'primary', startMins:12*60,   duration:60, sessionType:'Casual Shooting', athletes:['Tyler Ross'],   coach:'', bookingType:'member',   memberTier:'silver' },
     { id:'cs4', date:today, spaceId:'primary', startMins:13*60,   duration:60, sessionType:'Casual Shooting', athletes:['Marcus Davies'],coach:'', bookingType:'casual' },
     { id:'cs5', date:today, spaceId:'primary', startMins:15*60,   duration:60, sessionType:'Casual Shooting', athletes:['Sam Liu'],      coach:'', bookingType:'casual' },
+    // Shooting Machine Rental demos
+    { id:'sm1', date:today, spaceId:'shooting', startMins:10*60,     duration:60, sessionType:'Shooting Machine Rental', athletes:['Liam Carter'],    coach:'', bookingType:'casual' },
+    { id:'sm2', date:tm,    spaceId:'shooting', startMins:13*60+30,  duration:45, sessionType:'Shooting Machine Rental', athletes:['Jordan Williams'], coach:'', bookingType:'casual' },
   ]
 }
 
@@ -1232,9 +1238,11 @@ function BookingModal({
   const [memberCasuals,  setMemberCasuals]  = useState<CasualAthleteEntry[]>([])
   const [singleAthlete,  setSingleAthlete]  = useState('')
   const [customAthlete,  setCustomAthlete]  = useState('')
-  const [memberTier,     setMemberTier]     = useState<MemberTier | ''>('')
-  const accentColor = bookingType === 'casual' ? '#6BAD6B' : bookingType === 'unavailable' ? '#ef4444' : '#6BA3D6'
+  const [memberTier,            setMemberTier]            = useState<MemberTier | ''>('')
+  const [machineRentalDuration, setMachineRentalDuration] = useState<30 | 45 | 60>(60)
+  const accentColor  = bookingType === 'casual' ? '#6BAD6B' : bookingType === 'unavailable' ? '#ef4444' : '#6BA3D6'
   const isIndividual = bookingType === 'member' && sessionType === 'Individual Work Out'
+  const isMachineRental = sessionType === 'Shooting Machine Rental'
 
   const modalRef  = useRef<HTMLDivElement>(null)
   const headerRef = useRef<HTMLDivElement>(null)
@@ -1257,6 +1265,7 @@ function BookingModal({
     setSingleAthlete('')
     setCustomAthlete('')
     setMemberTier('')
+    setMachineRentalDuration(60)
   }
 
   function handleSpaceChange(id: SpaceId) {
@@ -1591,7 +1600,13 @@ function BookingModal({
                       <label className={LABEL}>Session type</label>
                       <SelectPicker
                         value={sessionType}
-                        onChange={setSessionType}
+                        onChange={v => {
+                          setSessionType(v)
+                          if (v === 'Shooting Machine Rental') {
+                            setMachineRentalDuration(60)
+                            setFinishMins(startMins + 60)
+                          }
+                        }}
                         accentColor={accentColor}
                         options={[
                           { value: '', label: 'Select A Session Type', muted: true },
@@ -1607,27 +1622,83 @@ function BookingModal({
                     </div>
                   </div>
 
-                  {/* Row 2: Start Time | Finish Time */}
+                  {/* Row 2: Start Time | Finish Time (or Duration for Shooting Machine Rental) */}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className={LABEL}>Start time</label>
                       <TimePicker
                         value={startMins}
-                        onChange={s => { setStartMins(s); if (finishMins <= s) setFinishMins(s + 60) }}
+                        onChange={s => {
+                          setStartMins(s)
+                          if (isMachineRental) setFinishMins(s + machineRentalDuration)
+                          else if (finishMins <= s) setFinishMins(s + 60)
+                        }}
                         options={Array.from({ length: 95 }, (_, i) => i * 15)}
                         accentColor={accentColor}
                       />
                     </div>
                     <div>
-                      <label className={LABEL}>Finish time</label>
-                      <TimePicker
-                        value={finishMins}
-                        onChange={setFinishMins}
-                        options={Array.from({ length: 95 }, (_, i) => (i + 1) * 15).filter(m => m > startMins)}
-                        accentColor={accentColor}
-                      />
+                      {isMachineRental ? (
+                        <>
+                          <label className={LABEL}>Duration</label>
+                          <div className="flex gap-2">
+                            {([30, 45, 60] as const).map(d => (
+                              <button
+                                key={d}
+                                type="button"
+                                onClick={() => { setMachineRentalDuration(d); setFinishMins(startMins + d) }}
+                                className={`flex h-10 flex-1 flex-col items-center justify-center rounded-lg border text-[11px] font-bold leading-tight transition ${
+                                  machineRentalDuration === d
+                                    ? 'border-transparent text-white'
+                                    : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
+                                }`}
+                                style={machineRentalDuration === d ? { backgroundColor: accentColor } : {}}
+                              >
+                                <span>{d} min</span>
+                                <span>${MACHINE_RENTAL_PRICES[d]}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <label className={LABEL}>Finish time</label>
+                          <TimePicker
+                            value={finishMins}
+                            onChange={setFinishMins}
+                            options={Array.from({ length: 95 }, (_, i) => (i + 1) * 15).filter(m => m > startMins)}
+                            accentColor={accentColor}
+                          />
+                        </>
+                      )}
                     </div>
                   </div>
+
+                  {/* Session-type info boxes */}
+                  {sessionType === 'Casual Shooting' && (
+                    <div className="flex items-start gap-2.5 rounded-xl border border-yellow-200 bg-yellow-50 px-4 py-3">
+                      <IconInfoCircle size={15} className="mt-0.5 shrink-0 text-yellow-600" />
+                      <div>
+                        <p className="text-sm font-semibold text-yellow-800">$10 per athlete · 60 minutes court access</p>
+                        <p className="mt-0.5 text-xs text-yellow-700">Includes basketballs and access to all shooting areas. Shooting machine access is <strong>not</strong> included — book a Shooting Machine Rental separately if required.</p>
+                      </div>
+                    </div>
+                  )}
+                  {isMachineRental && (
+                    <div className="space-y-2">
+                      <div className="flex items-start gap-2.5 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
+                        <IconInfoCircle size={15} className="mt-0.5 shrink-0 text-[#6BA3D6]" />
+                        <div>
+                          <p className="text-sm font-semibold text-blue-800">Booking holder controls the machine for the full booked period</p>
+                          <p className="mt-0.5 text-xs text-blue-700">You may use the machine individually or share it with other athletes at your discretion.</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                        <IconAlertCircle size={15} className="mt-0.5 shrink-0 text-amber-500" />
+                        <p className="text-xs text-amber-700">This booking covers shooting machine access only and does <strong>not</strong> include Casual Shooting court access before, during, or after the booking period. Athletes who also wish to participate in Casual Shooting must purchase a separate booking.</p>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Row 3: Coach | Repeat */}
                   <div className="grid grid-cols-2 gap-3">
@@ -1801,7 +1872,7 @@ function BookingModal({
                       )
                     }
 
-                    const isMulti = sessionType !== 'Individual Work Out'
+                    const isMulti = sessionType !== 'Individual Work Out' && sessionType !== 'Shooting Machine Rental'
                     const visibleAthletes = isMulti ? casualAthletes : casualAthletes.slice(0, 1)
                     const upd = (id: string, patch: Partial<CasualAthleteEntry>) =>
                       setCasualAthletes(prev => prev.map(a => a.id === id ? { ...a, ...patch } : a))
@@ -2189,7 +2260,13 @@ function BookingModal({
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">Total</span>
-                    <span className="text-lg font-bold text-gray-900">$0.00</span>
+                    <span className="text-lg font-bold text-gray-900">
+                      {sessionType === 'Casual Shooting'
+                        ? `$${(casualAthletes.length * 10).toFixed(2)}`
+                        : sessionType === 'Shooting Machine Rental'
+                        ? `$${(MACHINE_RENTAL_PRICES[machineRentalDuration] ?? 50).toFixed(2)}`
+                        : '$0.00'}
+                    </span>
                   </div>
                 </div>
               ) : (

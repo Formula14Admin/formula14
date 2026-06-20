@@ -151,9 +151,7 @@ const INIT_PRICING: SessionPricingConfig[] = [
   {
     sessionType: 'casual-shooting',
     tiers: [
-      { id: 't10', min: 1, max: 1, pricePerAthlete: 45 },
-      { id: 't11', min: 2, max: 2, pricePerAthlete: 40 },
-      { id: 't12', min: 3, max: 5, pricePerAthlete: 35 },
+      { id: 't10', min: 1, max: null, pricePerAthlete: 10 },
     ],
   },
   {
