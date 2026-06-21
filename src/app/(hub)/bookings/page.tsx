@@ -1255,10 +1255,10 @@ export default function BookingsPage() {
             return (
               <div className="flex shrink-0 border-b border-gray-200 bg-white" style={{ height: RULER_H + coaches.length * ROW_H }}>
                 {/* Fixed left: coach name labels */}
-                <div className="w-16 shrink-0 border-r border-gray-100 flex flex-col">
+                <div className="w-16 shrink-0 border-r border-gray-200 flex flex-col">
                   <div style={{ height: RULER_H }} />
                   {coaches.map(coach => (
-                    <div key={coach.id} style={{ height: ROW_H }} className="flex items-center justify-end px-2 border-t border-gray-100">
+                    <div key={coach.id} style={{ height: ROW_H }} className="flex items-center justify-end px-2 border-t border-gray-200">
                       <span className="text-[10px] font-semibold truncate" style={{ color: coach.color }}>{coach.name}</span>
                     </div>
                   ))}
@@ -1266,11 +1266,11 @@ export default function BookingsPage() {
                 {/* Horizontally scrollable timeline */}
                 <div className="flex-1 overflow-x-auto overflow-y-hidden select-none" style={{ scrollbarWidth: 'thin' }}>
                   <div style={{ width: TOTAL_W }}>
-                    {/* Hour ruler */}
-                    <div className="flex border-b border-gray-100" style={{ height: RULER_H }}>
+                    {/* Hour ruler — labels centred between gridlines */}
+                    <div className="flex border-b border-gray-200" style={{ height: RULER_H }}>
                       {Array.from({ length: 24 }, (_, h) => (
-                        <div key={h} style={{ width: HR_W, flexShrink: 0, borderRight: '1px solid #f0f0f0' }} className="relative">
-                          <span className="absolute left-1 top-1 text-[9px] text-gray-400 whitespace-nowrap leading-none">
+                        <div key={h} style={{ width: HR_W, flexShrink: 0, borderRight: '1px solid #e5e7eb' }} className="flex items-center justify-center">
+                          <span className="text-[9px] text-gray-400 whitespace-nowrap leading-none">
                             {h === 0 ? '12am' : h === 12 ? '12pm' : h > 12 ? `${h - 12}pm` : `${h}am`}
                           </span>
                         </div>
@@ -1280,30 +1280,32 @@ export default function BookingsPage() {
                     {coaches.map(coach => {
                       const windows = getCoachWindowsForDate(coach.id, date)
                       return (
-                        <div key={coach.id} className="relative border-t border-gray-100" style={{ height: ROW_H }}>
+                        <div key={coach.id} className="relative border-t border-gray-200" style={{ height: ROW_H }}>
                           {/* OFF background (light tint) */}
-                          <div className="absolute inset-0" style={{ backgroundColor: coach.color + '18' }} />
-                          {/* ON windows (solid) */}
-                          {windows.map((w, wi) => {
-                            const leftPx = w.startMins / 60 * HR_W
-                            const widthPx = Math.max(4, (w.endMins - w.startMins) / 60 * HR_W)
-                            return (
-                              <div
-                                key={wi}
-                                className="absolute top-2 bottom-2 rounded-sm"
-                                style={{ left: leftPx, width: widthPx, backgroundColor: coach.color }}
-                                title={`${coach.name}: ${minsToAvLabel(w.startMins)} – ${minsToAvLabel(w.endMins)}`}
-                              >
-                                {(w.endMins - w.startMins) >= 60 && (
-                                  <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-[9px] font-semibold text-white whitespace-nowrap leading-none">
-                                    {minsToAvLabel(w.startMins)} – {minsToAvLabel(w.endMins)}
-                                  </span>
-                                )}
-                              </div>
-                            )
-                          })}
+                          <div className="absolute inset-0" style={{ backgroundColor: coach.color + '22' }} />
+                          {/* ON windows — full height, no rounding, no padding */}
+                          {windows.map((w, wi) => (
+                            <div
+                              key={wi}
+                              className="absolute top-0 bottom-0"
+                              style={{
+                                left: w.startMins / 60 * HR_W,
+                                width: Math.max(1, (w.endMins - w.startMins) / 60 * HR_W),
+                                backgroundColor: coach.color,
+                              }}
+                              title={`${coach.name}: ${minsToAvLabel(w.startMins)} – ${minsToAvLabel(w.endMins)}`}
+                            />
+                          ))}
+                          {/* Vertical hour gridlines drawn on top of blocks */}
+                          {Array.from({ length: 25 }, (_, h) => (
+                            <div
+                              key={h}
+                              className="absolute top-0 bottom-0 pointer-events-none"
+                              style={{ left: h * HR_W, width: 1, backgroundColor: 'rgba(0,0,0,0.10)' }}
+                            />
+                          ))}
                           {windows.length === 0 && (
-                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[9px] text-gray-400">Off</span>
+                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[9px] text-gray-400 pointer-events-none" style={{ zIndex: 1 }}>Off</span>
                           )}
                         </div>
                       )
