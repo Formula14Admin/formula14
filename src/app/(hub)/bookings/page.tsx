@@ -1276,12 +1276,10 @@ function BookingModal({
       .filter(t => !(bookingType === 'member' && t === 'Team Training'))
       .filter(t => !ALL_PROGRAM_NAMES.includes(t))
       .map(t => ({ value: t, label: t })),
-    ...Object.entries(PROGRAM_GROUPS)
-      .filter(([, progs]) => progs.some(p => SESSION_TYPES[spaceId].includes(p)))
-      .flatMap(([cat, progs]) => [
-        { value: `--${cat}--`, label: cat, header: true },
-        ...progs.filter(p => SESSION_TYPES[spaceId].includes(p)).map(p => ({ value: p, label: p })),
-      ]),
+    ...Object.values(PROGRAM_GROUPS)
+      .flat()
+      .filter(p => SESSION_TYPES[spaceId].includes(p))
+      .map(p => ({ value: p, label: p })),
   ]
 
   const modalRef  = useRef<HTMLDivElement>(null)
