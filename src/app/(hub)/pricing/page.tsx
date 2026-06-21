@@ -480,6 +480,15 @@ export default function PricingPage() {
     }))
   }
 
+  function runAllPayments() {
+    setSessions(prev => prev.map(s => s.status !== 'completed' ? s : {
+      ...s,
+      athletes: s.athletes.map(sa =>
+        sa.paymentStatus === 'payment-required' ? { ...sa, paymentStatus: 'paid' as PaymentStatus } : sa
+      ),
+    }))
+  }
+
   // ── Render ───────────────────────────────────────────────────────────────
 
   return (
@@ -906,6 +915,32 @@ export default function PricingPage() {
               </div>
             )}
           </div>
+
+          {/* Run All Payments */}
+          {(() => {
+            const totalPending = sessions
+              .filter(s => s.status === 'completed')
+              .flatMap(s => s.athletes)
+              .filter(sa => sa.paymentStatus === 'payment-required').length
+            if (totalPending === 0) return null
+            return (
+              <div className="mt-4 flex items-center justify-between rounded-xl border border-green-200 bg-green-50 px-5 py-4">
+                <div>
+                  <p className="text-sm font-semibold text-green-800">
+                    {totalPending} outstanding payment{totalPending !== 1 ? 's' : ''} across all completed sessions
+                  </p>
+                  <p className="text-xs text-green-600 mt-0.5">Requires Stripe connection in production</p>
+                </div>
+                <button
+                  onClick={runAllPayments}
+                  className="flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
+                  style={{ backgroundColor: '#16a34a' }}
+                >
+                  <IconCreditCard size={15} /> Run All Payments
+                </button>
+              </div>
+            )
+          })()}
         </div>
       )}
 
