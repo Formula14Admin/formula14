@@ -449,13 +449,13 @@ export default function AvailabilityPage() {
         {/* ── Section 1: Weekly Recurring Schedule ──────────────────────────── */}
         <div className="rounded-xl border border-gray-200 bg-white p-5">
           <h2 className="text-sm font-bold text-gray-700 mb-4">Weekly Recurring Schedule — {coachName}</h2>
-          <div className="grid grid-cols-7 gap-2">
+          <div className="flex gap-3 overflow-x-auto pb-1">
             {(Object.keys(DAYS_LABEL) as unknown as DayOfWeek[]).map((dow) => {
               const day = coach.days[dow]
               return (
                 <div
                   key={dow}
-                  className="flex flex-col items-center gap-2 rounded-xl border p-3"
+                  className="flex w-44 shrink-0 flex-col items-center gap-2 rounded-xl border p-3"
                   style={{
                     borderColor: day.available ? coachColor + '40' : '#e5e7eb',
                     backgroundColor: day.available ? coachColor + '08' : '#fafafa',
