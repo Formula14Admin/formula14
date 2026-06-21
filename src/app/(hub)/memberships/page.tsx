@@ -17,7 +17,7 @@ import {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type Plan = 'bronze' | 'silver' | 'gold' | 'platinum'
+type Plan = 'bronze' | 'silver' | 'gold' | 'platinum' | 'family'
 type MemberStatus = 'active' | 'cancelling' | 'overdue' | 'inactive'
 type BillingStatus = 'paid' | 'failed' | 'upcoming'
 
@@ -45,29 +45,71 @@ interface Member {
 
 // ─── Plan info ────────────────────────────────────────────────────────────────
 
+type CreditType = 'skills-clinic' | 'casual-shooting' | 'small-group' | 'shooting-machine' | 'weight-room' | 'film-room'
+
+interface CreditAllowance {
+  type: CreditType
+  label: string
+  limit: number
+}
+
 const PLAN_INFO: Record<Plan, {
   label: string
   price: number
-  sessionsPerWeek: number | null
-  monthlyQuota: number | null
   tagline: string
   color: string
+  allowances: CreditAllowance[]
+  comingSoon?: boolean
 }> = {
   bronze: {
-    label: 'Bronze', price: 35, sessionsPerWeek: 2,
-    monthlyQuota: 8, tagline: '2 sessions per week', color: '#B87333',
+    label: 'Bronze', price: 35, color: '#B87333',
+    tagline: '1x Skills Clinic · 1x Casual Shooting per week',
+    allowances: [
+      { type: 'skills-clinic',   label: 'Skills Clinic',   limit: 1 },
+      { type: 'casual-shooting', label: 'Casual Shooting', limit: 1 },
+    ],
   },
   silver: {
-    label: 'Silver', price: 50, sessionsPerWeek: 3,
-    monthlyQuota: 12, tagline: '3 sessions per week', color: '#64748B',
+    label: 'Silver', price: 50, color: '#64748B',
+    tagline: '1x Small Group · 2x Casual Shooting · 2x Shooting Machine per week',
+    allowances: [
+      { type: 'small-group',      label: 'Small Group Session',  limit: 1 },
+      { type: 'casual-shooting',  label: 'Casual Shooting',      limit: 2 },
+      { type: 'shooting-machine', label: 'Shooting Machine',     limit: 2 },
+    ],
   },
   gold: {
-    label: 'Gold', price: 75, sessionsPerWeek: 5,
-    monthlyQuota: 20, tagline: '5 sessions per week', color: '#D4A843',
+    label: 'Gold', price: 75, color: '#D4A843',
+    tagline: '2x Small Group · 3x Casual · 3x Machine · 2x Weight Room per week',
+    allowances: [
+      { type: 'small-group',      label: 'Small Group Session',  limit: 2 },
+      { type: 'casual-shooting',  label: 'Casual Shooting',      limit: 3 },
+      { type: 'shooting-machine', label: 'Shooting Machine',     limit: 3 },
+      { type: 'weight-room',      label: 'Weight Room',          limit: 2 },
+    ],
   },
   platinum: {
-    label: 'Platinum', price: 100, sessionsPerWeek: null,
-    monthlyQuota: null, tagline: 'Unlimited sessions', color: '#7C3AED',
+    label: 'Platinum', price: 100, color: '#7C3AED',
+    tagline: '3x Small Group · 4x Casual · 4x Machine · 3x Weight Room · 1x Film Room per week',
+    allowances: [
+      { type: 'small-group',      label: 'Small Group Session',  limit: 3 },
+      { type: 'casual-shooting',  label: 'Casual Shooting',      limit: 4 },
+      { type: 'shooting-machine', label: 'Shooting Machine',     limit: 4 },
+      { type: 'weight-room',      label: 'Weight Room',          limit: 3 },
+      { type: 'film-room',        label: 'Film Room',            limit: 1 },
+    ],
+  },
+  family: {
+    label: 'Family', price: 100, color: '#0891B2',
+    tagline: 'Platinum allowances shared across 2 linked accounts',
+    comingSoon: true,
+    allowances: [
+      { type: 'small-group',      label: 'Small Group Session',  limit: 3 },
+      { type: 'casual-shooting',  label: 'Casual Shooting',      limit: 4 },
+      { type: 'shooting-machine', label: 'Shooting Machine',     limit: 4 },
+      { type: 'weight-room',      label: 'Weight Room',          limit: 3 },
+      { type: 'film-room',        label: 'Film Room',            limit: 1 },
+    ],
   },
 }
 
@@ -198,6 +240,25 @@ const INIT_MEMBERS: Member[] = [
   },
 ]
 
+const WEEK_KEY = '2026-06-15'  // Current Monday (demo week)
+
+// memberId:creditType → sessions used this week
+const INIT_CREDIT_USAGE: Record<string, number> = {
+  'm1:small-group':      2,
+  'm1:casual-shooting':  3,
+  'm1:shooting-machine': 1,
+  'm1:weight-room':      2,
+  'm2:small-group':      1,
+  'm2:casual-shooting':  2,
+  'm2:shooting-machine': 3,
+  'm2:weight-room':      1,
+  'm3:casual-shooting':  1,
+  'm4:small-group':      1,
+  'm4:casual-shooting':  1,
+  'm4:shooting-machine': 0,
+  'm5:casual-shooting':  0,
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function initials(m: Member) {
@@ -268,27 +329,19 @@ function Avatar({ member, size = 36 }: { member: Member; size?: number }) {
   )
 }
 
-function SessionsBar({ sessions, plan }: { sessions: number; plan: Plan }) {
-  const quota = PLAN_INFO[plan].monthlyQuota
-  if (!quota) {
-    return (
-      <div>
-        <span className="text-sm font-semibold text-gray-800">{sessions}</span>
-        <span className="ml-1 text-xs text-gray-400">/ ∞</span>
-      </div>
-    )
-  }
-  const pct = Math.min(sessions / quota, 1)
-  const barColor = pct >= 1 ? '#ef4444' : pct >= 0.8 ? '#f97316' : ACCENT
+function CreditBar({ plan, creditUsage, memberId }: { plan: Plan; creditUsage: Record<string, number>; memberId: string }) {
+  const { allowances } = PLAN_INFO[plan]
+  if (allowances.length === 0) return <span className="text-sm text-gray-400">—</span>
+  const totalUsed = allowances.reduce((s, a) => s + (creditUsage[`${memberId}:${a.type}`] ?? 0), 0)
+  const totalLimit = allowances.reduce((s, a) => s + a.limit, 0)
+  const pct = totalLimit > 0 ? Math.min(totalUsed / totalLimit, 1) : 0
+  const color = pct >= 1 ? '#ef4444' : pct >= 0.7 ? '#f97316' : ACCENT
   return (
-    <div className="w-20">
-      <div className="mb-1 flex items-baseline gap-0.5">
-        <span className="text-sm font-semibold text-gray-800">{sessions}</span>
-        <span className="text-xs text-gray-400">/{quota}</span>
+    <div className="flex items-center gap-2">
+      <div className="h-1.5 w-20 rounded-full bg-gray-100">
+        <div className="h-1.5 rounded-full" style={{ width: `${pct * 100}%`, backgroundColor: color }} />
       </div>
-      <div className="h-1.5 w-full rounded-full bg-gray-100">
-        <div className="h-1.5 rounded-full" style={{ width: `${pct * 100}%`, backgroundColor: barColor }} />
-      </div>
+      <span className="text-xs text-gray-500">{totalUsed}/{totalLimit}</span>
     </div>
   )
 }
@@ -364,17 +417,12 @@ function PlanCard({
 
 function FamilyAccountCard() {
   return (
-    <div className="flex items-center justify-between rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 p-3">
+    <div className="flex items-center justify-between rounded-xl border-2 border-dashed border-cyan-200 bg-cyan-50 px-4 py-3">
       <div>
-        <span className="text-[11px] font-bold uppercase tracking-wide text-gray-400">Family Account</span>
-        <div className="mt-0.5 flex items-baseline gap-0.5">
-          <span className="text-lg font-bold text-gray-300">$100</span>
-          <span className="text-xs font-normal text-gray-300">/wk</span>
-        </div>
+        <span className="text-sm font-bold text-cyan-800">Family Account</span>
+        <p className="text-xs text-cyan-600">$100/wk · Platinum allowances shared across 2 accounts</p>
       </div>
-      <span className="rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-gray-400">
-        Details coming soon
-      </span>
+      <span className="rounded-full bg-cyan-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-cyan-600">Coming Soon</span>
     </div>
   )
 }
@@ -383,6 +431,7 @@ function FamilyAccountCard() {
 
 export default function MembershipsPage() {
   const [members, setMembers] = useState<Member[]>(INIT_MEMBERS)
+  const [creditUsage, setCreditUsage] = useState<Record<string, number>>(INIT_CREDIT_USAGE)
   const [filter, setFilter] = useState('all')
   const [search, setSearch] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -591,7 +640,7 @@ export default function MembershipsPage() {
             <table className="w-full min-w-[780px] border-collapse text-sm">
               <thead>
                 <tr style={{ backgroundColor: '#f8fafc' }}>
-                  {['Athlete', 'Plan', 'Status', 'Next Charge', 'Outstanding', 'Sessions', 'Started', ''].map((h, i) => (
+                  {['Athlete', 'Plan', 'Status', 'Next Charge', 'Outstanding', 'Weekly Credits', 'Started', ''].map((h, i) => (
                     <th
                       key={i}
                       className="border-b border-gray-100 px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wide text-gray-400"
@@ -638,7 +687,7 @@ export default function MembershipsPage() {
                             : <span className="text-gray-400">—</span>}
                         </td>
                         <td className="px-4 py-3">
-                          <SessionsBar sessions={m.sessionsThisMonth} plan={m.plan} />
+                          <CreditBar plan={m.plan} creditUsage={creditUsage} memberId={m.id} />
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-500">{fmtDate(m.started)}</td>
                         <td className="px-4 py-3 text-right">
@@ -661,7 +710,6 @@ export default function MembershipsPage() {
       {/* ── Detail panel ─────────────────────────────────────────────────────── */}
       {selectedMember && (() => {
         const m = selectedMember
-        const quota = PLAN_INFO[m.plan].monthlyQuota
         const sortedBilling = [...m.billing].sort((a, b) => b.date.localeCompare(a.date))
 
         return (
@@ -722,45 +770,37 @@ export default function MembershipsPage() {
                     </div>
                   </section>
 
-                  {/* Sessions */}
+                  {/* Weekly Credits */}
                   <section>
-                    <h3 className="mb-3 text-xs font-bold uppercase tracking-wider text-gray-400">Sessions This Month</h3>
-                    <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
-                      {quota ? (
-                        <>
-                          <div className="mb-2 flex items-end justify-between">
-                            <div>
-                              <span className="text-2xl font-bold text-gray-900">{m.sessionsThisMonth}</span>
-                              <span className="ml-1 text-sm text-gray-400">/ {quota} sessions</span>
-                            </div>
-                            <span className="text-sm font-semibold" style={{ color: ACCENT }}>
-                              {Math.round((m.sessionsThisMonth / quota) * 100)}%
-                            </span>
-                          </div>
-                          <div className="h-2 w-full rounded-full bg-gray-200">
-                            <div
-                              className="h-2 rounded-full transition-all"
-                              style={{
-                                width: `${Math.min((m.sessionsThisMonth / quota) * 100, 100)}%`,
-                                backgroundColor:
-                                  m.sessionsThisMonth / quota >= 1 ? '#ef4444'
-                                  : m.sessionsThisMonth / quota >= 0.8 ? '#f97316'
-                                  : ACCENT,
-                              }}
-                            />
-                          </div>
-                          <p className="mt-2 text-xs text-gray-400">
-                            {quota - m.sessionsThisMonth > 0
-                              ? `${quota - m.sessionsThisMonth} sessions remaining this month`
-                              : 'Monthly cap reached'}
-                          </p>
-                        </>
+                    <h3 className="mb-3 text-xs font-bold uppercase tracking-wider text-gray-400">Weekly Credits</h3>
+                    <div className="space-y-2 rounded-xl border border-gray-100 bg-gray-50 p-4">
+                      {PLAN_INFO[m.plan].comingSoon ? (
+                        <p className="text-xs text-gray-400 italic">Family plan — shared credit tracking coming soon.</p>
+                      ) : PLAN_INFO[m.plan].allowances.length === 0 ? (
+                        <p className="text-xs text-gray-400 italic">No credit allowances for this plan.</p>
                       ) : (
-                        <div>
-                          <span className="text-2xl font-bold text-gray-900">{m.sessionsThisMonth}</span>
-                          <span className="ml-2 text-sm text-gray-400">sessions this month (Unlimited)</span>
-                        </div>
+                        PLAN_INFO[m.plan].allowances.map(allowance => {
+                          const used = creditUsage[`${m.id}:${allowance.type}`] ?? 0
+                          const remaining = allowance.limit - used
+                          const pct = Math.min(used / allowance.limit, 1)
+                          const barColor = pct >= 1 ? '#ef4444' : pct >= 0.7 ? '#f97316' : ACCENT
+                          const atLimit = remaining <= 0
+                          return (
+                            <div key={allowance.type} className="space-y-1">
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="font-medium text-gray-700">{allowance.label}</span>
+                                <span className={atLimit ? 'font-semibold text-red-500' : 'text-gray-500'}>
+                                  {used}/{allowance.limit} used{atLimit ? ' · at limit' : remaining === 1 ? ' · 1 remaining' : ` · ${remaining} remaining`}
+                                </span>
+                              </div>
+                              <div className="h-1.5 w-full rounded-full bg-gray-200">
+                                <div className="h-1.5 rounded-full transition-all" style={{ width: `${pct * 100}%`, backgroundColor: barColor }} />
+                              </div>
+                            </div>
+                          )
+                        })
                       )}
+                      <p className="pt-1 text-[10px] text-gray-400">Resets every Monday at 12:00am</p>
                     </div>
                   </section>
 

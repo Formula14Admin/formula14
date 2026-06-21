@@ -25,10 +25,11 @@ const TOP_PAD  = 8                                // px above first slot so 6am 
 
 // ── Spaces ─────────────────────────────────────────────────────────────────────
 const SPACES = [
-  { id: 'primary',   label: 'Primary Station',  color: '#6BA3D6', light: '#e8f1fb' },
-  { id: 'secondary', label: 'Secondary Station', color: '#6BAD6B', light: '#edf5ed' },
-  { id: 'shooting',  label: 'Shooting Bay',      color: '#D4A520', light: '#fdf5e0' },
-  { id: 'meeting',   label: 'Meeting Room',      color: '#A06BD6', light: '#f0ebfb' },
+  { id: 'primary',     label: 'Primary Station',  color: '#6BA3D6', light: '#e8f1fb' },
+  { id: 'secondary',   label: 'Secondary Station', color: '#6BAD6B', light: '#edf5ed' },
+  { id: 'shooting',    label: 'Shooting Bay',      color: '#D4A520', light: '#fdf5e0' },
+  { id: 'meeting',     label: 'Meeting Room',      color: '#A06BD6', light: '#f0ebfb' },
+  { id: 'weight-room', label: 'Weight Room',       color: '#9B2335', light: '#fce8eb' },
 ] as const
 
 type SpaceId = typeof SPACES[number]['id']
@@ -51,10 +52,85 @@ const ALL_PROGRAM_NAMES = Object.values(PROGRAM_GROUPS).flat()
 
 // ── Session types per space ────────────────────────────────────────────────────
 const SESSION_TYPES: Record<SpaceId, string[]> = {
-  primary:   ['Casual Shooting', 'Individual Work Out', 'Small Group Session', 'Volume Shooting'],
-  secondary: ['Casual Shooting', 'Individual Work Out', 'Small Group Session', 'Volume Shooting'],
-  shooting:  ['Casual Shooting', 'Individual Work Out', 'Small Group Session', 'Team Training', 'Volume Shooting'],
-  meeting:   ['Coach Meeting', 'Film Review', 'Goal Setting', 'Meeting (General)', 'Parent Meeting', 'Player Meeting', 'Team Meeting'],
+  primary:       ['Casual Shooting', 'Individual Work Out', 'Skills Clinic', 'Small Group Session', 'Volume Shooting'],
+  secondary:     ['Casual Shooting', 'Individual Work Out', 'Skills Clinic', 'Small Group Session', 'Volume Shooting'],
+  shooting:      ['Casual Shooting', 'Individual Work Out', 'Shooting Machine Session', 'Small Group Session', 'Team Training', 'Volume Shooting'],
+  meeting:       ['Coach Meeting', 'Film Review', 'Film Room Session', 'Goal Setting', 'Meeting (General)', 'Parent Meeting', 'Player Meeting', 'Team Meeting'],
+  'weight-room': ['Weight Room Session'],
+}
+
+// ─── Credit System ────────────────────────────────────────────────────────────
+
+type CreditType = 'skills-clinic' | 'casual-shooting' | 'small-group' | 'shooting-machine' | 'weight-room' | 'film-room'
+
+const SESSION_TO_CREDIT: Partial<Record<string, CreditType>> = {
+  'Skills Clinic':            'skills-clinic',
+  'Casual Shooting':          'casual-shooting',
+  'Small Group Session':      'small-group',
+  'Shooting Machine Session': 'shooting-machine',
+  'Weight Room Session':      'weight-room',
+  'Film Room Session':        'film-room',
+}
+
+const CREDIT_CASUAL_PRICE: Record<CreditType, number> = {
+  'skills-clinic':    20,
+  'casual-shooting':  10,
+  'small-group':      40,
+  'shooting-machine': 15,
+  'weight-room':      15,
+  'film-room':        20,
+}
+
+const PLAN_ALLOWANCES: Record<string, Array<{ type: CreditType; label: string; limit: number }>> = {
+  bronze: [
+    { type: 'skills-clinic',    label: 'Skills Clinic',         limit: 1 },
+    { type: 'casual-shooting',  label: 'Casual Shooting',       limit: 1 },
+  ],
+  silver: [
+    { type: 'small-group',      label: 'Small Group Session',   limit: 1 },
+    { type: 'casual-shooting',  label: 'Casual Shooting',       limit: 2 },
+    { type: 'shooting-machine', label: 'Shooting Machine',      limit: 2 },
+  ],
+  gold: [
+    { type: 'small-group',      label: 'Small Group Session',   limit: 2 },
+    { type: 'casual-shooting',  label: 'Casual Shooting',       limit: 3 },
+    { type: 'shooting-machine', label: 'Shooting Machine',      limit: 3 },
+    { type: 'weight-room',      label: 'Weight Room',           limit: 2 },
+  ],
+  platinum: [
+    { type: 'small-group',      label: 'Small Group Session',   limit: 3 },
+    { type: 'casual-shooting',  label: 'Casual Shooting',       limit: 4 },
+    { type: 'shooting-machine', label: 'Shooting Machine',      limit: 4 },
+    { type: 'weight-room',      label: 'Weight Room',           limit: 3 },
+    { type: 'film-room',        label: 'Film Room',             limit: 1 },
+  ],
+  family: [
+    { type: 'small-group',      label: 'Small Group Session',   limit: 3 },
+    { type: 'casual-shooting',  label: 'Casual Shooting',       limit: 4 },
+    { type: 'shooting-machine', label: 'Shooting Machine',      limit: 4 },
+    { type: 'weight-room',      label: 'Weight Room',           limit: 3 },
+    { type: 'film-room',        label: 'Film Room',             limit: 1 },
+  ],
+}
+
+// Athlete name → membership plan key (for credit lookup in booking modal)
+const MEMBER_PLANS: Record<string, string> = {
+  'Liam Carter':     'bronze',
+  'Jordan Williams': 'silver',
+  'Aisha Thompson':  'gold',
+  'Marcus Davies':   'gold',
+  'Kai Okafor':      'bronze',
+  'Tyler Ross':      'silver',
+  'Priya Mehta':     'silver',
+  'Sam Liu':         'platinum',
+  'Zara Obi':        'bronze',
+}
+
+function getMondayKey(date: Date): string {
+  const d = new Date(date)
+  const day = d.getDay()
+  d.setDate(d.getDate() - (day === 0 ? 6 : day - 1))
+  return d.toISOString().slice(0, 10)
 }
 
 // Shooting Machine Rental: price by duration (minutes)
@@ -251,6 +327,20 @@ export default function BookingsPage() {
   const today = ds(new Date())
 
   const [bookings,   setBookings]   = useState<Booking[]>(() => makeSamples(today))
+  const [creditUsage, setCreditUsage] = useState<Record<string, number>>(() => {
+    const wk = getMondayKey(new Date())
+    return {
+      [`Jordan Williams:small-group:${wk}`]: 1,
+      [`Aisha Thompson:small-group:${wk}`]: 1,
+      [`Aisha Thompson:casual-shooting:${wk}`]: 2,
+      [`Sam Liu:small-group:${wk}`]: 2,
+      [`Sam Liu:casual-shooting:${wk}`]: 3,
+      [`Sam Liu:shooting-machine:${wk}`]: 2,
+      [`Tyler Ross:casual-shooting:${wk}`]: 1,
+      [`Liam Carter:casual-shooting:${wk}`]: 1,
+      [`Zara Obi:casual-shooting:${wk}`]: 1,
+    }
+  })
   const [anchor,     setAnchor]     = useState<Date>(() => new Date())
   const [view,       setView]       = useState<'day' | 'week'>('day')
   const [modal,      setModal]      = useState<Modal>(null)
@@ -354,6 +444,20 @@ export default function BookingsPage() {
     })
     setModal(null)
     if (bumpMsg) showToast(bumpMsg)
+
+    // Track credit usage for new member bookings
+    const wk = getMondayKey(new Date())
+    items.forEach(item => {
+      if (item.id) return  // skip edits
+      if (item.bookingType !== 'member') return
+      const creditType = SESSION_TO_CREDIT[item.sessionType]
+      if (!creditType) return
+      item.athletes.forEach(athleteName => {
+        if (!MEMBER_PLANS[athleteName]) return
+        const key = `${athleteName}:${creditType}:${wk}`
+        setCreditUsage(prev => ({ ...prev, [key]: (prev[key] ?? 0) + 1 }))
+      })
+    })
   }
 
   function handleDelete(id: string) {
@@ -640,6 +744,7 @@ export default function BookingsPage() {
           onSaveFrom={handleSaveFrom}
           onEdit={b => setModal({ kind: 'edit', booking: b })}
           onEditSeries={b => setModal({ kind: 'editSeries', booking: b })}
+          creditUsage={creditUsage}
         />
       )}
 
@@ -1230,7 +1335,7 @@ function SelectPicker({ value, onChange, options, accentColor = '#6BA3D6', getPa
 
 // ── Booking Modal ──────────────────────────────────────────────────────────────
 function BookingModal({
-  modal, today, onClose, onSave, onDelete, onDeleteFrom, onSaveFrom, onEdit, onEditSeries,
+  modal, today, onClose, onSave, onDelete, onDeleteFrom, onSaveFrom, onEdit, onEditSeries, creditUsage,
 }: {
   modal: NonNullable<Modal>
   today: string
@@ -1241,6 +1346,7 @@ function BookingModal({
   onSaveFrom:   (fromDate: string, seriesId: string, updates: Omit<Booking, 'id' | 'date' | 'seriesId'>) => void
   onEdit: (b: Booking) => void
   onEditSeries: (b: Booking) => void
+  creditUsage: Record<string, number>
 }) {
   const isView          = modal.kind === 'view'
   const editSeriesFuture = modal.kind === 'editSeries'
@@ -1308,7 +1414,8 @@ function BookingModal({
 
   function handleSpaceChange(id: SpaceId) {
     setSpaceId(id)
-    setSessionType('')
+    const types = SESSION_TYPES[id]
+    setSessionType(types.length === 1 ? types[0] : '')
   }
 
   function toggleAthlete(name: string) {
@@ -1733,6 +1840,57 @@ function BookingModal({
                       </div>
                     </div>
                   )}
+
+                  {/* Credit status — member bookings with a credit-trackable session type */}
+                  {bookingType === 'member' && (() => {
+                    const creditType = SESSION_TO_CREDIT[sessionType]
+                    if (!creditType) return null
+                    const wk = getMondayKey(new Date())
+                    const memberAthletes = athletes.filter(name => MEMBER_PLANS[name])
+                    if (memberAthletes.length === 0) return null
+                    return (
+                      <div className="space-y-2">
+                        {memberAthletes.map(name => {
+                          const plan = MEMBER_PLANS[name]
+                          const allowance = PLAN_ALLOWANCES[plan]?.find(a => a.type === creditType)
+                          if (!allowance) return null
+                          const used = creditUsage[`${name}:${creditType}:${wk}`] ?? 0
+                          const remaining = allowance.limit - used
+                          const isExtra = remaining <= 0
+                          const overagePrice = CREDIT_CASUAL_PRICE[creditType]
+                          return (
+                            <div
+                              key={name}
+                              className="flex items-center justify-between rounded-lg border px-3 py-2"
+                              style={isExtra
+                                ? { backgroundColor: '#fff7ed', borderColor: '#fed7aa' }
+                                : remaining === 1
+                                ? { backgroundColor: '#fefce8', borderColor: '#fef08a' }
+                                : { backgroundColor: '#f0fdf4', borderColor: '#bbf7d0' }}
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium text-gray-800">{name}</span>
+                                <span className="text-xs text-gray-500">
+                                  {isExtra
+                                    ? `${allowance.label} credits exhausted`
+                                    : `${remaining} of ${allowance.limit} ${allowance.label} credit${allowance.limit !== 1 ? 's' : ''} remaining`}
+                                </span>
+                              </div>
+                              {isExtra ? (
+                                <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[11px] font-semibold text-orange-700">
+                                  Extra — ${overagePrice} charged
+                                </span>
+                              ) : remaining === allowance.limit ? (
+                                <span className="rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-700">Full credit</span>
+                              ) : (
+                                <span className="rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-700">{remaining} left</span>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )
+                  })()}
 
                   {/* Row 3: Coach | Repeat */}
                   <div className="grid grid-cols-2 gap-3">

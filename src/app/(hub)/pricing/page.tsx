@@ -25,7 +25,7 @@ import {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type SessionType = 'small-group' | 'individual' | 'team-training' | 'casual-shooting' | 'volume-shooting' | 'development-programs' | 'social-programs'
+type SessionType = 'small-group' | 'individual' | 'team-training' | 'casual-shooting' | 'volume-shooting' | 'development-programs' | 'social-programs' | 'weight-room-session' | 'film-room-session' | 'shooting-machine-session'
 type AttendanceStatus = 'attended' | 'no-show' | 'excused' | null
 type PaymentStatus = 'paid' | 'payment-required' | 'overdue' | 'waived' | 'refunded' | 'pending'
 type PaymentMethod = 'automatic' | 'pay-at-venue'
@@ -78,23 +78,29 @@ const ACCENT = '#6BA3D6'
 const DEMO_NOW = new Date('2026-06-20T11:00:00')
 
 const SESSION_TYPE_LABELS: Record<SessionType, string> = {
-  'small-group':          'Small Group Session',
-  'individual':           'Individual Work Out',
-  'team-training':        'Team Training',
-  'casual-shooting':      'Casual Shooting',
-  'volume-shooting':      'Volume Shooting',
-  'development-programs': 'Development Programs',
-  'social-programs':      'Social Programs',
+  'small-group':            'Small Group Session',
+  'individual':             'Individual Work Out',
+  'team-training':          'Team Training',
+  'casual-shooting':        'Casual Shooting',
+  'volume-shooting':        'Volume Shooting',
+  'development-programs':   'Development Programs',
+  'social-programs':        'Social Programs',
+  'weight-room-session':    'Weight Room Session',
+  'film-room-session':      'Film Room Session',
+  'shooting-machine-session': 'Shooting Machine Session',
 }
 
 const SESSION_TYPE_COLORS: Record<SessionType, { bg: string; color: string }> = {
-  'small-group':          { bg: '#dbeafe', color: '#1d4ed8' },
-  'individual':           { bg: '#dcfce7', color: '#15803d' },
-  'team-training':        { bg: '#ede9fe', color: '#6d28d9' },
-  'casual-shooting':      { bg: '#fef3c7', color: '#b45309' },
-  'volume-shooting':      { bg: '#fee2e2', color: '#b91c1c' },
-  'development-programs': { bg: '#ccfbf1', color: '#0f766e' },
-  'social-programs':      { bg: '#fce7f3', color: '#be185d' },
+  'small-group':            { bg: '#dbeafe', color: '#1d4ed8' },
+  'individual':             { bg: '#dcfce7', color: '#15803d' },
+  'team-training':          { bg: '#ede9fe', color: '#6d28d9' },
+  'casual-shooting':        { bg: '#fef3c7', color: '#b45309' },
+  'volume-shooting':        { bg: '#fee2e2', color: '#b91c1c' },
+  'development-programs':   { bg: '#ccfbf1', color: '#0f766e' },
+  'social-programs':        { bg: '#fce7f3', color: '#be185d' },
+  'weight-room-session':    { bg: '#fce8eb', color: '#9B2335' },
+  'film-room-session':      { bg: '#f0ebfb', color: '#A06BD6' },
+  'shooting-machine-session': { bg: '#fdf5e0', color: '#D4A520' },
 }
 
 const PAY_STATUS: Record<PaymentStatus, { bg: string; color: string; label: string }> = {
@@ -169,6 +175,24 @@ const INIT_PRICING: SessionPricingConfig[] = [
   {
     sessionType: 'social-programs',
     tiers: [], // program-based pricing — see PROGRAM_PRICING below
+  },
+  {
+    sessionType: 'weight-room-session',
+    tiers: [
+      { id: 'tw1', min: 1, max: null, pricePerAthlete: 15 },
+    ],
+  },
+  {
+    sessionType: 'film-room-session',
+    tiers: [
+      { id: 'tf1', min: 1, max: null, pricePerAthlete: 20 },
+    ],
+  },
+  {
+    sessionType: 'shooting-machine-session',
+    tiers: [
+      { id: 'tsm1', min: 1, max: null, pricePerAthlete: 15 },
+    ],
   },
 ]
 
