@@ -15,10 +15,15 @@ import {
 type CoachId = 'matt' | 'jade'
 type DayOfWeek = 0 | 1 | 2 | 3 | 4 | 5 | 6
 
-interface DaySchedule {
-  available: boolean
+interface TimeWindow {
+  id: string
   startMins: number
   endMins: number
+}
+
+interface DaySchedule {
+  available: boolean
+  windows: TimeWindow[]
 }
 
 interface CoachSchedule {
@@ -84,25 +89,26 @@ const INIT_SCHEDULES: Record<CoachId, CoachSchedule> = {
   matt: {
     coachId: 'matt',
     days: {
-      0: { available: true,  startMins: 540, endMins: 780  },
-      1: { available: true,  startMins: 900, endMins: 1200 },
-      2: { available: true,  startMins: 540, endMins: 780  },
-      3: { available: true,  startMins: 900, endMins: 1200 },
-      4: { available: true,  startMins: 540, endMins: 780  },
-      5: { available: true,  startMins: 480, endMins: 720  },
-      6: { available: false, startMins: 540, endMins: 780  },
+      // Mon: 6am–9am then 4pm–10pm (two windows)
+      0: { available: true,  windows: [{ id: 'm0a', startMins: 360, endMins: 540 }, { id: 'm0b', startMins: 960, endMins: 1320 }] },
+      1: { available: true,  windows: [{ id: 'm1a', startMins: 900, endMins: 1200 }] },
+      2: { available: true,  windows: [{ id: 'm2a', startMins: 540, endMins: 780  }] },
+      3: { available: true,  windows: [{ id: 'm3a', startMins: 900, endMins: 1200 }] },
+      4: { available: true,  windows: [{ id: 'm4a', startMins: 540, endMins: 780  }] },
+      5: { available: true,  windows: [{ id: 'm5a', startMins: 480, endMins: 720  }] },
+      6: { available: false, windows: [{ id: 'm6a', startMins: 540, endMins: 780  }] },
     },
   },
   jade: {
     coachId: 'jade',
     days: {
-      0: { available: false, startMins: 600, endMins: 840  },
-      1: { available: true,  startMins: 600, endMins: 840  },
-      2: { available: true,  startMins: 960, endMins: 1200 },
-      3: { available: true,  startMins: 600, endMins: 840  },
-      4: { available: true,  startMins: 960, endMins: 1200 },
-      5: { available: true,  startMins: 540, endMins: 780  },
-      6: { available: false, startMins: 600, endMins: 840  },
+      0: { available: false, windows: [{ id: 'j0a', startMins: 600, endMins: 840  }] },
+      1: { available: true,  windows: [{ id: 'j1a', startMins: 600, endMins: 840  }] },
+      2: { available: true,  windows: [{ id: 'j2a', startMins: 960, endMins: 1200 }] },
+      3: { available: true,  windows: [{ id: 'j3a', startMins: 600, endMins: 840  }] },
+      4: { available: true,  windows: [{ id: 'j4a', startMins: 960, endMins: 1200 }] },
+      5: { available: true,  windows: [{ id: 'j5a', startMins: 540, endMins: 780  }] },
+      6: { available: false, windows: [{ id: 'j6a', startMins: 600, endMins: 840  }] },
     },
   },
 }
@@ -211,17 +217,60 @@ export default function AvailabilityPage() {
 
   // ── Schedule updates ──────────────────────────────────────────────────────
 
-  function updateDay(dow: DayOfWeek, patch: Partial<DaySchedule>) {
+  function setDayAvailable(dow: DayOfWeek, available: boolean) {
     setSchedules((prev) => ({
       ...prev,
       [activeCoach]: {
         ...prev[activeCoach],
-        days: {
-          ...prev[activeCoach].days,
-          [dow]: { ...prev[activeCoach].days[dow], ...patch },
-        },
+        days: { ...prev[activeCoach].days, [dow]: { ...prev[activeCoach].days[dow], available } },
       },
     }))
+  }
+
+  function addWindow(dow: DayOfWeek) {
+    setSchedules((prev) => {
+      const day = prev[activeCoach].days[dow]
+      const last = day.windows[day.windows.length - 1]
+      const start = last ? Math.min(last.endMins, 1290) : 540
+      const end   = Math.min(start + 60, 1320)
+      const win: TimeWindow = { id: uid(), startMins: start, endMins: end }
+      return {
+        ...prev,
+        [activeCoach]: {
+          ...prev[activeCoach],
+          days: { ...prev[activeCoach].days, [dow]: { ...day, windows: [...day.windows, win] } },
+        },
+      }
+    })
+  }
+
+  function removeWindow(dow: DayOfWeek, winId: string) {
+    setSchedules((prev) => {
+      const day = prev[activeCoach].days[dow]
+      return {
+        ...prev,
+        [activeCoach]: {
+          ...prev[activeCoach],
+          days: { ...prev[activeCoach].days, [dow]: { ...day, windows: day.windows.filter((w) => w.id !== winId) } },
+        },
+      }
+    })
+  }
+
+  function updateWindow(dow: DayOfWeek, winId: string, patch: Partial<{ startMins: number; endMins: number }>) {
+    setSchedules((prev) => {
+      const day = prev[activeCoach].days[dow]
+      return {
+        ...prev,
+        [activeCoach]: {
+          ...prev[activeCoach],
+          days: {
+            ...prev[activeCoach].days,
+            [dow]: { ...day, windows: day.windows.map((w) => w.id === winId ? { ...w, ...patch } : w) },
+          },
+        },
+      }
+    })
   }
 
   // ── Override CRUD ─────────────────────────────────────────────────────────
@@ -266,7 +315,9 @@ export default function AvailabilityPage() {
       // Collect time windows
       const windows: { start: number; end: number }[] = []
       if (!isBlocked && daySchedule.available) {
-        windows.push({ start: daySchedule.startMins, end: daySchedule.endMins })
+        for (const win of daySchedule.windows) {
+          windows.push({ start: win.startMins, end: win.endMins })
+        }
       }
       for (const ex of extraOvs) {
         if (ex.startMins !== undefined && ex.endMins !== undefined) {
@@ -326,15 +377,14 @@ export default function AvailabilityPage() {
         const isBlocked = dateOvs.some((o) => o.type === 'block')
         const extraOvs = dateOvs.filter((o) => o.type === 'extra')
 
-        if (!isBlocked && sched.days[dow].available) {
-          const s = sched.days[dow].startMins
-          const e = sched.days[dow].endMins
-          const topPct = ((s - CAL_START) / CAL_TOTAL) * 100
-          const heightPct = ((e - s) / CAL_TOTAL) * 100
-          blocks.push({ coach: cid, topPct, heightPct, color, label: `${minsToLabel(s)}–${minsToLabel(e)}` })
-        } else if (isBlocked) {
-          // Show a blocked indicator
+        if (isBlocked) {
           blocks.push({ coach: cid, topPct: 0, heightPct: 100, color: '#ef4444', label: 'Blocked' })
+        } else if (sched.days[dow].available) {
+          for (const win of sched.days[dow].windows) {
+            const topPct    = ((win.startMins - CAL_START) / CAL_TOTAL) * 100
+            const heightPct = ((win.endMins - win.startMins) / CAL_TOTAL) * 100
+            blocks.push({ coach: cid, topPct, heightPct, color, label: `${minsToLabel(win.startMins)}–${minsToLabel(win.endMins)}` })
+          }
         }
 
         for (const ex of extraOvs) {
@@ -412,7 +462,7 @@ export default function AvailabilityPage() {
                   }}
                 >
                   <span className="text-xs font-bold text-gray-600">{DAYS_FULL[dow].slice(0, 3)}</span>
-                  <Toggle on={day.available} onChange={(v) => updateDay(dow, { available: v })} />
+                  <Toggle on={day.available} onChange={(v) => setDayAvailable(dow, v)} />
                   <span
                     className="text-[10px] font-semibold"
                     style={{ color: day.available ? coachColor : '#9ca3af' }}
@@ -420,25 +470,55 @@ export default function AvailabilityPage() {
                     {day.available ? 'Available' : 'Off'}
                   </span>
                   {day.available && (
-                    <div className="flex flex-col gap-1 w-full">
-                      <select
-                        value={day.startMins}
-                        onChange={(e) => updateDay(dow, { startMins: Number(e.target.value) })}
-                        className="w-full rounded-md border border-gray-200 px-1 py-1 text-[11px] text-gray-700 outline-none focus:border-[#6BA3D6]"
+                    <div className="flex flex-col gap-2 w-full">
+                      {day.windows.map((win, wi) => (
+                        <div key={win.id} className="w-full">
+                          {wi > 0 && (
+                            <div className="mb-1 text-center text-[9px] font-bold uppercase tracking-wide text-gray-400">+ also</div>
+                          )}
+                          <div className="flex items-start gap-0.5">
+                            <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+                              <select
+                                value={win.startMins}
+                                onChange={(e) => {
+                                  const v = Number(e.target.value)
+                                  updateWindow(dow, win.id, { startMins: v, ...(win.endMins <= v ? { endMins: Math.min(v + 30, 1320) } : {}) })
+                                }}
+                                className="w-full rounded-md border border-gray-200 px-1 py-1 text-[11px] text-gray-700 outline-none focus:border-[#6BA3D6]"
+                              >
+                                {TIME_OPTIONS.filter((o) => o.mins < 1320).map((o) => (
+                                  <option key={o.mins} value={o.mins}>{o.label}</option>
+                                ))}
+                              </select>
+                              <select
+                                value={win.endMins}
+                                onChange={(e) => updateWindow(dow, win.id, { endMins: Number(e.target.value) })}
+                                className="w-full rounded-md border border-gray-200 px-1 py-1 text-[11px] text-gray-700 outline-none focus:border-[#6BA3D6]"
+                              >
+                                {TIME_OPTIONS.filter((o) => o.mins > win.startMins).map((o) => (
+                                  <option key={o.mins} value={o.mins}>{o.label}</option>
+                                ))}
+                              </select>
+                            </div>
+                            {day.windows.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => removeWindow(dow, win.id)}
+                                className="mt-0.5 shrink-0 rounded p-0.5 text-gray-300 transition hover:bg-red-50 hover:text-red-400"
+                              >
+                                <IconX size={11} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => addWindow(dow)}
+                        className="flex items-center justify-center gap-1 w-full rounded-md border border-dashed border-gray-300 py-1 text-[10px] font-semibold text-gray-400 transition hover:border-gray-400 hover:text-gray-500"
                       >
-                        {TIME_OPTIONS.filter((o) => o.mins < day.endMins).map((o) => (
-                          <option key={o.mins} value={o.mins}>{o.label}</option>
-                        ))}
-                      </select>
-                      <select
-                        value={day.endMins}
-                        onChange={(e) => updateDay(dow, { endMins: Number(e.target.value) })}
-                        className="w-full rounded-md border border-gray-200 px-1 py-1 text-[11px] text-gray-700 outline-none focus:border-[#6BA3D6]"
-                      >
-                        {TIME_OPTIONS.filter((o) => o.mins > day.startMins).map((o) => (
-                          <option key={o.mins} value={o.mins}>{o.label}</option>
-                        ))}
-                      </select>
+                        <IconPlus size={10} /> Add
+                      </button>
                     </div>
                   )}
                 </div>
