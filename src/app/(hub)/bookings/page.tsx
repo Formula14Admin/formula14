@@ -347,6 +347,7 @@ export default function BookingsPage() {
   const [nowY,       setNowY]       = useState(() => toY(nowMins()))
   const [hoverInfo,  setHoverInfo]  = useState<HoverInfo>(null)
   const [toast,      setToast]      = useState<string | null>(null)
+  const [conflictMsg, setConflictMsg] = useState<string | null>(null)
 
   const gridRef = useRef<HTMLDivElement>(null)
 
@@ -399,6 +400,25 @@ export default function BookingsPage() {
   }
 
   function handleSave(items: (Omit<Booking, 'id'> & { id?: string })[]) {
+    // Double-booking check — runs against current bookings before any state updates
+    for (const data of items) {
+      const sp = SPACES.find(s => s.id === data.spaceId)!
+      for (const existing of bookings) {
+        if (existing.spaceId !== data.spaceId) continue
+        if (existing.date !== data.date) continue
+        if (data.id && existing.id === data.id) continue // skip self when editing
+        const newEnd = data.startMins + data.duration
+        const exEnd  = existing.startMins + existing.duration
+        if (data.startMins >= exEnd || newEnd <= existing.startMins) continue // no time overlap
+        if (data.sessionType === 'Casual Shooting' && existing.sessionType === 'Casual Shooting') continue // CS shares space
+        const dl = parse(data.date).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })
+        setConflictMsg(
+          `${sp.label} is already booked on ${dl} from ${fmtTime(existing.startMins)} to ${fmtTime(exEnd)} (${existing.sessionType}). Please choose a different time or space.`
+        )
+        return // leave modal open so the user can adjust
+      }
+    }
+
     let bumpMsg: string | null = null
     setBookings(prev => {
       let next = [...prev]
@@ -746,6 +766,30 @@ export default function BookingsPage() {
           onEditSeries={b => setModal({ kind: 'editSeries', booking: b })}
           creditUsage={creditUsage}
         />
+      )}
+
+      {/* ── Conflict popup ── */}
+      {conflictMsg && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
+            <div className="mb-4 flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-100">
+                <IconAlertCircle size={20} className="text-red-500" />
+              </div>
+              <div>
+                <h3 className="font-bold text-gray-900">Space Already Booked</h3>
+                <p className="mt-1 text-sm text-gray-600">{conflictMsg}</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setConflictMsg(null)}
+              className="w-full rounded-lg py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
+              style={{ backgroundColor: '#ef4444' }}
+            >
+              OK — Go Back
+            </button>
+          </div>
+        </div>
       )}
 
       {/* ── Toast ── */}
