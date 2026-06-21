@@ -8,12 +8,17 @@ import {
   IconX,
   IconTrash,
   IconEdit,
+  IconPencil,
   IconPlus,
   IconCheck,
   IconCalendar,
+  IconCalendarTime,
   IconRepeat,
   IconInfoCircle,
   IconAlertCircle,
+  IconUsers,
+  IconBuilding,
+  IconClipboardList,
 } from '@tabler/icons-react'
 
 // ── Grid constants ─────────────────────────────────────────────────────────────
@@ -185,6 +190,161 @@ type Booking = {
   bookingType: 'member' | 'casual' | 'unavailable' | 'program'
   seriesId?: string
   memberTier?: MemberTier
+  adminOverride?: boolean
+  capacity?: number       // for Small Group Session
+  joinRequests?: JoinRequest[]
+}
+
+// ── Join Requests ──────────────────────────────────────────────────────────────
+type JoinRequest = {
+  id: string
+  bookingId: string
+  athleteName: string
+  requestedAt: string  // e.g. '2026-06-20'
+  status: 'pending' | 'accepted' | 'declined'
+}
+
+// ── Coach Availability (merged from availability/page.tsx) ─────────────────────
+type CoachId = 'matt' | 'jade'
+type DayOfWeek = 0 | 1 | 2 | 3 | 4 | 5 | 6
+
+interface TimeWindow {
+  id: string
+  startMins: number
+  endMins: number
+  sessionTypes: string[]  // which coach session types are enabled for this window
+}
+
+interface DaySchedule {
+  available: boolean
+  windows: TimeWindow[]
+}
+
+interface CoachSchedule {
+  coachId: CoachId
+  days: Record<DayOfWeek, DaySchedule>
+}
+
+interface DateOverride {
+  id: string
+  coachId: CoachId
+  date: string
+  type: 'block' | 'extra'
+  startMins?: number
+  endMins?: number
+  note: string
+}
+
+// ── Facility Availability ──────────────────────────────────────────────────────
+interface FacilityWindow {
+  id: string
+  startMins: number
+  endMins: number
+  sessionTypes: string[]  // subset of FACILITY_SESSION_TYPES
+}
+
+interface FacilityDaySchedule {
+  available: boolean
+  windows: FacilityWindow[]
+}
+
+type FacilitySchedule = Record<DayOfWeek, FacilityDaySchedule>
+
+// ── Availability constants ─────────────────────────────────────────────────────
+// Coach session types that require explicit coach enablement
+const COACH_SESSION_TYPES = [
+  'Individual Work Out',
+  'Small Group Session',
+  'Skills Clinic',
+  'Volume Shooting',
+]
+
+// Self-serve facility session types
+const FACILITY_SESSION_TYPES = ['Casual Shooting', 'Shooting Machine Session', 'Weight Room Session']
+
+const DAYS_LABEL: Record<DayOfWeek, string> = {
+  0: 'Mon', 1: 'Tue', 2: 'Wed', 3: 'Thu', 4: 'Fri', 5: 'Sat', 6: 'Sun',
+}
+const DAYS_FULL: Record<DayOfWeek, string> = {
+  0: 'Monday', 1: 'Tuesday', 2: 'Wednesday', 3: 'Thursday',
+  4: 'Friday', 5: 'Saturday', 6: 'Sunday',
+}
+
+// Time options every 30 min 6am–10pm (for availability selects)
+const AV_TIME_OPTIONS: { label: string; mins: number }[] = []
+for (let m = 360; m <= 1320; m += 30) {
+  const h = Math.floor(m / 60)
+  const min = m % 60
+  const ampm = h >= 12 ? 'pm' : 'am'
+  const h12 = h > 12 ? h - 12 : h === 0 ? 12 : h
+  AV_TIME_OPTIONS.push({ label: `${h12}:${min.toString().padStart(2, '0')}${ampm}`, mins: m })
+}
+
+const ACCENT_MATT = '#6BA3D6'
+const ACCENT_JADE = '#6BAD6B'
+
+// ── Availability initial data ──────────────────────────────────────────────────
+const INIT_COACH_SCHEDULES: Record<CoachId, CoachSchedule> = {
+  matt: {
+    coachId: 'matt',
+    days: {
+      0: { available: true,  windows: [
+        { id: 'm0a', startMins: 360, endMins: 540, sessionTypes: ['Individual Work Out', 'Small Group Session'] },
+        { id: 'm0b', startMins: 960, endMins: 1320, sessionTypes: ['Individual Work Out', 'Small Group Session', 'Skills Clinic'] }
+      ]},
+      1: { available: true,  windows: [{ id: 'm1a', startMins: 900, endMins: 1200, sessionTypes: ['Individual Work Out', 'Small Group Session'] }] },
+      2: { available: true,  windows: [{ id: 'm2a', startMins: 540, endMins: 780,  sessionTypes: ['Individual Work Out', 'Skills Clinic'] }] },
+      3: { available: true,  windows: [{ id: 'm3a', startMins: 900, endMins: 1200, sessionTypes: ['Individual Work Out', 'Small Group Session'] }] },
+      4: { available: true,  windows: [{ id: 'm4a', startMins: 540, endMins: 780,  sessionTypes: ['Individual Work Out'] }] },
+      5: { available: true,  windows: [{ id: 'm5a', startMins: 480, endMins: 720,  sessionTypes: ['Individual Work Out', 'Small Group Session', 'Skills Clinic', 'Volume Shooting'] }] },
+      6: { available: false, windows: [{ id: 'm6a', startMins: 540, endMins: 780,  sessionTypes: [] }] },
+    },
+  },
+  jade: {
+    coachId: 'jade',
+    days: {
+      0: { available: false, windows: [{ id: 'j0a', startMins: 600, endMins: 840,  sessionTypes: [] }] },
+      1: { available: true,  windows: [{ id: 'j1a', startMins: 600, endMins: 840,  sessionTypes: ['Individual Work Out', 'Small Group Session'] }] },
+      2: { available: true,  windows: [{ id: 'j2a', startMins: 960, endMins: 1200, sessionTypes: ['Individual Work Out', 'Skills Clinic'] }] },
+      3: { available: true,  windows: [{ id: 'j3a', startMins: 600, endMins: 840,  sessionTypes: ['Individual Work Out', 'Small Group Session'] }] },
+      4: { available: true,  windows: [{ id: 'j4a', startMins: 960, endMins: 1200, sessionTypes: ['Small Group Session', 'Volume Shooting'] }] },
+      5: { available: true,  windows: [{ id: 'j5a', startMins: 540, endMins: 780,  sessionTypes: ['Individual Work Out', 'Small Group Session', 'Skills Clinic'] }] },
+      6: { available: false, windows: [{ id: 'j6a', startMins: 600, endMins: 840,  sessionTypes: [] }] },
+    },
+  },
+}
+
+const INIT_DATE_OVERRIDES: DateOverride[] = [
+  { id: 'ov1', coachId: 'matt', date: '2026-06-23', type: 'block', note: 'Public holiday — unavailable' },
+  { id: 'ov2', coachId: 'jade', date: '2026-06-25', type: 'extra', startMins: 780, endMins: 1020, note: 'Extra availability — filling in for Matt' },
+]
+
+const INIT_FACILITY_SCHEDULE: FacilitySchedule = {
+  0: { available: true,  windows: [{ id: 'f0a', startMins: 360, endMins: 1320, sessionTypes: ['Casual Shooting', 'Shooting Machine Session', 'Weight Room Session'] }] },
+  1: { available: true,  windows: [{ id: 'f1a', startMins: 360, endMins: 1320, sessionTypes: ['Casual Shooting', 'Shooting Machine Session', 'Weight Room Session'] }] },
+  2: { available: true,  windows: [{ id: 'f2a', startMins: 360, endMins: 1320, sessionTypes: ['Casual Shooting', 'Shooting Machine Session', 'Weight Room Session'] }] },
+  3: { available: true,  windows: [{ id: 'f3a', startMins: 360, endMins: 1320, sessionTypes: ['Casual Shooting', 'Shooting Machine Session', 'Weight Room Session'] }] },
+  4: { available: true,  windows: [{ id: 'f4a', startMins: 360, endMins: 1320, sessionTypes: ['Casual Shooting', 'Shooting Machine Session', 'Weight Room Session'] }] },
+  5: { available: true,  windows: [{ id: 'f5a', startMins: 480, endMins: 1200, sessionTypes: ['Casual Shooting', 'Shooting Machine Session'] }] },
+  6: { available: false, windows: [{ id: 'f6a', startMins: 540, endMins: 780,  sessionTypes: [] }] },
+}
+
+// ── Availability helpers ───────────────────────────────────────────────────────
+function jsDayToOurs(jsDay: number): DayOfWeek {
+  return ((jsDay + 6) % 7) as DayOfWeek
+}
+
+function minsToAvLabel(mins: number): string {
+  const h = Math.floor(mins / 60)
+  const m = mins % 60
+  const ampm = h >= 12 ? 'pm' : 'am'
+  const h12 = h > 12 ? h - 12 : h === 0 ? 12 : h
+  return `${h12}:${m.toString().padStart(2, '0')}${ampm}`
+}
+
+function dateLabel(dateStr: string): string {
+  const d = new Date(dateStr + 'T00:00:00')
+  return d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
 type CasualAthleteEntry = {
@@ -293,10 +453,15 @@ function makeSamples(today: string): Booking[] {
   const d2f = ds(shift(dt,  2))
   return [
     { id:'b1',  date:today, spaceId:'primary',   startMins:7*60,     duration:60,  sessionType:'Individual Work Out', athletes:['Liam Carter'],                                              coach:'matt', bookingType:'member' },
-    { id:'b2',  date:today, spaceId:'primary',   startMins:8*60+30,  duration:90,  sessionType:'Small Group Session', athletes:['Jordan Williams','Aisha Thompson','Devon Knox'],             coach:'matt', bookingType:'member' },
+    { id:'b2',  date:today, spaceId:'primary',   startMins:8*60+30,  duration:90,  sessionType:'Small Group Session', athletes:['Jordan Williams','Aisha Thompson','Devon Knox'],             coach:'matt', bookingType:'member',
+      capacity: 6,
+      joinRequests: [
+        { id: 'jr1', bookingId: 'b2', athleteName: 'Kai Okafor', requestedAt: today, status: 'pending' },
+        { id: 'jr2', bookingId: 'b2', athleteName: 'Zara Obi', requestedAt: today, status: 'pending' },
+      ] },
     { id:'b3',  date:today, spaceId:'secondary', startMins:9*60,     duration:120, sessionType:'Team Training',       athletes:['Liam Carter','Jordan Williams','Marcus Davies','Priya Mehta','Tyler Ross'], coach:'jade', bookingType:'member' },
     { id:'b4',  date:today, spaceId:'primary',   startMins:11*60,    duration:60,  sessionType:'Domestic Academy',    athletes:[],                                                           coach:'matt', bookingType:'program' },
-    { id:'b5',  date:today, spaceId:'secondary', startMins:14*60,    duration:90,  sessionType:'Small Group Session', athletes:['Aisha Thompson','Kai Okafor','Sam Liu'],                     coach:'jade', bookingType:'member' },
+    { id:'b5',  date:today, spaceId:'secondary', startMins:14*60,    duration:90,  sessionType:'Small Group Session', athletes:['Aisha Thompson','Kai Okafor','Sam Liu'],                     coach:'jade', bookingType:'member', capacity: 4, joinRequests: [] },
     { id:'b6',  date:today, spaceId:'shooting',  startMins:16*60+30, duration:60,  sessionType:'Volume Shooting',     athletes:['Devon Knox'],                                               coach:'matt', bookingType:'member' },
     { id:'b7',  date:today, spaceId:'meeting',   startMins:17*60,    duration:60,  sessionType:'Coach Meeting',       athletes:[],                                                           coach:'matt', bookingType:'member' },
     { id:'b8',  date:today, spaceId:'primary',   startMins:18*60,    duration:90,  sessionType:'Team Training',       athletes:['Liam Carter','Jordan Williams','Aisha Thompson','Tyler Ross','Zara Obi'], coach:'matt', bookingType:'member' },
@@ -304,7 +469,9 @@ function makeSamples(today: string): Booking[] {
     { id:'b10', date:yd,   spaceId:'meeting',   startMins:15*60,    duration:60,  sessionType:'Film Review',         athletes:['Jordan Williams','Marcus Davies'],                          coach:'matt', bookingType:'member' },
     { id:'b11', date:d2,   spaceId:'secondary', startMins:10*60,    duration:90,  sessionType:'Snipers Club',        athletes:[],                                                           coach:'matt', bookingType:'program' },
     { id:'b12', date:d2,   spaceId:'shooting',  startMins:14*60,    duration:60,  sessionType:'Volume Shooting',     athletes:['Kai Okafor'],                                              coach:'jade', bookingType:'member' },
-    { id:'b13', date:tm,   spaceId:'primary',   startMins:8*60,     duration:90,  sessionType:'Small Group Session', athletes:['Liam Carter','Jordan Williams','Aisha Thompson'],           coach:'matt', bookingType:'member' },
+    { id:'b13', date:tm,   spaceId:'primary',   startMins:8*60,     duration:90,  sessionType:'Small Group Session', athletes:['Liam Carter','Jordan Williams','Aisha Thompson'],           coach:'matt', bookingType:'member', capacity: 5, joinRequests: [
+      { id: 'jr3', bookingId: 'b13', athleteName: 'Tyler Ross', requestedAt: today, status: 'pending' },
+    ] },
     { id:'b14', date:tm,   spaceId:'meeting',   startMins:13*60,    duration:60,  sessionType:'Goal Setting',        athletes:['Devon Knox'],                                               coach:'jade', bookingType:'member' },
     { id:'b15', date:d2f,  spaceId:'secondary', startMins:11*60,    duration:60,  sessionType:'Team Training',       athletes:['Tyler Ross','Priya Mehta','Zara Obi'],                     coach:'matt', bookingType:'member' },
     // Casual Shooting demo — 5/6 capacity on primary today for bump testing
@@ -348,6 +515,25 @@ export default function BookingsPage() {
   const [hoverInfo,  setHoverInfo]  = useState<HoverInfo>(null)
   const [toast,      setToast]      = useState<string | null>(null)
   const [conflictMsg, setConflictMsg] = useState<string | null>(null)
+
+  // ── Module tab state ──────────────────────────────────────────────────────────
+  const [pageTab, setPageTab] = useState<'calendar' | 'coach-availability' | 'facility-availability' | 'join-requests'>('calendar')
+
+  // Coach Availability state (merged from old availability page)
+  const [activeCoach, setActiveCoach] = useState<CoachId>('matt')
+  const [coachSchedules, setCoachSchedules] = useState<Record<CoachId, CoachSchedule>>(INIT_COACH_SCHEDULES)
+  const [dateOverrides, setDateOverrides] = useState<DateOverride[]>(INIT_DATE_OVERRIDES)
+  // Override form state
+  const [ovDate, setOvDate] = useState('')
+  const [ovType, setOvType] = useState<'block' | 'extra'>('block')
+  const [ovStart, setOvStart] = useState(540)
+  const [ovEnd, setOvEnd] = useState(780)
+  const [ovNote, setOvNote] = useState('')
+  const [ovError, setOvError] = useState('')
+  const [editingOvId, setEditingOvId] = useState<string | null>(null)
+
+  // Facility Availability state
+  const [facilitySchedule, setFacilitySchedule] = useState<FacilitySchedule>(INIT_FACILITY_SCHEDULE)
 
   const gridRef = useRef<HTMLDivElement>(null)
 
@@ -399,7 +585,262 @@ export default function BookingsPage() {
     setTimeout(() => setToast(null), 4500)
   }
 
+  // ── Coach Availability helpers ────────────────────────────────────────────────
+  function setDayAvailable(dow: DayOfWeek, available: boolean) {
+    setCoachSchedules(prev => ({
+      ...prev,
+      [activeCoach]: {
+        ...prev[activeCoach],
+        days: { ...prev[activeCoach].days, [dow]: { ...prev[activeCoach].days[dow], available } },
+      },
+    }))
+  }
+
+  function addWindow(dow: DayOfWeek) {
+    setCoachSchedules(prev => {
+      const day = prev[activeCoach].days[dow]
+      const last = day.windows[day.windows.length - 1]
+      const start = last ? Math.min(last.endMins, 1290) : 540
+      const end = Math.min(start + 60, 1320)
+      const win: TimeWindow = { id: uid(), startMins: start, endMins: end, sessionTypes: [] }
+      return {
+        ...prev,
+        [activeCoach]: {
+          ...prev[activeCoach],
+          days: { ...prev[activeCoach].days, [dow]: { ...day, windows: [...day.windows, win] } },
+        },
+      }
+    })
+  }
+
+  function removeWindow(dow: DayOfWeek, winId: string) {
+    setCoachSchedules(prev => {
+      const day = prev[activeCoach].days[dow]
+      return {
+        ...prev,
+        [activeCoach]: {
+          ...prev[activeCoach],
+          days: { ...prev[activeCoach].days, [dow]: { ...day, windows: day.windows.filter(w => w.id !== winId) } },
+        },
+      }
+    })
+  }
+
+  function updateWindow(dow: DayOfWeek, winId: string, patch: Partial<{ startMins: number; endMins: number; sessionTypes: string[] }>) {
+    setCoachSchedules(prev => {
+      const day = prev[activeCoach].days[dow]
+      return {
+        ...prev,
+        [activeCoach]: {
+          ...prev[activeCoach],
+          days: {
+            ...prev[activeCoach].days,
+            [dow]: { ...day, windows: day.windows.map(w => w.id === winId ? { ...w, ...patch } : w) },
+          },
+        },
+      }
+    })
+  }
+
+  function toggleWindowSessionType(dow: DayOfWeek, winId: string, sessionType: string) {
+    setCoachSchedules(prev => {
+      const day = prev[activeCoach].days[dow]
+      return {
+        ...prev,
+        [activeCoach]: {
+          ...prev[activeCoach],
+          days: {
+            ...prev[activeCoach].days,
+            [dow]: {
+              ...day,
+              windows: day.windows.map(w => {
+                if (w.id !== winId) return w
+                const has = w.sessionTypes.includes(sessionType)
+                return { ...w, sessionTypes: has ? w.sessionTypes.filter(t => t !== sessionType) : [...w.sessionTypes, sessionType] }
+              }),
+            },
+          },
+        },
+      }
+    })
+  }
+
+  function resetOvForm() {
+    setOvDate(''); setOvType('block'); setOvStart(540); setOvEnd(780); setOvNote(''); setOvError(''); setEditingOvId(null)
+  }
+
+  function startEditOverride(ov: DateOverride) {
+    setEditingOvId(ov.id)
+    setOvDate(ov.date)
+    setOvType(ov.type)
+    setOvStart(ov.startMins ?? 540)
+    setOvEnd(ov.endMins ?? 780)
+    setOvNote(ov.note)
+    setOvError('')
+  }
+
+  function addOverride() {
+    if (!ovDate) { setOvError('Please select a date.'); return }
+    if (ovType === 'extra' && ovEnd <= ovStart) { setOvError('End time must be after start time.'); return }
+    if (editingOvId) {
+      setDateOverrides(prev => prev.map(o =>
+        o.id === editingOvId
+          ? { ...o, date: ovDate, type: ovType, note: ovNote.trim(), ...(ovType === 'extra' ? { startMins: ovStart, endMins: ovEnd } : { startMins: undefined, endMins: undefined }) }
+          : o
+      ))
+      resetOvForm()
+      return
+    }
+    const newOv: DateOverride = {
+      id: uid(),
+      coachId: activeCoach,
+      date: ovDate,
+      type: ovType,
+      ...(ovType === 'extra' ? { startMins: ovStart, endMins: ovEnd } : {}),
+      note: ovNote.trim(),
+    }
+    setDateOverrides(prev => [...prev, newOv])
+    resetOvForm()
+  }
+
+  function deleteOverride(id: string) {
+    if (editingOvId === id) resetOvForm()
+    setDateOverrides(prev => prev.filter(o => o.id !== id))
+  }
+
+  // ── Facility Availability helpers ─────────────────────────────────────────────
+  function setFacilityDayAvailable(dow: DayOfWeek, available: boolean) {
+    setFacilitySchedule(prev => ({
+      ...prev,
+      [dow]: { ...prev[dow], available },
+    }))
+  }
+
+  function addFacilityWindow(dow: DayOfWeek) {
+    setFacilitySchedule(prev => {
+      const day = prev[dow]
+      const last = day.windows[day.windows.length - 1]
+      const start = last ? Math.min(last.endMins, 1290) : 540
+      const end = Math.min(start + 60, 1320)
+      const win: FacilityWindow = { id: uid(), startMins: start, endMins: end, sessionTypes: [...FACILITY_SESSION_TYPES] }
+      return { ...prev, [dow]: { ...day, windows: [...day.windows, win] } }
+    })
+  }
+
+  function removeFacilityWindow(dow: DayOfWeek, winId: string) {
+    setFacilitySchedule(prev => {
+      const day = prev[dow]
+      return { ...prev, [dow]: { ...day, windows: day.windows.filter(w => w.id !== winId) } }
+    })
+  }
+
+  function updateFacilityWindow(dow: DayOfWeek, winId: string, patch: Partial<{ startMins: number; endMins: number; sessionTypes: string[] }>) {
+    setFacilitySchedule(prev => {
+      const day = prev[dow]
+      return { ...prev, [dow]: { ...day, windows: day.windows.map(w => w.id === winId ? { ...w, ...patch } : w) } }
+    })
+  }
+
+  function toggleFacilityWindowSessionType(dow: DayOfWeek, winId: string, sessionType: string) {
+    setFacilitySchedule(prev => {
+      const day = prev[dow]
+      return {
+        ...prev,
+        [dow]: {
+          ...day,
+          windows: day.windows.map(w => {
+            if (w.id !== winId) return w
+            const has = w.sessionTypes.includes(sessionType)
+            return { ...w, sessionTypes: has ? w.sessionTypes.filter(t => t !== sessionType) : [...w.sessionTypes, sessionType] }
+          }),
+        },
+      }
+    })
+  }
+
+  // ── Join Request actions ──────────────────────────────────────────────────────
+  function acceptJoinRequest(bookingId: string, requestId: string, athleteName: string) {
+    setBookings(prev => prev.map(b => {
+      if (b.id !== bookingId) return b
+      const updatedRequests = (b.joinRequests ?? []).map(jr =>
+        jr.id === requestId ? { ...jr, status: 'accepted' as const } : jr
+      )
+      return { ...b, athletes: [...b.athletes, athleteName], joinRequests: updatedRequests }
+    }))
+  }
+
+  function declineJoinRequest(bookingId: string, requestId: string) {
+    setBookings(prev => prev.map(b => {
+      if (b.id !== bookingId) return b
+      const updatedRequests = (b.joinRequests ?? []).map(jr =>
+        jr.id === requestId ? { ...jr, status: 'declined' as const } : jr
+      )
+      return { ...b, joinRequests: updatedRequests }
+    }))
+  }
+
+  const pendingJoinRequestCount = bookings.reduce((sum, b) =>
+    sum + (b.joinRequests?.filter(jr => jr.status === 'pending').length ?? 0), 0
+  )
+
   function handleSave(items: (Omit<Booking, 'id'> & { id?: string })[]) {
+    // ── Check 1 & 2: Facility + Coach availability (admin override bypasses) ──────
+    for (const data of items) {
+      if (data.adminOverride) continue  // admin override skips availability checks
+
+      const bookDate = data.date
+      const jsDay = new Date(bookDate + 'T12:00:00').getDay()
+      const dow = jsDayToOurs(jsDay)
+      const dataEnd = data.startMins + data.duration
+
+      // Check 1: Facility Availability (for self-serve types)
+      if (FACILITY_SESSION_TYPES.includes(data.sessionType)) {
+        const facilDay = facilitySchedule[dow]
+        if (!facilDay.available) {
+          setConflictMsg(`The facility is closed on ${parse(bookDate).toLocaleDateString('en-AU', { weekday: 'long' })}s. ${data.sessionType} is not available.`)
+          return
+        }
+        const facilityAllows = facilDay.windows.some(win =>
+          win.sessionTypes.includes(data.sessionType) &&
+          win.startMins <= data.startMins &&
+          win.endMins >= dataEnd
+        )
+        if (!facilityAllows) {
+          const dl = parse(bookDate).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })
+          setConflictMsg(`${data.sessionType} is not available at ${fmtTime(data.startMins)} on ${dl}. Check Facility Availability for open hours.`)
+          return
+        }
+      }
+
+      // Check 2: Coach Availability (for coach-required types with a coach assigned)
+      if (COACH_SESSION_TYPES.includes(data.sessionType) && (data.coach === 'matt' || data.coach === 'jade')) {
+        const coachId = data.coach as CoachId
+        const sched = coachSchedules[coachId]
+        const coachDay = sched.days[dow]
+        const dateOvs = dateOverrides.filter(o => o.coachId === coachId && o.date === bookDate)
+        const isBlocked = dateOvs.some(o => o.type === 'block')
+        const coachName = coachId === 'matt' ? 'Matt' : 'Jade'
+        const dl = parse(bookDate).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })
+        if (isBlocked) {
+          setConflictMsg(`${coachName} is blocked/unavailable on ${dl}. Check Coach Availability.`)
+          return
+        }
+        if (!coachDay.available) {
+          setConflictMsg(`${coachName} is not available on ${dl}s. Check Coach Availability.`)
+          return
+        }
+        const coachAllows = coachDay.windows.some(win =>
+          win.sessionTypes.includes(data.sessionType) &&
+          win.startMins <= data.startMins &&
+          win.endMins >= dataEnd
+        )
+        if (!coachAllows) {
+          setConflictMsg(`${coachName} has not enabled ${data.sessionType} at ${fmtTime(data.startMins)} on ${dl}. Check Coach Availability.`)
+          return
+        }
+      }
+    }
+
     // Double-booking check — runs against current bookings before any state updates
     for (const data of items) {
       const sp = SPACES.find(s => s.id === data.spaceId)!
@@ -499,8 +940,73 @@ export default function BookingsPage() {
 
   const hours = Array.from({ length: END_H - START_H }, (_, i) => START_H + i)
 
+  const TABS: { id: 'calendar' | 'coach-availability' | 'facility-availability' | 'join-requests'; label: string; badge?: number }[] = [
+    { id: 'calendar',              label: 'Calendar' },
+    { id: 'coach-availability',    label: 'Coach Availability' },
+    { id: 'facility-availability', label: 'Facility Availability' },
+    { id: 'join-requests',         label: 'Join Requests', badge: pendingJoinRequestCount },
+  ]
+
   return (
     <div className="flex h-full flex-col overflow-hidden">
+      {/* ── Module Tab Bar ── */}
+      <div className="flex shrink-0 items-center gap-1 border-b border-gray-200 bg-white px-4">
+        {TABS.map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setPageTab(tab.id)}
+            className={`relative flex items-center gap-1.5 px-4 py-3 text-sm font-semibold transition border-b-2 ${
+              pageTab === tab.id
+                ? 'border-[#6BA3D6] text-[#6BA3D6]'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            {tab.label}
+            {tab.badge !== undefined && tab.badge > 0 && (
+              <span className="flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                {tab.badge}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {pageTab === 'coach-availability' && (
+        <CoachAvailabilityTab
+          activeCoach={activeCoach} setActiveCoach={setActiveCoach}
+          coachSchedules={coachSchedules}
+          setDayAvailable={setDayAvailable} addWindow={addWindow} removeWindow={removeWindow}
+          updateWindow={updateWindow} toggleWindowSessionType={toggleWindowSessionType}
+          dateOverrides={dateOverrides}
+          ovDate={ovDate} setOvDate={setOvDate} ovType={ovType} setOvType={setOvType}
+          ovStart={ovStart} setOvStart={setOvStart} ovEnd={ovEnd} setOvEnd={setOvEnd}
+          ovNote={ovNote} setOvNote={setOvNote} ovError={ovError} editingOvId={editingOvId}
+          resetOvForm={resetOvForm} startEditOverride={startEditOverride}
+          addOverride={addOverride} deleteOverride={deleteOverride}
+        />
+      )}
+
+      {pageTab === 'facility-availability' && (
+        <FacilityAvailabilityTab
+          facilitySchedule={facilitySchedule}
+          setFacilityDayAvailable={setFacilityDayAvailable}
+          addFacilityWindow={addFacilityWindow}
+          removeFacilityWindow={removeFacilityWindow}
+          updateFacilityWindow={updateFacilityWindow}
+          toggleFacilityWindowSessionType={toggleFacilityWindowSessionType}
+        />
+      )}
+
+      {pageTab === 'join-requests' && (
+        <JoinRequestsTab
+          bookings={bookings}
+          onAccept={acceptJoinRequest}
+          onDecline={declineJoinRequest}
+        />
+      )}
+
+      {pageTab === 'calendar' && (
+      <>
       {/* ── Toolbar ── */}
       <div className="flex shrink-0 items-center gap-3 border-b border-gray-200 bg-white px-6 py-3">
         <button
@@ -791,6 +1297,8 @@ export default function BookingsPage() {
           </div>
         </div>
       )}
+      </>
+      )}
 
       {/* ── Toast ── */}
       <ToastNotification message={toast} />
@@ -856,10 +1364,19 @@ function BookingBlock({
         )}
         {!compact && height >= 24 && coachBadge && booking.bookingType !== 'unavailable' && (
           <span
-            className="absolute right-1 top-0.5 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-black text-white"
-            style={{ backgroundColor: chipColor }}
+            className="absolute top-0.5 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-black text-white"
+            style={{ backgroundColor: chipColor, right: booking.adminOverride ? 22 : 4 }}
           >
             {coachBadge}
+          </span>
+        )}
+        {!compact && height >= 24 && booking.adminOverride && (
+          <span
+            className="absolute right-1 top-0.5 flex h-4 items-center justify-center rounded-full px-1 text-[8px] font-black text-white"
+            style={{ backgroundColor: '#f97316' }}
+            title="Admin Override — availability checks bypassed"
+          >
+            OVR
           </span>
         )}
       </div>
@@ -1417,6 +1934,7 @@ function BookingModal({
   const [customAthlete,  setCustomAthlete]  = useState('')
   const [memberTier,            setMemberTier]            = useState<MemberTier | ''>('')
   const [machineRentalDuration, setMachineRentalDuration] = useState<30 | 45 | 60>(60)
+  const [adminOverride, setAdminOverride] = useState(src?.adminOverride ?? false)
   const accentColor  = bookingType === 'casual' ? '#6BAD6B' : bookingType === 'unavailable' ? '#ef4444' : bookingType === 'program' ? '#D4A520' : '#6BA3D6'
   const isIndividual = bookingType === 'member' && sessionType === 'Individual Work Out'
   const isMachineRental = sessionType === 'Shooting Machine Rental'
@@ -1500,7 +2018,7 @@ function BookingModal({
     const effectiveAthletes = isIndividual
       ? (singleAthlete === 'other' ? (customAthlete.trim() ? [customAthlete.trim()] : []) : singleAthlete ? [singleAthlete] : [])
       : [...athletes, ...memberCasualNames]
-    const base = { spaceId, startMins, duration, sessionType, athletes: effectiveAthletes, coach, bookingType, memberTier: memberTier || undefined }
+    const base = { spaceId, startMins, duration, sessionType, athletes: effectiveAthletes, coach, bookingType, memberTier: memberTier || undefined, adminOverride: adminOverride || undefined }
     if (editSeriesFuture) {
       onSaveFrom(src!.date, src!.seriesId!, base)
     } else if (repeat === 'none' || !repeatUntil) {
@@ -2616,6 +3134,24 @@ function BookingModal({
                 </>
               )}
 
+              {/* Admin Override */}
+              <div className="flex items-center gap-3 rounded-xl border border-orange-100 bg-orange-50 px-4 py-3">
+                <label className="flex cursor-pointer items-center gap-3 flex-1">
+                  <input
+                    type="checkbox"
+                    checked={adminOverride}
+                    onChange={e => setAdminOverride(e.target.checked)}
+                    className="h-4 w-4 rounded accent-orange-500"
+                  />
+                  <div>
+                    <span className="text-sm font-semibold text-orange-800">Admin Override</span>
+                    {adminOverride && (
+                      <p className="text-xs text-orange-600 mt-0.5">Availability checks will be bypassed for this booking.</p>
+                    )}
+                  </div>
+                </label>
+              </div>
+
               {/* Actions */}
               {bookingType === 'casual' ? (
                 <div className="flex items-center justify-between pt-1">
@@ -2669,6 +3205,548 @@ function BookingModal({
             </div>
           )}
         </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Availability sub-components ─────────────────────────────────────────────────
+function Toggle({ on, onChange, color = '#6BA3D6' }: { on: boolean; onChange: (v: boolean) => void; color?: string }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!on)}
+      className="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors duration-200"
+      style={{ backgroundColor: on ? color : '#d1d5db' }}
+    >
+      <span
+        className="inline-block h-4 w-4 translate-x-1 rounded-full bg-white shadow transition-transform duration-200"
+        style={{ transform: on ? 'translateX(1.375rem)' : 'translateX(0.25rem)' }}
+      />
+    </button>
+  )
+}
+
+function AvTimeSelect({ value, onChange, minMins }: { value: number; onChange: (v: number) => void; minMins?: number }) {
+  const opts = minMins ? AV_TIME_OPTIONS.filter(o => o.mins > minMins) : AV_TIME_OPTIONS
+  return (
+    <select
+      value={value}
+      onChange={e => onChange(Number(e.target.value))}
+      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-800 outline-none transition focus:border-[#6BA3D6] focus:ring-2 focus:ring-[#6BA3D6]/10"
+    >
+      {opts.map(o => (
+        <option key={o.mins} value={o.mins}>{o.label}</option>
+      ))}
+    </select>
+  )
+}
+
+// ── Coach Availability Tab ──────────────────────────────────────────────────────
+function CoachAvailabilityTab({
+  activeCoach, setActiveCoach,
+  coachSchedules, setDayAvailable, addWindow, removeWindow, updateWindow, toggleWindowSessionType,
+  dateOverrides,
+  ovDate, setOvDate, ovType, setOvType, ovStart, setOvStart, ovEnd, setOvEnd,
+  ovNote, setOvNote, ovError, editingOvId,
+  resetOvForm, startEditOverride, addOverride, deleteOverride,
+}: {
+  activeCoach: CoachId
+  setActiveCoach: (c: CoachId) => void
+  coachSchedules: Record<CoachId, CoachSchedule>
+  setDayAvailable: (dow: DayOfWeek, available: boolean) => void
+  addWindow: (dow: DayOfWeek) => void
+  removeWindow: (dow: DayOfWeek, winId: string) => void
+  updateWindow: (dow: DayOfWeek, winId: string, patch: Partial<{ startMins: number; endMins: number; sessionTypes: string[] }>) => void
+  toggleWindowSessionType: (dow: DayOfWeek, winId: string, sessionType: string) => void
+  dateOverrides: DateOverride[]
+  ovDate: string; setOvDate: (v: string) => void
+  ovType: 'block' | 'extra'; setOvType: (v: 'block' | 'extra') => void
+  ovStart: number; setOvStart: (v: number) => void
+  ovEnd: number; setOvEnd: (v: number) => void
+  ovNote: string; setOvNote: (v: string) => void
+  ovError: string; editingOvId: string | null
+  resetOvForm: () => void
+  startEditOverride: (ov: DateOverride) => void
+  addOverride: () => void
+  deleteOverride: (id: string) => void
+}) {
+  const coach = coachSchedules[activeCoach]
+  const coachColor = activeCoach === 'matt' ? ACCENT_MATT : ACCENT_JADE
+  const coachName = activeCoach === 'matt' ? 'Matt' : 'Jade'
+  const coachOverrides = dateOverrides.filter(o => o.coachId === activeCoach)
+
+  const LABEL_CLS = 'mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500'
+  const INPUT_CLS = 'w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-[#6BA3D6] focus:ring-2 focus:ring-[#6BA3D6]/10'
+
+  return (
+    <div className="flex-1 overflow-y-auto min-h-0 bg-[#f4f6f9]">
+      <div className="border-b border-gray-200 bg-white px-6 py-4">
+        <div className="flex items-center gap-3">
+          <IconCalendarTime size={22} style={{ color: ACCENT_MATT }} />
+          <div>
+            <h1 className="text-xl font-bold text-gray-900">Coach Availability</h1>
+            <p className="text-sm text-gray-500">Manage recurring schedules and date overrides per coach</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="mx-auto max-w-[1100px] space-y-6 p-6">
+        {/* Coach tab bar */}
+        <div className="flex gap-1 rounded-xl border border-gray-200 bg-white p-1 w-fit">
+          {(['matt', 'jade'] as CoachId[]).map(c => {
+            const color = c === 'matt' ? ACCENT_MATT : ACCENT_JADE
+            const name = c === 'matt' ? 'Matt' : 'Jade'
+            const active = activeCoach === c
+            return (
+              <button
+                key={c}
+                type="button"
+                onClick={() => { setActiveCoach(c); resetOvForm() }}
+                className="rounded-lg px-6 py-2.5 text-sm font-semibold transition"
+                style={active ? { backgroundColor: color, color: 'white' } : { color: '#6b7280' }}
+              >
+                {name}
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Weekly Recurring Schedule */}
+        <div className="rounded-xl border border-gray-200 bg-white p-5">
+          <h2 className="text-sm font-bold text-gray-700 mb-4">Weekly Recurring Schedule — {coachName}</h2>
+          <div className="flex gap-3 overflow-x-auto pb-1">
+            {(Object.keys(DAYS_LABEL) as unknown as DayOfWeek[]).map(dow => {
+              const day = coach.days[dow]
+              return (
+                <div
+                  key={dow}
+                  className="flex w-52 shrink-0 flex-col items-center gap-2 rounded-xl border p-3"
+                  style={{
+                    borderColor: day.available ? coachColor + '40' : '#e5e7eb',
+                    backgroundColor: day.available ? coachColor + '08' : '#fafafa',
+                  }}
+                >
+                  <span className="text-xs font-bold text-gray-600">{DAYS_FULL[dow].slice(0, 3)}</span>
+                  <Toggle on={day.available} onChange={v => setDayAvailable(dow, v)} color={coachColor} />
+                  <span className="text-[10px] font-semibold" style={{ color: day.available ? coachColor : '#9ca3af' }}>
+                    {day.available ? 'Available' : 'Off'}
+                  </span>
+                  {day.available && (
+                    <div className="flex flex-col gap-2 w-full">
+                      {day.windows.map((win, wi) => (
+                        <div key={win.id} className="w-full">
+                          {wi > 0 && (
+                            <div className="mb-1 text-center text-[9px] font-bold uppercase tracking-wide text-gray-400">+ also</div>
+                          )}
+                          <div className="flex items-start gap-0.5">
+                            <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+                              <select
+                                value={win.startMins}
+                                onChange={e => {
+                                  const v = Number(e.target.value)
+                                  updateWindow(dow, win.id, { startMins: v, ...(win.endMins <= v ? { endMins: Math.min(v + 30, 1320) } : {}) })
+                                }}
+                                className="w-full rounded-md border border-gray-200 px-1 py-1 text-[11px] text-gray-700 outline-none focus:border-[#6BA3D6]"
+                              >
+                                {AV_TIME_OPTIONS.filter(o => o.mins < 1320).map(o => (
+                                  <option key={o.mins} value={o.mins}>{o.label}</option>
+                                ))}
+                              </select>
+                              <select
+                                value={win.endMins}
+                                onChange={e => updateWindow(dow, win.id, { endMins: Number(e.target.value) })}
+                                className="w-full rounded-md border border-gray-200 px-1 py-1 text-[11px] text-gray-700 outline-none focus:border-[#6BA3D6]"
+                              >
+                                {AV_TIME_OPTIONS.filter(o => o.mins > win.startMins).map(o => (
+                                  <option key={o.mins} value={o.mins}>{o.label}</option>
+                                ))}
+                              </select>
+                            </div>
+                            {day.windows.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => removeWindow(dow, win.id)}
+                                className="mt-0.5 shrink-0 rounded p-0.5 text-gray-300 transition hover:bg-red-50 hover:text-red-400"
+                              >
+                                <IconX size={11} />
+                              </button>
+                            )}
+                          </div>
+                          {/* Session type checkboxes */}
+                          <div className="mt-1 flex flex-col gap-0.5">
+                            {COACH_SESSION_TYPES.map(st => (
+                              <label key={st} className="flex items-center gap-1 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={win.sessionTypes.includes(st)}
+                                  onChange={() => toggleWindowSessionType(dow, win.id, st)}
+                                  className="h-3 w-3 rounded"
+                                  style={{ accentColor: coachColor }}
+                                />
+                                <span className="text-[10px] text-gray-600">{st}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => addWindow(dow)}
+                        className="flex items-center justify-center gap-1 w-full rounded-md border border-dashed border-gray-300 py-1 text-[10px] font-semibold text-gray-400 transition hover:border-gray-400 hover:text-gray-500"
+                      >
+                        <IconPlus size={10} /> Add
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Date Overrides */}
+        <div className="rounded-xl border border-gray-200 bg-white p-5">
+          <h2 className="text-sm font-bold text-gray-700 mb-4">Date Overrides — {coachName}</h2>
+
+          {coachOverrides.length === 0 ? (
+            <p className="mb-4 text-sm text-gray-400 italic">No overrides for {coachName}.</p>
+          ) : (
+            <div className="mb-4 space-y-2">
+              {coachOverrides.map(ov => (
+                <div
+                  key={ov.id}
+                  className="flex items-center justify-between rounded-xl border px-4 py-3"
+                  style={
+                    editingOvId === ov.id
+                      ? { backgroundColor: '#eff6ff', borderColor: '#3b82f6', boxShadow: '0 0 0 2px #3b82f620' }
+                      : ov.type === 'block'
+                      ? { backgroundColor: '#fff1f2', borderColor: '#fecdd3' }
+                      : { backgroundColor: '#eff6ff', borderColor: '#bfdbfe' }
+                  }
+                >
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase"
+                        style={ov.type === 'block' ? { backgroundColor: '#fee2e2', color: '#b91c1c' } : { backgroundColor: '#dbeafe', color: '#1d4ed8' }}
+                      >
+                        {ov.type === 'block' ? 'Block' : 'Extra'}
+                      </span>
+                      <span className="text-sm font-semibold text-gray-800">{dateLabel(ov.date)}</span>
+                      {ov.type === 'extra' && ov.startMins !== undefined && ov.endMins !== undefined && (
+                        <span className="text-sm text-gray-500">{minsToAvLabel(ov.startMins)} – {minsToAvLabel(ov.endMins)}</span>
+                      )}
+                    </div>
+                    {ov.note && <p className="mt-0.5 text-xs text-gray-500">{ov.note}</p>}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => editingOvId === ov.id ? resetOvForm() : startEditOverride(ov)}
+                      className="rounded-lg p-1.5 text-gray-400 transition hover:bg-blue-50 hover:text-blue-500"
+                    >
+                      {editingOvId === ov.id ? <IconX size={15} /> : <IconPencil size={15} />}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => deleteOverride(ov.id)}
+                      className="rounded-lg p-1.5 text-gray-400 transition hover:bg-red-50 hover:text-red-500"
+                    >
+                      <IconTrash size={15} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Add / Edit override form */}
+          <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+            <p className="mb-3 text-xs font-bold uppercase tracking-wide text-gray-500">{editingOvId ? 'Edit Override' : 'Add Override'}</p>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div>
+                <label className={LABEL_CLS}>Date</label>
+                <input type="date" value={ovDate} onChange={e => setOvDate(e.target.value)} className={INPUT_CLS} />
+              </div>
+              <div>
+                <label className={LABEL_CLS}>Type</label>
+                <select value={ovType} onChange={e => setOvType(e.target.value as 'block' | 'extra')} className={INPUT_CLS}>
+                  <option value="block">Block (unavailable)</option>
+                  <option value="extra">Add extra hours</option>
+                </select>
+              </div>
+              {ovType === 'extra' && (
+                <>
+                  <div>
+                    <label className={LABEL_CLS}>Start</label>
+                    <AvTimeSelect value={ovStart} onChange={setOvStart} />
+                  </div>
+                  <div>
+                    <label className={LABEL_CLS}>End</label>
+                    <AvTimeSelect value={ovEnd} onChange={setOvEnd} minMins={ovStart} />
+                  </div>
+                </>
+              )}
+            </div>
+            <div className="mt-3">
+              <label className={LABEL_CLS}>Note (optional)</label>
+              <input type="text" value={ovNote} onChange={e => setOvNote(e.target.value)} placeholder="Reason for override…" className={INPUT_CLS} />
+            </div>
+            {ovError && <p className="mt-2 text-xs text-red-500">{ovError}</p>}
+            <div className="mt-3 flex justify-end gap-2">
+              {editingOvId && (
+                <button
+                  type="button"
+                  onClick={resetOvForm}
+                  className="flex items-center gap-2 rounded-xl border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50"
+                >
+                  <IconX size={15} /> Cancel
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={addOverride}
+                className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+                style={{ backgroundColor: coachColor }}
+              >
+                {editingOvId ? <IconCheck size={15} /> : <IconPlus size={15} />}
+                {editingOvId ? 'Save Changes' : 'Add Override'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Facility Availability Tab ───────────────────────────────────────────────────
+function FacilityAvailabilityTab({
+  facilitySchedule, setFacilityDayAvailable, addFacilityWindow, removeFacilityWindow, updateFacilityWindow, toggleFacilityWindowSessionType,
+}: {
+  facilitySchedule: FacilitySchedule
+  setFacilityDayAvailable: (dow: DayOfWeek, available: boolean) => void
+  addFacilityWindow: (dow: DayOfWeek) => void
+  removeFacilityWindow: (dow: DayOfWeek, winId: string) => void
+  updateFacilityWindow: (dow: DayOfWeek, winId: string, patch: Partial<{ startMins: number; endMins: number; sessionTypes: string[] }>) => void
+  toggleFacilityWindowSessionType: (dow: DayOfWeek, winId: string, sessionType: string) => void
+}) {
+  const FACIL_COLOR = '#059669'
+  return (
+    <div className="flex-1 overflow-y-auto min-h-0 bg-[#f4f6f9]">
+      <div className="border-b border-gray-200 bg-white px-6 py-4">
+        <div className="flex items-center gap-3">
+          <IconBuilding size={22} style={{ color: FACIL_COLOR }} />
+          <div>
+            <h1 className="text-xl font-bold text-gray-900">Facility Availability</h1>
+            <p className="text-sm text-gray-500">Control when the facility is open for self-serve sessions</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="mx-auto max-w-[1100px] space-y-6 p-6">
+        <div className="rounded-xl border border-gray-200 bg-white p-5">
+          <h2 className="text-sm font-bold text-gray-700 mb-4">Weekly Schedule</h2>
+          <div className="flex gap-3 overflow-x-auto pb-1">
+            {(Object.keys(DAYS_LABEL) as unknown as DayOfWeek[]).map(dow => {
+              const day = facilitySchedule[dow]
+              return (
+                <div
+                  key={dow}
+                  className="flex w-52 shrink-0 flex-col items-center gap-2 rounded-xl border p-3"
+                  style={{
+                    borderColor: day.available ? FACIL_COLOR + '40' : '#e5e7eb',
+                    backgroundColor: day.available ? FACIL_COLOR + '08' : '#fafafa',
+                  }}
+                >
+                  <span className="text-xs font-bold text-gray-600">{DAYS_FULL[dow].slice(0, 3)}</span>
+                  <Toggle on={day.available} onChange={v => setFacilityDayAvailable(dow, v)} color={FACIL_COLOR} />
+                  <span className="text-[10px] font-semibold" style={{ color: day.available ? FACIL_COLOR : '#9ca3af' }}>
+                    {day.available ? 'Open' : 'Closed'}
+                  </span>
+                  {day.available && (
+                    <div className="flex flex-col gap-2 w-full">
+                      {day.windows.map((win, wi) => (
+                        <div key={win.id} className="w-full">
+                          {wi > 0 && (
+                            <div className="mb-1 text-center text-[9px] font-bold uppercase tracking-wide text-gray-400">+ also</div>
+                          )}
+                          <div className="flex items-start gap-0.5">
+                            <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+                              <select
+                                value={win.startMins}
+                                onChange={e => {
+                                  const v = Number(e.target.value)
+                                  updateFacilityWindow(dow, win.id, { startMins: v, ...(win.endMins <= v ? { endMins: Math.min(v + 30, 1320) } : {}) })
+                                }}
+                                className="w-full rounded-md border border-gray-200 px-1 py-1 text-[11px] text-gray-700 outline-none focus:border-[#6BA3D6]"
+                              >
+                                {AV_TIME_OPTIONS.filter(o => o.mins < 1320).map(o => (
+                                  <option key={o.mins} value={o.mins}>{o.label}</option>
+                                ))}
+                              </select>
+                              <select
+                                value={win.endMins}
+                                onChange={e => updateFacilityWindow(dow, win.id, { endMins: Number(e.target.value) })}
+                                className="w-full rounded-md border border-gray-200 px-1 py-1 text-[11px] text-gray-700 outline-none focus:border-[#6BA3D6]"
+                              >
+                                {AV_TIME_OPTIONS.filter(o => o.mins > win.startMins).map(o => (
+                                  <option key={o.mins} value={o.mins}>{o.label}</option>
+                                ))}
+                              </select>
+                            </div>
+                            {day.windows.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => removeFacilityWindow(dow, win.id)}
+                                className="mt-0.5 shrink-0 rounded p-0.5 text-gray-300 transition hover:bg-red-50 hover:text-red-400"
+                              >
+                                <IconX size={11} />
+                              </button>
+                            )}
+                          </div>
+                          <div className="mt-1 flex flex-col gap-0.5">
+                            {FACILITY_SESSION_TYPES.map(st => (
+                              <label key={st} className="flex items-center gap-1 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={win.sessionTypes.includes(st)}
+                                  onChange={() => toggleFacilityWindowSessionType(dow, win.id, st)}
+                                  className="h-3 w-3 rounded"
+                                  style={{ accentColor: FACIL_COLOR }}
+                                />
+                                <span className="text-[10px] text-gray-600">{st}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => addFacilityWindow(dow)}
+                        className="flex items-center justify-center gap-1 w-full rounded-md border border-dashed border-gray-300 py-1 text-[10px] font-semibold text-gray-400 transition hover:border-gray-400 hover:text-gray-500"
+                      >
+                        <IconPlus size={10} /> Add
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Join Requests Tab ───────────────────────────────────────────────────────────
+function JoinRequestsTab({
+  bookings, onAccept, onDecline,
+}: {
+  bookings: Booking[]
+  onAccept: (bookingId: string, requestId: string, athleteName: string) => void
+  onDecline: (bookingId: string, requestId: string) => void
+}) {
+  const ACCEPT = '#6BA3D6'
+  const DECLINE = '#ef4444'
+  const withPending = bookings.filter(b => (b.joinRequests ?? []).some(jr => jr.status === 'pending'))
+
+  return (
+    <div className="flex-1 overflow-y-auto min-h-0 bg-[#f4f6f9]">
+      <div className="border-b border-gray-200 bg-white px-6 py-4">
+        <div className="flex items-center gap-3">
+          <IconClipboardList size={22} style={{ color: ACCEPT }} />
+          <div>
+            <h1 className="text-xl font-bold text-gray-900">Join Requests</h1>
+            <p className="text-sm text-gray-500">Pending requests to join Small Group Sessions</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="mx-auto max-w-[900px] space-y-4 p-6">
+        {withPending.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-gray-200 bg-white p-12 text-center">
+            <IconUsers size={32} className="mx-auto mb-2 text-gray-300" />
+            <p className="text-sm text-gray-400">No pending join requests</p>
+          </div>
+        ) : (
+          withPending.map(b => {
+            const sp = SPACES.find(s => s.id === b.spaceId)
+            const requests = b.joinRequests ?? []
+            const pending = requests.filter(jr => jr.status === 'pending')
+            const resolved = requests.filter(jr => jr.status !== 'pending')
+            const capacity = b.capacity ?? 0
+            const filledPct = capacity > 0 ? Math.min(100, (b.athletes.length / capacity) * 100) : 0
+            const coachName = b.coach === 'matt' ? 'Matt' : b.coach === 'jade' ? 'Jade' : b.coach === 'other' ? 'Other' : '—'
+            return (
+              <div key={b.id} className="rounded-xl border border-gray-200 bg-white p-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-bold text-gray-900">{b.sessionType}</p>
+                    <p className="mt-0.5 text-xs text-gray-500">
+                      {parse(b.date).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })}
+                      {' · '}{fmtTime(b.startMins)} – {fmtTime(b.startMins + b.duration)}
+                    </p>
+                    <p className="text-xs text-gray-400">{sp?.label ?? b.spaceId} · Coach {coachName}</p>
+                  </div>
+                  <div className="w-40 shrink-0">
+                    <div className="flex items-center justify-between text-[11px] font-semibold text-gray-500">
+                      <span>Spots</span>
+                      <span>{b.athletes.length} / {capacity || '—'}</span>
+                    </div>
+                    <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+                      <div className="h-full rounded-full" style={{ width: `${filledPct}%`, backgroundColor: ACCEPT }} />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 space-y-2">
+                  {pending.map(jr => (
+                    <div key={jr.id} className="flex items-center justify-between rounded-lg border border-gray-100 bg-gray-50 px-3 py-2.5">
+                      <div>
+                        <p className="text-sm font-semibold text-gray-800">{jr.athleteName}</p>
+                        <p className="text-[11px] text-gray-400">Requested on {dateLabel(jr.requestedAt)}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => onAccept(b.id, jr.id, jr.athleteName)}
+                          className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition hover:opacity-90"
+                          style={{ backgroundColor: ACCEPT }}
+                        >
+                          <IconCheck size={13} /> Accept
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onDecline(b.id, jr.id)}
+                          className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition hover:opacity-90"
+                          style={{ backgroundColor: DECLINE }}
+                        >
+                          <IconX size={13} /> Decline
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  {resolved.map(jr => (
+                    <div key={jr.id} className="flex items-center justify-between rounded-lg border border-gray-100 px-3 py-2 opacity-60">
+                      <p className="text-sm text-gray-500">{jr.athleteName}</p>
+                      <span
+                        className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase"
+                        style={jr.status === 'accepted'
+                          ? { backgroundColor: '#dcfce7', color: '#15803d' }
+                          : { backgroundColor: '#fee2e2', color: '#b91c1c' }}
+                      >
+                        {jr.status}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })
+        )}
       </div>
     </div>
   )
