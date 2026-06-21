@@ -7,6 +7,8 @@ import { signOut, useSession } from 'next-auth/react'
 import {
   IconLayoutDashboard,
   IconCalendar,
+  IconCalendarTime,
+  IconCalendarEvent,
   IconUsers,
   IconLayoutKanban,
   IconForms,
@@ -23,9 +25,10 @@ const NAV = [
   {
     section: 'MAIN',
     items: [
-      { label: 'Dashboard', href: '/dashboard', icon: IconLayoutDashboard },
-      { label: 'Bookings', href: '/bookings', icon: IconCalendar },
-      { label: 'Athletes', href: '/athletes', icon: IconUsers },
+      { label: 'Dashboard',    href: '/dashboard',    icon: IconLayoutDashboard },
+      { label: 'Bookings',     href: '/bookings',     icon: IconCalendar },
+      { label: 'Availability', href: '/availability', icon: IconCalendarTime },
+      { label: 'Athletes',     href: '/athletes',     icon: IconUsers },
     ],
   },
   {
@@ -37,13 +40,19 @@ const NAV = [
     ],
   },
   {
+    section: 'ATHLETES',
+    items: [
+      { label: 'Book a Session', href: '/portal', icon: IconCalendarEvent },
+    ],
+  },
+  {
     section: 'TOOLS',
     items: [
-      { label: 'Boards', href: '/boards', icon: IconLayoutKanban },
-      { label: 'Forms', href: '/forms', icon: IconForms },
+      { label: 'Boards',       href: '/boards',       icon: IconLayoutKanban },
+      { label: 'Forms',        href: '/forms',        icon: IconForms },
       { label: 'Pocket Plays', href: '/pocket-plays', icon: IconBallBasketball },
       { label: 'Learning Lab', href: '/learning-lab', icon: IconSchool },
-      { label: 'Journal', href: '/journal', icon: IconNotebook },
+      { label: 'Journal',      href: '/journal',      icon: IconNotebook },
     ],
   },
 ]

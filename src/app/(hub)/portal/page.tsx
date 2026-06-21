@@ -1,0 +1,562 @@
+'use client'
+
+import { useState, useMemo } from 'react'
+import {
+  IconChevronLeft,
+  IconChevronRight,
+  IconCheck,
+  IconX,
+  IconCalendarEvent,
+  IconUser,
+} from '@tabler/icons-react'
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type CoachId = 'matt' | 'jade'
+type DayOfWeek = 0 | 1 | 2 | 3 | 4 | 5 | 6
+
+interface DaySchedule {
+  available: boolean
+  startMins: number
+  endMins: number
+}
+
+interface CoachSchedule {
+  coachId: CoachId
+  days: Record<DayOfWeek, DaySchedule>
+}
+
+interface DateOverride {
+  id: string
+  coachId: CoachId
+  date: string
+  type: 'block' | 'extra'
+  startMins?: number
+  endMins?: number
+  note: string
+}
+
+interface SessionSlot {
+  id: string
+  date: string
+  startMins: number
+  endMins: number
+  sessionType: string
+  space: string
+  coach: CoachId | 'self-serve'
+  price: number | 'membership'
+}
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const COACH_MATT_COLOR = '#6BA3D6'
+const COACH_JADE_COLOR = '#6BAD6B'
+const SELF_SERVE_COLOR = '#D4A520'
+
+const COACH_NAMES: Record<CoachId, string> = { matt: 'Matt', jade: 'Jade' }
+
+const SELF_SERVE_TYPES = ['Casual Shooting', 'Shooting Machine Session']
+
+// ─── Schedule Data (self-contained copy) ─────────────────────────────────────
+
+const SCHEDULES: Record<CoachId, CoachSchedule> = {
+  matt: {
+    coachId: 'matt',
+    days: {
+      0: { available: true,  startMins: 540, endMins: 780  },
+      1: { available: true,  startMins: 900, endMins: 1200 },
+      2: { available: true,  startMins: 540, endMins: 780  },
+      3: { available: true,  startMins: 900, endMins: 1200 },
+      4: { available: true,  startMins: 540, endMins: 780  },
+      5: { available: true,  startMins: 480, endMins: 720  },
+      6: { available: false, startMins: 540, endMins: 780  },
+    },
+  },
+  jade: {
+    coachId: 'jade',
+    days: {
+      0: { available: false, startMins: 600, endMins: 840  },
+      1: { available: true,  startMins: 600, endMins: 840  },
+      2: { available: true,  startMins: 960, endMins: 1200 },
+      3: { available: true,  startMins: 600, endMins: 840  },
+      4: { available: true,  startMins: 960, endMins: 1200 },
+      5: { available: true,  startMins: 540, endMins: 780  },
+      6: { available: false, startMins: 600, endMins: 840  },
+    },
+  },
+}
+
+const OVERRIDES: DateOverride[] = [
+  { id: 'ov1', coachId: 'matt', date: '2026-06-23', type: 'block', note: 'Public holiday — unavailable' },
+  { id: 'ov2', coachId: 'jade', date: '2026-06-25', type: 'extra', startMins: 780, endMins: 1020, note: 'Extra availability — filling in for Matt' },
+]
+
+// Session configs for coached slots
+const COACHED_SESSIONS = [
+  { type: 'Individual Work Out', space: 'Primary Station', durationMins: 60, price: 35 as number | 'membership' },
+  { type: 'Small Group Session', space: 'Primary Station', durationMins: 90, price: 'membership' as number | 'membership' },
+  { type: 'Skills Clinic',       space: 'Secondary Station', durationMins: 60, price: 'membership' as number | 'membership' },
+]
+
+const SELF_SERVE_SESSIONS = [
+  { type: 'Casual Shooting',          space: 'Shooting Bay', durationMins: 60, price: 10 as number | 'membership' },
+  { type: 'Shooting Machine Session', space: 'Shooting Bay', durationMins: 60, price: 15 as number | 'membership' },
+]
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function minsToLabel(mins: number): string {
+  const h = Math.floor(mins / 60)
+  const m = mins % 60
+  const ampm = h >= 12 ? 'pm' : 'am'
+  const h12 = h > 12 ? h - 12 : h === 0 ? 12 : h
+  return `${h12}:${m.toString().padStart(2, '0')}${ampm}`
+}
+
+function uid(): string {
+  return Math.random().toString(36).slice(2, 10)
+}
+
+function jsDayToOurs(jsDay: number): DayOfWeek {
+  return ((jsDay + 6) % 7) as DayOfWeek
+}
+
+function addDays(dateStr: string, n: number): string {
+  const d = new Date(dateStr + 'T00:00:00')
+  d.setDate(d.getDate() + n)
+  return d.toISOString().slice(0, 10)
+}
+
+function formatDay(dateStr: string): { dayShort: string; dayNum: number; monthShort: string } {
+  const d = new Date(dateStr + 'T00:00:00')
+  const dayShort = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][jsDayToOurs(d.getDay())]
+  const monthShort = d.toLocaleDateString('en-AU', { month: 'short' })
+  return { dayShort, dayNum: d.getDate(), monthShort }
+}
+
+function formatWeekRange(startDate: string): string {
+  const end = addDays(startDate, 6)
+  const s = new Date(startDate + 'T00:00:00')
+  const e = new Date(end + 'T00:00:00')
+  const sStr = s.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
+  const eStr = e.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })
+  return `${sStr} – ${eStr}`
+}
+
+// Get the Monday of the week containing the given date
+function getMondayOf(dateStr: string): string {
+  const d = new Date(dateStr + 'T00:00:00')
+  const jsDay = d.getDay()
+  const diff = (jsDay + 6) % 7 // days since Monday
+  d.setDate(d.getDate() - diff)
+  return d.toISOString().slice(0, 10)
+}
+
+// ─── Slot Builder ─────────────────────────────────────────────────────────────
+
+function buildSlotsForWeek(mondayStr: string): SessionSlot[] {
+  const slots: SessionSlot[] = []
+
+  for (let i = 0; i < 7; i++) {
+    const dateStr = addDays(mondayStr, i)
+    const dow = jsDayToOurs(new Date(dateStr + 'T00:00:00').getDay())
+
+    // ── Self-serve slots (always shown) ───────────────────────────────────
+    for (const ss of SELF_SERVE_SESSIONS) {
+      // 3 slots per day for self-serve: 9am, 11am, 1pm
+      const times = [540, 660, 780]
+      for (const t of times) {
+        slots.push({
+          id: uid(),
+          date: dateStr,
+          startMins: t,
+          endMins: t + ss.durationMins,
+          sessionType: ss.type,
+          space: ss.space,
+          coach: 'self-serve',
+          price: ss.price,
+        })
+      }
+    }
+
+    // ── Coached slots ─────────────────────────────────────────────────────
+    for (const [cid, sched] of Object.entries(SCHEDULES) as [CoachId, CoachSchedule][]) {
+      const dayOvs = OVERRIDES.filter((o) => o.coachId === cid && o.date === dateStr)
+      const isBlocked = dayOvs.some((o) => o.type === 'block')
+      const extraOvs = dayOvs.filter((o) => o.type === 'extra')
+
+      const windows: { start: number; end: number }[] = []
+      if (!isBlocked && sched.days[dow].available) {
+        windows.push({ start: sched.days[dow].startMins, end: sched.days[dow].endMins })
+      }
+      for (const ex of extraOvs) {
+        if (ex.startMins !== undefined && ex.endMins !== undefined) {
+          windows.push({ start: ex.startMins, end: ex.endMins })
+        }
+      }
+
+      for (const win of windows) {
+        // Primary: Individual Work Out (60min) — fill first half
+        const midpoint = Math.floor((win.start + win.end) / 2)
+        // Generate Individual Work Out slots in first half
+        let cur = win.start
+        while (cur + 60 <= midpoint) {
+          slots.push({
+            id: uid(),
+            date: dateStr,
+            startMins: cur,
+            endMins: cur + 60,
+            sessionType: 'Individual Work Out',
+            space: 'Primary Station',
+            coach: cid,
+            price: 35,
+          })
+          cur += 60
+        }
+        // Skills Clinic (60min) — second half
+        cur = midpoint
+        while (cur + 60 <= win.end) {
+          slots.push({
+            id: uid(),
+            date: dateStr,
+            startMins: cur,
+            endMins: cur + 60,
+            sessionType: 'Skills Clinic',
+            space: 'Secondary Station',
+            coach: cid,
+            price: 'membership',
+          })
+          cur += 60
+        }
+      }
+    }
+  }
+
+  return slots
+}
+
+// ─── Coach Availability Dots ──────────────────────────────────────────────────
+
+function getCoachesForDate(dateStr: string): CoachId[] {
+  const dow = jsDayToOurs(new Date(dateStr + 'T00:00:00').getDay())
+  const available: CoachId[] = []
+  for (const [cid, sched] of Object.entries(SCHEDULES) as [CoachId, CoachSchedule][]) {
+    const dayOvs = OVERRIDES.filter((o) => o.coachId === cid && o.date === dateStr)
+    const isBlocked = dayOvs.some((o) => o.type === 'block')
+    const hasExtra = dayOvs.some((o) => o.type === 'extra')
+    if ((!isBlocked && sched.days[dow].available) || hasExtra) {
+      available.push(cid as CoachId)
+    }
+  }
+  return available
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
+
+export default function PortalPage() {
+  // Start on the week of 2026-06-23 (Monday after demo date)
+  const [weekStart, setWeekStart] = useState<string>(getMondayOf('2026-06-23'))
+  const [bookingSlot, setBookingSlot] = useState<SessionSlot | null>(null)
+  const [bookerName, setBookerName] = useState('')
+  const [toastMsg, setToastMsg] = useState('')
+  const [bookedIds, setBookedIds] = useState<Set<string>>(new Set())
+
+  const weekDates = useMemo(() => {
+    return Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
+  }, [weekStart])
+
+  const allSlots = useMemo(() => buildSlotsForWeek(weekStart), [weekStart])
+
+  function prevWeek() { setWeekStart((d) => addDays(d, -7)) }
+  function nextWeek() { setWeekStart((d) => addDays(d, 7)) }
+
+  function openBooking(slot: SessionSlot) {
+    setBookingSlot(slot)
+    setBookerName('')
+  }
+
+  function confirmBooking() {
+    if (!bookingSlot) return
+    setBookedIds((prev) => new Set([...prev, bookingSlot.id]))
+    setBookingSlot(null)
+    setToastMsg('Booking confirmed!')
+    setTimeout(() => setToastMsg(''), 3000)
+  }
+
+  function getCoachColor(coach: SessionSlot['coach']): string {
+    if (coach === 'matt') return COACH_MATT_COLOR
+    if (coach === 'jade') return COACH_JADE_COLOR
+    return SELF_SERVE_COLOR
+  }
+
+  function getCoachLabel(coach: SessionSlot['coach']): string {
+    if (coach === 'self-serve') return 'Self-Serve'
+    return COACH_NAMES[coach]
+  }
+
+  function getPriceLabel(price: number | 'membership'): string {
+    if (price === 'membership') return 'Included in membership'
+    return `$${price} casual rate`
+  }
+
+  return (
+    <div className="min-h-screen" style={{ backgroundColor: '#f4f6f9' }}>
+
+      {/* ── Page header ──────────────────────────────────────────────────────── */}
+      <div className="sticky top-0 z-20 border-b border-gray-200 bg-white px-6 py-4">
+        <div className="flex items-center gap-3">
+          <IconCalendarEvent size={22} style={{ color: '#6BA3D6' }} />
+          <div>
+            <h1 className="text-xl font-bold text-gray-900">Book a Session</h1>
+            <p className="text-sm text-gray-500">
+              Available sessions this week · Members use your weekly credits · Casual rates apply otherwise
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="mx-auto max-w-[1200px] p-6">
+
+        {/* ── Week navigation ───────────────────────────────────────────────── */}
+        <div className="mb-5 flex items-center justify-between">
+          <button
+            type="button"
+            onClick={prevWeek}
+            className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50"
+          >
+            <IconChevronLeft size={16} /> Prev Week
+          </button>
+          <span className="text-sm font-semibold text-gray-700">{formatWeekRange(weekStart)}</span>
+          <button
+            type="button"
+            onClick={nextWeek}
+            className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50"
+          >
+            Next Week <IconChevronRight size={16} />
+          </button>
+        </div>
+
+        {/* ── Legend ───────────────────────────────────────────────────────── */}
+        <div className="mb-4 flex items-center gap-4">
+          {[
+            { color: COACH_MATT_COLOR, label: 'Matt' },
+            { color: COACH_JADE_COLOR, label: 'Jade' },
+            { color: SELF_SERVE_COLOR, label: 'Self-Serve' },
+          ].map(({ color, label }) => (
+            <div key={label} className="flex items-center gap-1.5">
+              <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color }} />
+              <span className="text-xs text-gray-500">{label}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* ── Weekly grid ──────────────────────────────────────────────────── */}
+        <div className="grid grid-cols-7 gap-2">
+          {weekDates.map((dateStr) => {
+            const { dayShort, dayNum, monthShort } = formatDay(dateStr)
+            const daySlots = allSlots.filter((s) => s.date === dateStr)
+            const coaches = getCoachesForDate(dateStr)
+
+            return (
+              <div key={dateStr} className="flex flex-col gap-2">
+                {/* Day header */}
+                <div className="rounded-xl border border-gray-200 bg-white p-3 text-center shadow-sm">
+                  <div className="text-[10px] font-bold uppercase tracking-wide text-gray-400">{dayShort}</div>
+                  <div className="text-lg font-bold text-gray-900 leading-none mt-0.5">{dayNum}</div>
+                  <div className="text-[10px] text-gray-400">{monthShort}</div>
+                  {/* Coach dots */}
+                  <div className="mt-1.5 flex items-center justify-center gap-1">
+                    {coaches.map((c) => (
+                      <div
+                        key={c}
+                        className="h-2 w-2 rounded-full"
+                        style={{ backgroundColor: c === 'matt' ? COACH_MATT_COLOR : COACH_JADE_COLOR }}
+                        title={COACH_NAMES[c]}
+                      />
+                    ))}
+                    {coaches.length === 0 && (
+                      <div className="h-2 w-2 rounded-full bg-gray-200" title="No coaches" />
+                    )}
+                  </div>
+                </div>
+
+                {/* Slot cards */}
+                {daySlots.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-gray-200 bg-white p-3 text-center">
+                    <p className="text-[10px] text-gray-400">No sessions</p>
+                  </div>
+                ) : (
+                  daySlots.map((slot) => {
+                    const isBooked = bookedIds.has(slot.id)
+                    const coachColor = getCoachColor(slot.coach)
+                    return (
+                      <div
+                        key={slot.id}
+                        className="rounded-xl border bg-white p-2.5 shadow-sm transition"
+                        style={{
+                          borderColor: isBooked ? '#86efac' : '#e5e7eb',
+                          backgroundColor: isBooked ? '#f0fdf4' : 'white',
+                          opacity: isBooked ? 0.7 : 1,
+                        }}
+                      >
+                        {/* Time */}
+                        <p className="text-[10px] font-bold text-gray-700">
+                          {minsToLabel(slot.startMins)} – {minsToLabel(slot.endMins)}
+                        </p>
+
+                        {/* Session type badge */}
+                        <div
+                          className="mt-1 inline-block rounded-full px-1.5 py-0.5 text-[9px] font-bold leading-none"
+                          style={{ backgroundColor: coachColor + '20', color: coachColor }}
+                        >
+                          {slot.sessionType}
+                        </div>
+
+                        {/* Coach */}
+                        <div className="mt-1 flex items-center gap-1">
+                          <div className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: coachColor }} />
+                          <span className="text-[10px] text-gray-500">{getCoachLabel(slot.coach)}</span>
+                        </div>
+
+                        {/* Space */}
+                        <p className="text-[10px] text-gray-400">{slot.space}</p>
+
+                        {/* Price */}
+                        <p className="mt-1 text-[10px] font-medium" style={{ color: slot.price === 'membership' ? '#6BAD6B' : '#6b7280' }}>
+                          {getPriceLabel(slot.price)}
+                        </p>
+
+                        {/* Book button */}
+                        {isBooked ? (
+                          <div className="mt-2 flex items-center gap-1 text-[10px] font-semibold text-green-600">
+                            <IconCheck size={11} strokeWidth={2.5} /> Booked
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => openBooking(slot)}
+                            className="mt-2 w-full rounded-lg py-1.5 text-[11px] font-bold text-white transition hover:opacity-90"
+                            style={{ backgroundColor: coachColor }}
+                          >
+                            Book
+                          </button>
+                        )}
+                      </div>
+                    )
+                  })
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* ── Toast notification ───────────────────────────────────────────────── */}
+      {toastMsg && (
+        <div
+          className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 flex items-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold text-white shadow-xl"
+          style={{ backgroundColor: '#22c55e' }}
+        >
+          <IconCheck size={16} strokeWidth={2.5} />
+          {toastMsg}
+        </div>
+      )}
+
+      {/* ── Booking Modal ─────────────────────────────────────────────────────── */}
+      {bookingSlot && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+              <h2 className="text-base font-bold text-gray-900">Confirm Booking</h2>
+              <button
+                type="button"
+                onClick={() => setBookingSlot(null)}
+                className="rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100"
+              >
+                <IconX size={18} />
+              </button>
+            </div>
+
+            {/* Slot details */}
+            <div className="px-6 py-5 space-y-4">
+              <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-500">Session</span>
+                  <span className="text-sm font-semibold text-gray-800">{bookingSlot.sessionType}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-500">Date</span>
+                  <span className="text-sm font-semibold text-gray-800">
+                    {new Date(bookingSlot.date + 'T00:00:00').toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-500">Time</span>
+                  <span className="text-sm font-semibold text-gray-800">
+                    {minsToLabel(bookingSlot.startMins)} – {minsToLabel(bookingSlot.endMins)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-500">Space</span>
+                  <span className="text-sm font-semibold text-gray-800">{bookingSlot.space}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-500">Coach</span>
+                  <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold text-white"
+                    style={{ backgroundColor: getCoachColor(bookingSlot.coach) }}
+                  >
+                    <IconUser size={11} />
+                    {getCoachLabel(bookingSlot.coach)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-500">Price</span>
+                  <span className="text-sm font-semibold" style={{ color: bookingSlot.price === 'membership' ? '#16a34a' : '#374151' }}>
+                    {getPriceLabel(bookingSlot.price)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Name input */}
+              <div>
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  Your Name
+                </label>
+                <input
+                  type="text"
+                  value={bookerName}
+                  onChange={(e) => setBookerName(e.target.value)}
+                  placeholder="e.g. Jordan Mitchell"
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-[#6BA3D6] focus:ring-2 focus:ring-[#6BA3D6]/10"
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex justify-end gap-2 border-t border-gray-100 px-6 py-4">
+              <button
+                type="button"
+                onClick={() => setBookingSlot(null)}
+                className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmBooking}
+                disabled={!bookerName.trim()}
+                className="rounded-xl px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-40"
+                style={{ backgroundColor: '#6BA3D6' }}
+              >
+                Confirm Booking
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+    </div>
+  )
+}
