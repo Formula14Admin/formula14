@@ -1354,6 +1354,7 @@ function BookingModal({
     ? modal.booking : null
 
   const [spaceId,     setSpaceId]     = useState<SpaceId>(modal.kind === 'add' ? (modal.spaceId ?? 'primary') : src!.spaceId)
+  const [unavailableSpaces, setUnavailableSpaces] = useState<SpaceId[]>([modal.kind === 'add' ? (modal.spaceId ?? 'primary') : src!.spaceId])
   const [date,        setDate]        = useState(modal.kind === 'add' ? modal.date : src!.date)
   const [startMins,   setStartMins]   = useState(modal.kind === 'add' ? modal.startMins : src!.startMins)
   const [finishMins,  setFinishMins]  = useState(modal.kind === 'add' ? modal.startMins + 60 : src!.startMins + src!.duration)
@@ -1424,6 +1425,31 @@ function BookingModal({
 
   function handleSave() {
     const duration = Math.max(15, finishMins - startMins)
+
+    if (bookingType === 'unavailable') {
+      const spaces = (modal.kind === 'add' && unavailableSpaces.length > 0) ? unavailableSpaces : [spaceId]
+      if (editSeriesFuture) {
+        onSaveFrom(src!.date, src!.seriesId!, { spaceId, startMins, duration, sessionType, athletes: [], coach, bookingType: 'unavailable' as const })
+      } else if (repeat === 'none' || !repeatUntil) {
+        onSave(spaces.map((sid, i) => ({
+          spaceId: sid, startMins, duration, sessionType, athletes: [], coach,
+          bookingType: 'unavailable' as const, date,
+          id: i === 0 && modal.kind === 'edit' ? src?.id : undefined,
+          seriesId: modal.kind === 'edit' ? src?.seriesId : undefined,
+        })))
+      } else {
+        const newSeriesId = uid()
+        const dates = occurrenceDates(date, repeat, repeatUntil)
+        onSave(spaces.flatMap(sid =>
+          dates.map(d => ({
+            spaceId: sid, startMins, duration, sessionType, athletes: [], coach,
+            bookingType: 'unavailable' as const, date: d, seriesId: newSeriesId,
+          }))
+        ))
+      }
+      return
+    }
+
     const memberCasualNames = memberCasuals
       .map(e => e.type === 'existing' ? e.existingId : e.name.trim())
       .filter(Boolean)
@@ -1616,6 +1642,7 @@ function BookingModal({
                       setBookingType(type)
                       if (type === 'unavailable') {
                         setSessionType('Unavailable')
+                        setUnavailableSpaces([spaceId])
                       } else if (type === 'program') {
                         setSessionType('')
                       } else if (type === 'member') {
@@ -1635,27 +1662,46 @@ function BookingModal({
               </div>
               {/* Space */}
               <div>
-                <label className={LABEL}>Space</label>
+                <div className="mb-1 flex items-center justify-center gap-2">
+                  <label className={LABEL} style={{ margin: 0 }}>Space</label>
+                  {bookingType === 'unavailable' && modal.kind === 'add' && (
+                    <span className="text-[10px] font-medium text-gray-400">(select one or more)</span>
+                  )}
+                </div>
                 <div className="grid grid-cols-2 gap-2">
-                  {SPACES.map(sp => (
-                    <button
-                      key={sp.id}
-                      type="button"
-                      onClick={() => handleSpaceChange(sp.id)}
-                      className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-center text-sm font-semibold transition ${
-                        spaceId === sp.id
-                          ? 'border-transparent text-white'
-                          : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
-                      }`}
-                      style={spaceId === sp.id ? { backgroundColor: sp.color } : {}}
-                    >
-                      <span
-                        className="h-2 w-2 shrink-0 rounded-full"
-                        style={{ backgroundColor: spaceId === sp.id ? 'rgba(255,255,255,0.7)' : sp.color }}
-                      />
-                      {sp.label}
-                    </button>
-                  ))}
+                  {SPACES.map(sp => {
+                    const multiMode = bookingType === 'unavailable' && modal.kind === 'add'
+                    const isSelected = multiMode ? unavailableSpaces.includes(sp.id) : spaceId === sp.id
+                    return (
+                      <button
+                        key={sp.id}
+                        type="button"
+                        onClick={() => {
+                          if (multiMode) {
+                            setUnavailableSpaces(prev =>
+                              prev.includes(sp.id)
+                                ? prev.length > 1 ? prev.filter(id => id !== sp.id) : prev
+                                : [...prev, sp.id]
+                            )
+                          } else {
+                            handleSpaceChange(sp.id)
+                          }
+                        }}
+                        className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-center text-sm font-semibold transition ${
+                          isSelected
+                            ? 'border-transparent text-white'
+                            : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
+                        }`}
+                        style={isSelected ? { backgroundColor: sp.color } : {}}
+                      >
+                        <span
+                          className="h-2 w-2 shrink-0 rounded-full"
+                          style={{ backgroundColor: isSelected ? 'rgba(255,255,255,0.7)' : sp.color }}
+                        />
+                        {sp.label}
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
 
