@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react'
 import {
   IconPlus,
   IconTrash,
+  IconPencil,
   IconCheck,
   IconX,
   IconCalendarTime,
@@ -210,6 +211,7 @@ export default function AvailabilityPage() {
   const [ovEnd, setOvEnd] = useState(780)
   const [ovNote, setOvNote] = useState('')
   const [ovError, setOvError] = useState('')
+  const [editingOvId, setEditingOvId] = useState<string | null>(null)
 
   const coach = schedules[activeCoach]
   const coachColor = activeCoach === 'matt' ? ACCENT_MATT : ACCENT_JADE
@@ -275,9 +277,32 @@ export default function AvailabilityPage() {
 
   // ── Override CRUD ─────────────────────────────────────────────────────────
 
+  function resetOvForm() {
+    setOvDate(''); setOvType('block'); setOvStart(540); setOvEnd(780); setOvNote(''); setOvError(''); setEditingOvId(null)
+  }
+
+  function startEditOverride(ov: DateOverride) {
+    setEditingOvId(ov.id)
+    setOvDate(ov.date)
+    setOvType(ov.type)
+    setOvStart(ov.startMins ?? 540)
+    setOvEnd(ov.endMins ?? 780)
+    setOvNote(ov.note)
+    setOvError('')
+  }
+
   function addOverride() {
     if (!ovDate) { setOvError('Please select a date.'); return }
     if (ovType === 'extra' && ovEnd <= ovStart) { setOvError('End time must be after start time.'); return }
+    if (editingOvId) {
+      setOverrides((prev) => prev.map((o) =>
+        o.id === editingOvId
+          ? { ...o, date: ovDate, type: ovType, note: ovNote.trim(), ...(ovType === 'extra' ? { startMins: ovStart, endMins: ovEnd } : { startMins: undefined, endMins: undefined }) }
+          : o
+      ))
+      resetOvForm()
+      return
+    }
     const newOv: DateOverride = {
       id: uid(),
       coachId: activeCoach,
@@ -287,10 +312,11 @@ export default function AvailabilityPage() {
       note: ovNote.trim(),
     }
     setOverrides((prev) => [...prev, newOv])
-    setOvDate(''); setOvType('block'); setOvStart(540); setOvEnd(780); setOvNote(''); setOvError('')
+    resetOvForm()
   }
 
   function deleteOverride(id: string) {
+    if (editingOvId === id) resetOvForm()
     setOverrides((prev) => prev.filter((o) => o.id !== id))
   }
 
@@ -432,7 +458,7 @@ export default function AvailabilityPage() {
               <button
                 key={c}
                 type="button"
-                onClick={() => setActiveCoach(c)}
+                onClick={() => { setActiveCoach(c); resetOvForm() }}
                 className="rounded-lg px-6 py-2.5 text-sm font-semibold transition"
                 style={
                   active
@@ -541,7 +567,9 @@ export default function AvailabilityPage() {
                   key={ov.id}
                   className="flex items-center justify-between rounded-xl border px-4 py-3"
                   style={
-                    ov.type === 'block'
+                    editingOvId === ov.id
+                      ? { backgroundColor: '#eff6ff', borderColor: '#3b82f6', boxShadow: '0 0 0 2px #3b82f620' }
+                      : ov.type === 'block'
                       ? { backgroundColor: '#fff1f2', borderColor: '#fecdd3' }
                       : { backgroundColor: '#eff6ff', borderColor: '#bfdbfe' }
                   }
@@ -567,13 +595,22 @@ export default function AvailabilityPage() {
                     </div>
                     {ov.note && <p className="mt-0.5 text-xs text-gray-500">{ov.note}</p>}
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => deleteOverride(ov.id)}
-                    className="rounded-lg p-1.5 text-gray-400 transition hover:bg-red-50 hover:text-red-500"
-                  >
-                    <IconTrash size={15} />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => editingOvId === ov.id ? resetOvForm() : startEditOverride(ov)}
+                      className="rounded-lg p-1.5 text-gray-400 transition hover:bg-blue-50 hover:text-blue-500"
+                    >
+                      {editingOvId === ov.id ? <IconX size={15} /> : <IconPencil size={15} />}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => deleteOverride(ov.id)}
+                      className="rounded-lg p-1.5 text-gray-400 transition hover:bg-red-50 hover:text-red-500"
+                    >
+                      <IconTrash size={15} />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -581,7 +618,7 @@ export default function AvailabilityPage() {
 
           {/* Add override form */}
           <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-            <p className="mb-3 text-xs font-bold uppercase tracking-wide text-gray-500">Add Override</p>
+            <p className="mb-3 text-xs font-bold uppercase tracking-wide text-gray-500">{editingOvId ? 'Edit Override' : 'Add Override'}</p>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               <div>
                 <label className={LABEL_CLS}>Date</label>
@@ -627,15 +664,25 @@ export default function AvailabilityPage() {
               />
             </div>
             {ovError && <p className="mt-2 text-xs text-red-500">{ovError}</p>}
-            <div className="mt-3 flex justify-end">
+            <div className="mt-3 flex justify-end gap-2">
+              {editingOvId && (
+                <button
+                  type="button"
+                  onClick={resetOvForm}
+                  className="flex items-center gap-2 rounded-xl border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50"
+                >
+                  <IconX size={15} />
+                  Cancel
+                </button>
+              )}
               <button
                 type="button"
                 onClick={addOverride}
                 className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
                 style={{ backgroundColor: coachColor }}
               >
-                <IconPlus size={15} />
-                Add Override
+                {editingOvId ? <IconCheck size={15} /> : <IconPlus size={15} />}
+                {editingOvId ? 'Save Changes' : 'Add Override'}
               </button>
             </div>
           </div>
