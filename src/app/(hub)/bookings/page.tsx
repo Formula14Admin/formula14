@@ -1244,52 +1244,99 @@ export default function BookingsPage() {
 
         {/* ── Coach Availability Strip ── */}
         {coaches.length > 0 && (() => {
+          const HR_W = 60        // px per hour — matches SLOT_PX * 4
+          const TOTAL_W = 24 * HR_W
+          const ROW_H = 28
+          const RULER_H = 20
           const GM = (END_H - START_H) * 60
+
+          if (view === 'day') {
+            const date = visibleDates[0]
+            return (
+              <div className="flex shrink-0 border-b border-gray-200 bg-white" style={{ height: RULER_H + coaches.length * ROW_H }}>
+                {/* Fixed left: coach name labels */}
+                <div className="w-16 shrink-0 border-r border-gray-100 flex flex-col">
+                  <div style={{ height: RULER_H }} />
+                  {coaches.map(coach => (
+                    <div key={coach.id} style={{ height: ROW_H }} className="flex items-center justify-end px-2 border-t border-gray-100">
+                      <span className="text-[10px] font-semibold truncate" style={{ color: coach.color }}>{coach.name}</span>
+                    </div>
+                  ))}
+                </div>
+                {/* Horizontally scrollable timeline */}
+                <div className="flex-1 overflow-x-auto overflow-y-hidden select-none" style={{ scrollbarWidth: 'thin' }}>
+                  <div style={{ width: TOTAL_W }}>
+                    {/* Hour ruler */}
+                    <div className="flex border-b border-gray-100" style={{ height: RULER_H }}>
+                      {Array.from({ length: 24 }, (_, h) => (
+                        <div key={h} style={{ width: HR_W, flexShrink: 0, borderRight: '1px solid #f0f0f0' }} className="relative">
+                          <span className="absolute left-1 top-1 text-[9px] text-gray-400 whitespace-nowrap leading-none">
+                            {h === 0 ? '12am' : h === 12 ? '12pm' : h > 12 ? `${h - 12}pm` : `${h}am`}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    {/* Per-coach rows */}
+                    {coaches.map(coach => {
+                      const windows = getCoachWindowsForDate(coach.id, date)
+                      return (
+                        <div key={coach.id} className="relative border-t border-gray-100" style={{ height: ROW_H }}>
+                          {/* OFF background (light tint) */}
+                          <div className="absolute inset-0" style={{ backgroundColor: coach.color + '18' }} />
+                          {/* ON windows (solid) */}
+                          {windows.map((w, wi) => {
+                            const leftPx = w.startMins / 60 * HR_W
+                            const widthPx = Math.max(4, (w.endMins - w.startMins) / 60 * HR_W)
+                            return (
+                              <div
+                                key={wi}
+                                className="absolute top-2 bottom-2 rounded-sm"
+                                style={{ left: leftPx, width: widthPx, backgroundColor: coach.color }}
+                                title={`${coach.name}: ${minsToAvLabel(w.startMins)} – ${minsToAvLabel(w.endMins)}`}
+                              >
+                                {(w.endMins - w.startMins) >= 60 && (
+                                  <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-[9px] font-semibold text-white whitespace-nowrap leading-none">
+                                    {minsToAvLabel(w.startMins)} – {minsToAvLabel(w.endMins)}
+                                  </span>
+                                )}
+                              </div>
+                            )
+                          })}
+                          {windows.length === 0 && (
+                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[9px] text-gray-400">Off</span>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+            )
+          }
+
+          // Week view: compact stacked bars per day column
           return (
             <div className="flex shrink-0 border-b border-gray-100 bg-white">
               <div className="w-16 shrink-0 border-r border-gray-100 flex items-center justify-end px-2">
                 <span className="text-[9px] font-semibold uppercase tracking-wide text-gray-400">Coaches</span>
               </div>
-              {view === 'day' ? (
-                <div className="flex-1 flex flex-col gap-1 px-3 py-2">
+              {visibleDates.map((d, i) => (
+                <div key={d} className="flex-1 flex flex-col gap-1 px-1 py-2" style={{ borderLeft: i === 0 ? 'none' : '1px solid #f0f0f0' }}>
                   {coaches.map(coach => {
-                    const windows = getCoachWindowsForDate(coach.id, visibleDates[0])
+                    const windows = getCoachWindowsForDate(coach.id, d)
+                    const tip = windows.length === 0 ? `${coach.name}: Off` : `${coach.name}: ${windows.map(w => `${minsToAvLabel(w.startMins)}–${minsToAvLabel(w.endMins)}`).join(', ')}`
                     return (
-                      <div key={coach.id} className="flex items-center gap-2">
-                        <span className="w-10 shrink-0 text-[10px] font-semibold truncate" style={{ color: coach.color }}>{coach.name}</span>
-                        <div className="relative flex-1 h-2 rounded-full" style={{ backgroundColor: coach.color + '18' }}>
-                          {windows.length === 0
-                            ? <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[8px] text-gray-400">Off</span>
-                            : windows.map((w, wi) => {
-                                const s = Math.max(0, (Math.max(w.startMins, START_H*60) - START_H*60) / GM * 100)
-                                const e = Math.min(100, (Math.min(w.endMins, END_H*60) - START_H*60) / GM * 100)
-                                return <div key={wi} className="absolute top-0 h-full rounded-full" style={{ left: `${s}%`, width: `${Math.max(0, e-s)}%`, backgroundColor: coach.color }} title={`${coach.name}: ${minsToAvLabel(w.startMins)} – ${minsToAvLabel(w.endMins)}`} />
-                              })
-                          }
-                        </div>
+                      <div key={coach.id} className="relative h-3 w-full rounded" style={{ backgroundColor: coach.color + '20' }} title={tip}>
+                        {windows.map((w, wi) => {
+                          const s = Math.max(0, (Math.max(w.startMins, START_H*60) - START_H*60) / GM * 100)
+                          const e = Math.min(100, (Math.min(w.endMins, END_H*60) - START_H*60) / GM * 100)
+                          return <div key={wi} className="absolute top-0 h-full rounded" style={{ left: `${s}%`, width: `${Math.max(0, e-s)}%`, backgroundColor: coach.color }} />
+                        })}
                       </div>
                     )
                   })}
                 </div>
-              ) : (
-                visibleDates.map((d, i) => (
-                  <div key={d} className="flex-1 flex flex-col gap-1 px-1 py-2" style={{ borderLeft: i === 0 ? 'none' : '1px solid #f0f0f0' }}>
-                    {coaches.map(coach => {
-                      const windows = getCoachWindowsForDate(coach.id, d)
-                      const tip = windows.length === 0 ? `${coach.name}: Off` : `${coach.name}: ${windows.map(w => `${minsToAvLabel(w.startMins)}–${minsToAvLabel(w.endMins)}`).join(', ')}`
-                      return (
-                        <div key={coach.id} className="relative h-1.5 w-full rounded-full" style={{ backgroundColor: coach.color + '20' }} title={tip}>
-                          {windows.map((w, wi) => {
-                            const s = Math.max(0, (Math.max(w.startMins, START_H*60) - START_H*60) / GM * 100)
-                            const e = Math.min(100, (Math.min(w.endMins, END_H*60) - START_H*60) / GM * 100)
-                            return <div key={wi} className="absolute top-0 h-full rounded-full" style={{ left: `${s}%`, width: `${Math.max(0, e-s)}%`, backgroundColor: coach.color }} />
-                          })}
-                        </div>
-                      )
-                    })}
-                  </div>
-                ))
-              )}
+              ))}
             </div>
           )
         })()}
