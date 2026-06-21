@@ -369,6 +369,21 @@ function dateLabel(dateStr: string): string {
   return d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
+function getClosedRanges(open: { startMins: number; endMins: number }[]): { startMins: number; endMins: number }[] {
+  const gs = START_H * 60, ge = END_H * 60
+  if (open.length === 0) return [{ startMins: gs, endMins: ge }]
+  const sorted = [...open].sort((a, b) => a.startMins - b.startMins)
+  const closed: { startMins: number; endMins: number }[] = []
+  let cur = gs
+  for (const w of sorted) {
+    const s = Math.max(gs, w.startMins), e = Math.min(ge, w.endMins)
+    if (cur < s) closed.push({ startMins: cur, endMins: s })
+    if (e > cur) cur = e
+  }
+  if (cur < ge) closed.push({ startMins: cur, endMins: ge })
+  return closed
+}
+
 type CasualAthleteEntry = {
   id: string
   type: 'new' | 'existing' | ''
@@ -740,6 +755,31 @@ export default function BookingsPage() {
   function deleteOverride(id: string) {
     if (editingOvId === id) resetOvForm()
     setDateOverrides(prev => prev.filter(o => o.id !== id))
+  }
+
+  function getFacilityWindowsForDate(date: string) {
+    const dow = jsDayToOurs(new Date(date + 'T12:00:00').getDay())
+    if (facilityOverrides.some(o => o.date === date && o.type === 'block')) return []
+    const day = facilitySchedule[dow]
+    if (!day.available) return []
+    const extra = facilityOverrides
+      .filter(o => o.date === date && o.type === 'extra' && o.startMins != null && o.endMins != null)
+      .map(o => ({ startMins: o.startMins!, endMins: o.endMins! }))
+    return [...day.windows.map(w => ({ startMins: w.startMins, endMins: w.endMins })), ...extra]
+  }
+
+  function getCoachWindowsForDate(coachId: string, date: string) {
+    const sched = coachSchedules[coachId]
+    if (!sched) return []
+    const dow = jsDayToOurs(new Date(date + 'T12:00:00').getDay())
+    if (dateOverrides.some(o => o.coachId === coachId && o.date === date && o.type === 'block')) return []
+    const day = sched.days[dow]
+    const extra = dateOverrides
+      .filter(o => o.coachId === coachId && o.date === date && o.type === 'extra' && o.startMins != null && o.endMins != null)
+      .map(o => ({ startMins: o.startMins!, endMins: o.endMins! }))
+    if (!day.available && extra.length === 0) return []
+    const regular = day.available ? day.windows.map(w => ({ startMins: w.startMins, endMins: w.endMins })) : []
+    return [...regular, ...extra]
   }
 
   function addCoach(name: string) {
@@ -1202,6 +1242,58 @@ export default function BookingsPage() {
           )}
         </div>
 
+        {/* ── Coach Availability Strip ── */}
+        {coaches.length > 0 && (() => {
+          const GM = (END_H - START_H) * 60
+          return (
+            <div className="flex shrink-0 border-b border-gray-100 bg-white">
+              <div className="w-16 shrink-0 border-r border-gray-100 flex items-center justify-end px-2">
+                <span className="text-[9px] font-semibold uppercase tracking-wide text-gray-400">Coaches</span>
+              </div>
+              {view === 'day' ? (
+                <div className="flex-1 flex flex-col gap-1 px-3 py-2">
+                  {coaches.map(coach => {
+                    const windows = getCoachWindowsForDate(coach.id, visibleDates[0])
+                    return (
+                      <div key={coach.id} className="flex items-center gap-2">
+                        <span className="w-10 shrink-0 text-[10px] font-semibold truncate" style={{ color: coach.color }}>{coach.name}</span>
+                        <div className="relative flex-1 h-2 rounded-full" style={{ backgroundColor: coach.color + '18' }}>
+                          {windows.length === 0
+                            ? <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[8px] text-gray-400">Off</span>
+                            : windows.map((w, wi) => {
+                                const s = Math.max(0, (Math.max(w.startMins, START_H*60) - START_H*60) / GM * 100)
+                                const e = Math.min(100, (Math.min(w.endMins, END_H*60) - START_H*60) / GM * 100)
+                                return <div key={wi} className="absolute top-0 h-full rounded-full" style={{ left: `${s}%`, width: `${Math.max(0, e-s)}%`, backgroundColor: coach.color }} title={`${coach.name}: ${minsToAvLabel(w.startMins)} – ${minsToAvLabel(w.endMins)}`} />
+                              })
+                          }
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                visibleDates.map((d, i) => (
+                  <div key={d} className="flex-1 flex flex-col gap-1 px-1 py-2" style={{ borderLeft: i === 0 ? 'none' : '1px solid #f0f0f0' }}>
+                    {coaches.map(coach => {
+                      const windows = getCoachWindowsForDate(coach.id, d)
+                      const tip = windows.length === 0 ? `${coach.name}: Off` : `${coach.name}: ${windows.map(w => `${minsToAvLabel(w.startMins)}–${minsToAvLabel(w.endMins)}`).join(', ')}`
+                      return (
+                        <div key={coach.id} className="relative h-1.5 w-full rounded-full" style={{ backgroundColor: coach.color + '20' }} title={tip}>
+                          {windows.map((w, wi) => {
+                            const s = Math.max(0, (Math.max(w.startMins, START_H*60) - START_H*60) / GM * 100)
+                            const e = Math.min(100, (Math.min(w.endMins, END_H*60) - START_H*60) / GM * 100)
+                            return <div key={wi} className="absolute top-0 h-full rounded-full" style={{ left: `${s}%`, width: `${Math.max(0, e-s)}%`, backgroundColor: coach.color }} />
+                          })}
+                        </div>
+                      )
+                    })}
+                  </div>
+                ))
+              )}
+            </div>
+          )
+        })()}
+
         {/* Scrollable grid — TOP_PAD pushes the 6am row away from the header */}
         <div ref={gridRef} className="flex flex-1 overflow-y-auto" style={{ paddingTop: TOP_PAD }}>
 
@@ -1270,6 +1362,10 @@ export default function BookingsPage() {
                     onMouseMove={e => handleMouseMove(e, colKey)}
                     onMouseLeave={() => setHoverInfo(null)}
                   >
+                    {/* Facility closed overlay */}
+                    {getClosedRanges(getFacilityWindowsForDate(visibleDates[0])).map((r, ri) => (
+                      <div key={`fc${ri}`} className="pointer-events-none absolute left-0 right-0" style={{ top: toY(r.startMins), height: Math.max(0, toY(r.endMins) - toY(r.startMins)), background: 'repeating-linear-gradient(45deg, rgba(0,0,0,0.025), rgba(0,0,0,0.025) 3px, transparent 3px, transparent 9px)' }} />
+                    ))}
                     {/* Slot hover highlight */}
                     {hoverMatch && (
                       <div
@@ -1331,6 +1427,10 @@ export default function BookingsPage() {
                     onMouseMove={e => handleMouseMove(e, colKey)}
                     onMouseLeave={() => setHoverInfo(null)}
                   >
+                    {/* Facility closed overlay */}
+                    {getClosedRanges(getFacilityWindowsForDate(d)).map((r, ri) => (
+                      <div key={`fc${ri}`} className="pointer-events-none absolute left-0 right-0" style={{ top: toY(r.startMins), height: Math.max(0, toY(r.endMins) - toY(r.startMins)), background: 'repeating-linear-gradient(45deg, rgba(0,0,0,0.025), rgba(0,0,0,0.025) 3px, transparent 3px, transparent 9px)' }} />
+                    ))}
                     {/* Slot hover highlight */}
                     {hoverMatch && (
                       <div
