@@ -517,7 +517,7 @@ export default function BookingsPage() {
   const [conflictMsg, setConflictMsg] = useState<string | null>(null)
 
   // ── Module tab state ──────────────────────────────────────────────────────────
-  const [pageTab, setPageTab] = useState<'calendar' | 'coach-availability' | 'facility-availability' | 'join-requests'>('calendar')
+  const [pageTab, setPageTab] = useState<'calendar' | 'availability' | 'join-requests'>('calendar')
 
   // Coach Availability state (merged from old availability page)
   const [activeCoach, setActiveCoach] = useState<CoachId>('matt')
@@ -940,11 +940,10 @@ export default function BookingsPage() {
 
   const hours = Array.from({ length: END_H - START_H }, (_, i) => START_H + i)
 
-  const TABS: { id: 'calendar' | 'coach-availability' | 'facility-availability' | 'join-requests'; label: string; badge?: number }[] = [
-    { id: 'calendar',              label: 'Calendar' },
-    { id: 'coach-availability',    label: 'Coach Availability' },
-    { id: 'facility-availability', label: 'Facility Availability' },
-    { id: 'join-requests',         label: 'Join Requests', badge: pendingJoinRequestCount },
+  const TABS: { id: 'calendar' | 'availability' | 'join-requests'; label: string; badge?: number }[] = [
+    { id: 'calendar',      label: 'Calendar' },
+    { id: 'availability',  label: 'Availability' },
+    { id: 'join-requests', label: 'Join Requests', badge: pendingJoinRequestCount },
   ]
 
   return (
@@ -971,8 +970,8 @@ export default function BookingsPage() {
         ))}
       </div>
 
-      {pageTab === 'coach-availability' && (
-        <CoachAvailabilityTab
+      {pageTab === 'availability' && (
+        <AvailabilityTab
           activeCoach={activeCoach} setActiveCoach={setActiveCoach}
           coachSchedules={coachSchedules}
           setDayAvailable={setDayAvailable} addWindow={addWindow} removeWindow={removeWindow}
@@ -983,11 +982,6 @@ export default function BookingsPage() {
           ovNote={ovNote} setOvNote={setOvNote} ovError={ovError} editingOvId={editingOvId}
           resetOvForm={resetOvForm} startEditOverride={startEditOverride}
           addOverride={addOverride} deleteOverride={deleteOverride}
-        />
-      )}
-
-      {pageTab === 'facility-availability' && (
-        <FacilityAvailabilityTab
           facilitySchedule={facilitySchedule}
           setFacilityDayAvailable={setFacilityDayAvailable}
           addFacilityWindow={addFacilityWindow}
@@ -3242,14 +3236,16 @@ function AvTimeSelect({ value, onChange, minMins }: { value: number; onChange: (
   )
 }
 
-// ── Coach Availability Tab ──────────────────────────────────────────────────────
-function CoachAvailabilityTab({
+// ── Availability Tab (Coach + Facility merged) ──────────────────────────────────
+function AvailabilityTab({
   activeCoach, setActiveCoach,
   coachSchedules, setDayAvailable, addWindow, removeWindow, updateWindow, toggleWindowSessionType,
   dateOverrides,
   ovDate, setOvDate, ovType, setOvType, ovStart, setOvStart, ovEnd, setOvEnd,
   ovNote, setOvNote, ovError, editingOvId,
   resetOvForm, startEditOverride, addOverride, deleteOverride,
+  facilitySchedule, setFacilityDayAvailable, addFacilityWindow, removeFacilityWindow,
+  updateFacilityWindow, toggleFacilityWindowSessionType,
 }: {
   activeCoach: CoachId
   setActiveCoach: (c: CoachId) => void
@@ -3270,6 +3266,12 @@ function CoachAvailabilityTab({
   startEditOverride: (ov: DateOverride) => void
   addOverride: () => void
   deleteOverride: (id: string) => void
+  facilitySchedule: FacilitySchedule
+  setFacilityDayAvailable: (dow: DayOfWeek, available: boolean) => void
+  addFacilityWindow: (dow: DayOfWeek) => void
+  removeFacilityWindow: (dow: DayOfWeek, winId: string) => void
+  updateFacilityWindow: (dow: DayOfWeek, winId: string, patch: Partial<{ startMins: number; endMins: number; sessionTypes: string[] }>) => void
+  toggleFacilityWindowSessionType: (dow: DayOfWeek, winId: string, sessionType: string) => void
 }) {
   const coach = coachSchedules[activeCoach]
   const coachColor = activeCoach === 'matt' ? ACCENT_MATT : ACCENT_JADE
@@ -3285,8 +3287,8 @@ function CoachAvailabilityTab({
         <div className="flex items-center gap-3">
           <IconCalendarTime size={22} style={{ color: ACCENT_MATT }} />
           <div>
-            <h1 className="text-xl font-bold text-gray-900">Coach Availability</h1>
-            <p className="text-sm text-gray-500">Manage recurring schedules and date overrides per coach</p>
+            <h1 className="text-xl font-bold text-gray-900">Availability</h1>
+            <p className="text-sm text-gray-500">Manage coach schedules, date overrides, and facility open hours</p>
           </div>
         </div>
       </div>
@@ -3516,40 +3518,17 @@ function CoachAvailabilityTab({
             </div>
           </div>
         </div>
-      </div>
-    </div>
-  )
-}
 
-// ── Facility Availability Tab ───────────────────────────────────────────────────
-function FacilityAvailabilityTab({
-  facilitySchedule, setFacilityDayAvailable, addFacilityWindow, removeFacilityWindow, updateFacilityWindow, toggleFacilityWindowSessionType,
-}: {
-  facilitySchedule: FacilitySchedule
-  setFacilityDayAvailable: (dow: DayOfWeek, available: boolean) => void
-  addFacilityWindow: (dow: DayOfWeek) => void
-  removeFacilityWindow: (dow: DayOfWeek, winId: string) => void
-  updateFacilityWindow: (dow: DayOfWeek, winId: string, patch: Partial<{ startMins: number; endMins: number; sessionTypes: string[] }>) => void
-  toggleFacilityWindowSessionType: (dow: DayOfWeek, winId: string, sessionType: string) => void
-}) {
-  const FACIL_COLOR = '#059669'
-  return (
-    <div className="flex-1 overflow-y-auto min-h-0 bg-[#f4f6f9]">
-      <div className="border-b border-gray-200 bg-white px-6 py-4">
-        <div className="flex items-center gap-3">
-          <IconBuilding size={22} style={{ color: FACIL_COLOR }} />
-          <div>
-            <h1 className="text-xl font-bold text-gray-900">Facility Availability</h1>
-            <p className="text-sm text-gray-500">Control when the facility is open for self-serve sessions</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="mx-auto max-w-[1100px] space-y-6 p-6">
+        {/* ── Facility Availability ─────────────────────────────────────────── */}
         <div className="rounded-xl border border-gray-200 bg-white p-5">
-          <h2 className="text-sm font-bold text-gray-700 mb-4">Weekly Schedule</h2>
+          <div className="flex items-center gap-2 mb-4">
+            <IconBuilding size={16} style={{ color: '#059669' }} />
+            <h2 className="text-sm font-bold text-gray-700">Facility Availability</h2>
+            <span className="text-xs text-gray-400">— controls self-serve session access</span>
+          </div>
           <div className="flex gap-3 overflow-x-auto pb-1">
             {(Object.keys(DAYS_LABEL) as unknown as DayOfWeek[]).map(dow => {
+              const FACIL_COLOR = '#059669'
               const day = facilitySchedule[dow]
               return (
                 <div
@@ -3580,7 +3559,7 @@ function FacilityAvailabilityTab({
                                   const v = Number(e.target.value)
                                   updateFacilityWindow(dow, win.id, { startMins: v, ...(win.endMins <= v ? { endMins: Math.min(v + 30, 1320) } : {}) })
                                 }}
-                                className="w-full rounded-md border border-gray-200 px-1 py-1 text-[11px] text-gray-700 outline-none focus:border-[#6BA3D6]"
+                                className="w-full rounded-md border border-gray-200 px-1 py-1 text-[11px] text-gray-700 outline-none"
                               >
                                 {AV_TIME_OPTIONS.filter(o => o.mins < 1320).map(o => (
                                   <option key={o.mins} value={o.mins}>{o.label}</option>
@@ -3589,7 +3568,7 @@ function FacilityAvailabilityTab({
                               <select
                                 value={win.endMins}
                                 onChange={e => updateFacilityWindow(dow, win.id, { endMins: Number(e.target.value) })}
-                                className="w-full rounded-md border border-gray-200 px-1 py-1 text-[11px] text-gray-700 outline-none focus:border-[#6BA3D6]"
+                                className="w-full rounded-md border border-gray-200 px-1 py-1 text-[11px] text-gray-700 outline-none"
                               >
                                 {AV_TIME_OPTIONS.filter(o => o.mins > win.startMins).map(o => (
                                   <option key={o.mins} value={o.mins}>{o.label}</option>
@@ -3636,6 +3615,7 @@ function FacilityAvailabilityTab({
             })}
           </div>
         </div>
+
       </div>
     </div>
   )
