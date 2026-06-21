@@ -241,6 +241,15 @@ interface DateOverride {
   note: string
 }
 
+interface FacilityDateOverride {
+  id: string
+  date: string
+  type: 'block' | 'extra'
+  startMins?: number
+  endMins?: number
+  note: string
+}
+
 // ── Facility Availability ──────────────────────────────────────────────────────
 interface FacilityWindow {
   id: string
@@ -329,6 +338,8 @@ const INIT_DATE_OVERRIDES: DateOverride[] = [
   { id: 'ov1', coachId: 'matt', date: '2026-06-23', type: 'block', note: 'Public holiday — unavailable' },
   { id: 'ov2', coachId: 'jade', date: '2026-06-25', type: 'extra', startMins: 780, endMins: 1020, note: 'Extra availability — filling in for Matt' },
 ]
+
+const INIT_FACILITY_DATE_OVERRIDES: FacilityDateOverride[] = []
 
 const INIT_FACILITY_SCHEDULE: FacilitySchedule = {
   0: { available: true,  windows: [{ id: 'f0a', startMins: 360, endMins: 1320, sessionTypes: ['Casual Shooting', 'Shooting Machine Session', 'Weight Room Session'] }] },
@@ -546,6 +557,15 @@ export default function BookingsPage() {
 
   // Facility Availability state
   const [facilitySchedule, setFacilitySchedule] = useState<FacilitySchedule>(INIT_FACILITY_SCHEDULE)
+  const [facilityOverrides, setFacilityOverrides] = useState<FacilityDateOverride[]>(INIT_FACILITY_DATE_OVERRIDES)
+  // Facility override form state
+  const [fovDate, setFovDate] = useState('')
+  const [fovType, setFovType] = useState<'block' | 'extra'>('block')
+  const [fovStart, setFovStart] = useState(540)
+  const [fovEnd, setFovEnd] = useState(780)
+  const [fovNote, setFovNote] = useState('')
+  const [fovError, setFovError] = useState('')
+  const [editingFovId, setEditingFovId] = useState<string | null>(null)
 
   const gridRef = useRef<HTMLDivElement>(null)
 
@@ -799,6 +819,41 @@ export default function BookingsPage() {
     })
   }
 
+  // ── Facility Date Override helpers ────────────────────────────────────────────
+  function resetFovForm() {
+    setFovDate(''); setFovType('block'); setFovStart(540); setFovEnd(780); setFovNote(''); setFovError(''); setEditingFovId(null)
+  }
+
+  function startEditFacilityOverride(ov: FacilityDateOverride) {
+    setEditingFovId(ov.id); setFovDate(ov.date); setFovType(ov.type)
+    setFovStart(ov.startMins ?? 540); setFovEnd(ov.endMins ?? 780)
+    setFovNote(ov.note); setFovError('')
+  }
+
+  function addFacilityOverride() {
+    if (!fovDate) { setFovError('Please select a date.'); return }
+    if (fovType === 'extra' && fovEnd <= fovStart) { setFovError('End time must be after start time.'); return }
+    if (editingFovId) {
+      setFacilityOverrides(prev => prev.map(o =>
+        o.id === editingFovId
+          ? { ...o, date: fovDate, type: fovType, note: fovNote.trim(), ...(fovType === 'extra' ? { startMins: fovStart, endMins: fovEnd } : { startMins: undefined, endMins: undefined }) }
+          : o
+      ))
+      resetFovForm()
+      return
+    }
+    setFacilityOverrides(prev => [...prev, {
+      id: uid(), date: fovDate, type: fovType, note: fovNote.trim(),
+      ...(fovType === 'extra' ? { startMins: fovStart, endMins: fovEnd } : {}),
+    }])
+    resetFovForm()
+  }
+
+  function deleteFacilityOverride(id: string) {
+    if (editingFovId === id) resetFovForm()
+    setFacilityOverrides(prev => prev.filter(o => o.id !== id))
+  }
+
   // ── Join Request actions ──────────────────────────────────────────────────────
   function acceptJoinRequest(bookingId: string, requestId: string, athleteName: string) {
     setBookings(prev => prev.map(b => {
@@ -836,18 +891,27 @@ export default function BookingsPage() {
 
       // Check 1: Facility Availability (for self-serve types)
       if (FACILITY_SESSION_TYPES.includes(data.sessionType)) {
+        const dl = parse(bookDate).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })
+        const facilBlockOv = facilityOverrides.find(o => o.date === bookDate && o.type === 'block')
+        if (facilBlockOv) {
+          setConflictMsg(`The facility is closed on ${dl}${facilBlockOv.note ? ` (${facilBlockOv.note})` : ''}. ${data.sessionType} is not available.`)
+          return
+        }
         const facilDay = facilitySchedule[dow]
         if (!facilDay.available) {
           setConflictMsg(`The facility is closed on ${parse(bookDate).toLocaleDateString('en-AU', { weekday: 'long' })}s. ${data.sessionType} is not available.`)
           return
         }
-        const facilityAllows = facilDay.windows.some(win =>
+        const extraWindows = facilityOverrides
+          .filter(o => o.date === bookDate && o.type === 'extra' && o.startMins !== undefined && o.endMins !== undefined)
+          .map(o => ({ startMins: o.startMins!, endMins: o.endMins!, sessionTypes: FACILITY_SESSION_TYPES }))
+        const allFacilWindows = [...facilDay.windows, ...extraWindows]
+        const facilityAllows = allFacilWindows.some(win =>
           win.sessionTypes.includes(data.sessionType) &&
           win.startMins <= data.startMins &&
           win.endMins >= dataEnd
         )
         if (!facilityAllows) {
-          const dl = parse(bookDate).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })
           setConflictMsg(`${data.sessionType} is not available at ${fmtTime(data.startMins)} on ${dl}. Check Facility Availability for open hours.`)
           return
         }
@@ -1030,6 +1094,12 @@ export default function BookingsPage() {
           removeFacilityWindow={removeFacilityWindow}
           updateFacilityWindow={updateFacilityWindow}
           toggleFacilityWindowSessionType={toggleFacilityWindowSessionType}
+          facilityOverrides={facilityOverrides}
+          fovDate={fovDate} setFovDate={setFovDate} fovType={fovType} setFovType={setFovType}
+          fovStart={fovStart} setFovStart={setFovStart} fovEnd={fovEnd} setFovEnd={setFovEnd}
+          fovNote={fovNote} setFovNote={setFovNote} fovError={fovError} editingFovId={editingFovId}
+          resetFovForm={resetFovForm} startEditFacilityOverride={startEditFacilityOverride}
+          addFacilityOverride={addFacilityOverride} deleteFacilityOverride={deleteFacilityOverride}
         />
       )}
 
@@ -3288,6 +3358,10 @@ function AvailabilityTab({
   resetOvForm, startEditOverride, addOverride, deleteOverride,
   facilitySchedule, setFacilityDayAvailable, addFacilityWindow, removeFacilityWindow,
   updateFacilityWindow, toggleFacilityWindowSessionType,
+  facilityOverrides,
+  fovDate, setFovDate, fovType, setFovType, fovStart, setFovStart, fovEnd, setFovEnd,
+  fovNote, setFovNote, fovError, editingFovId,
+  resetFovForm, startEditFacilityOverride, addFacilityOverride, deleteFacilityOverride,
 }: {
   coaches: Coach[]
   addCoach: (name: string) => void
@@ -3316,6 +3390,17 @@ function AvailabilityTab({
   removeFacilityWindow: (dow: DayOfWeek, winId: string) => void
   updateFacilityWindow: (dow: DayOfWeek, winId: string, patch: Partial<{ startMins: number; endMins: number; sessionTypes: string[] }>) => void
   toggleFacilityWindowSessionType: (dow: DayOfWeek, winId: string, sessionType: string) => void
+  facilityOverrides: FacilityDateOverride[]
+  fovDate: string; setFovDate: (v: string) => void
+  fovType: 'block' | 'extra'; setFovType: (v: 'block' | 'extra') => void
+  fovStart: number; setFovStart: (v: number) => void
+  fovEnd: number; setFovEnd: (v: number) => void
+  fovNote: string; setFovNote: (v: string) => void
+  fovError: string; editingFovId: string | null
+  resetFovForm: () => void
+  startEditFacilityOverride: (ov: FacilityDateOverride) => void
+  addFacilityOverride: () => void
+  deleteFacilityOverride: (id: string) => void
 }) {
   const [avSubTab, setAvSubTab] = useState<'facility' | 'coach'>('facility')
   const [addCoachOpen, setAddCoachOpen] = useState(false)
@@ -3334,7 +3419,7 @@ function AvailabilityTab({
   }
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-[#f4f6f9]">
+    <div className="flex flex-1 min-h-0 flex-col overflow-hidden bg-[#f4f6f9]">
       {/* Sub-tab bar */}
       <div className="flex shrink-0 items-center gap-1 border-b border-gray-200 bg-white px-6">
         {([{ id: 'facility', label: 'Facility' }, { id: 'coach', label: 'Coach' }] as const).map(t => (
@@ -3415,6 +3500,98 @@ function AvailabilityTab({
                     </div>
                   )
                 })}
+              </div>
+            </div>
+
+            {/* Facility Date Overrides */}
+            <div className="rounded-xl border border-gray-200 bg-white p-5">
+              <h2 className="text-sm font-bold text-gray-700 mb-4">Date Overrides</h2>
+              <p className="mb-4 text-xs text-gray-400">Block the facility for public holidays or special closures, or add extra hours for a specific date.</p>
+
+              {facilityOverrides.length === 0 ? (
+                <p className="mb-4 text-sm text-gray-400 italic">No facility date overrides yet.</p>
+              ) : (
+                <div className="mb-4 space-y-2">
+                  {facilityOverrides.map(ov => (
+                    <div
+                      key={ov.id}
+                      className="flex items-center justify-between rounded-xl border px-4 py-3"
+                      style={
+                        editingFovId === ov.id
+                          ? { backgroundColor: '#eff6ff', borderColor: '#3b82f6', boxShadow: '0 0 0 2px #3b82f620' }
+                          : ov.type === 'block'
+                          ? { backgroundColor: '#fff1f2', borderColor: '#fecdd3' }
+                          : { backgroundColor: '#f0fdf4', borderColor: '#bbf7d0' }
+                      }
+                    >
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase" style={ov.type === 'block' ? { backgroundColor: '#fee2e2', color: '#b91c1c' } : { backgroundColor: '#dcfce7', color: '#15803d' }}>
+                            {ov.type === 'block' ? 'Closed' : 'Extra Hours'}
+                          </span>
+                          <span className="text-sm font-semibold text-gray-800">{dateLabel(ov.date)}</span>
+                          {ov.type === 'extra' && ov.startMins !== undefined && ov.endMins !== undefined && (
+                            <span className="text-sm text-gray-500">{minsToAvLabel(ov.startMins)} – {minsToAvLabel(ov.endMins)}</span>
+                          )}
+                        </div>
+                        {ov.note && <p className="mt-0.5 text-xs text-gray-500">{ov.note}</p>}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button type="button" onClick={() => editingFovId === ov.id ? resetFovForm() : startEditFacilityOverride(ov)} className="rounded-lg p-1.5 text-gray-400 transition hover:bg-blue-50 hover:text-blue-500">
+                          {editingFovId === ov.id ? <IconX size={15} /> : <IconPencil size={15} />}
+                        </button>
+                        <button type="button" onClick={() => deleteFacilityOverride(ov.id)} className="rounded-lg p-1.5 text-gray-400 transition hover:bg-red-50 hover:text-red-500">
+                          <IconTrash size={15} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                <p className="mb-3 text-xs font-bold uppercase tracking-wide text-gray-500">{editingFovId ? 'Edit Override' : 'Add Override'}</p>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <div>
+                    <label className={LABEL_CLS}>Date</label>
+                    <input type="date" value={fovDate} onChange={e => setFovDate(e.target.value)} className={INPUT_CLS} />
+                  </div>
+                  <div>
+                    <label className={LABEL_CLS}>Type</label>
+                    <select value={fovType} onChange={e => setFovType(e.target.value as 'block' | 'extra')} className={INPUT_CLS}>
+                      <option value="block">Close facility</option>
+                      <option value="extra">Add extra hours</option>
+                    </select>
+                  </div>
+                  {fovType === 'extra' && (
+                    <div className="flex gap-2 col-span-2 sm:col-span-2">
+                      <div className="flex-1">
+                        <label className={LABEL_CLS}>Start</label>
+                        <AvTimeSelect value={fovStart} onChange={setFovStart} />
+                      </div>
+                      <div className="flex-1">
+                        <label className={LABEL_CLS}>End</label>
+                        <AvTimeSelect value={fovEnd} onChange={setFovEnd} minMins={fovStart} />
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <div className="mt-3">
+                  <label className={LABEL_CLS}>Note (optional)</label>
+                  <input type="text" value={fovNote} onChange={e => setFovNote(e.target.value)} placeholder="e.g. Australia Day — public holiday" className={INPUT_CLS} />
+                </div>
+                {fovError && <p className="mt-2 text-xs text-red-500">{fovError}</p>}
+                <div className="mt-3 flex justify-end gap-2">
+                  {editingFovId && (
+                    <button type="button" onClick={resetFovForm} className="flex items-center gap-2 rounded-xl border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50">
+                      <IconX size={15} /> Cancel
+                    </button>
+                  )}
+                  <button type="button" onClick={addFacilityOverride} className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90" style={{ backgroundColor: FACIL_COLOR }}>
+                    {editingFovId ? <IconCheck size={15} /> : <IconPlus size={15} />}
+                    {editingFovId ? 'Save Changes' : 'Add Override'}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
