@@ -182,7 +182,7 @@ type Booking = {
   sessionType: string
   athletes: string[]
   coach: 'matt' | 'jade' | 'other' | ''
-  bookingType: 'member' | 'casual' | 'unavailable'
+  bookingType: 'member' | 'casual' | 'unavailable' | 'program'
   seriesId?: string
   memberTier?: MemberTier
 }
@@ -295,14 +295,14 @@ function makeSamples(today: string): Booking[] {
     { id:'b1',  date:today, spaceId:'primary',   startMins:7*60,     duration:60,  sessionType:'Individual Work Out', athletes:['Liam Carter'],                                              coach:'matt', bookingType:'member' },
     { id:'b2',  date:today, spaceId:'primary',   startMins:8*60+30,  duration:90,  sessionType:'Small Group Session', athletes:['Jordan Williams','Aisha Thompson','Devon Knox'],             coach:'matt', bookingType:'member' },
     { id:'b3',  date:today, spaceId:'secondary', startMins:9*60,     duration:120, sessionType:'Team Training',       athletes:['Liam Carter','Jordan Williams','Marcus Davies','Priya Mehta','Tyler Ross'], coach:'jade', bookingType:'member' },
-    { id:'b4',  date:today, spaceId:'primary',   startMins:11*60,    duration:60,  sessionType:'Programs',            athletes:[],                                                           coach:'matt', bookingType:'unavailable' },
+    { id:'b4',  date:today, spaceId:'primary',   startMins:11*60,    duration:60,  sessionType:'Domestic Academy',    athletes:[],                                                           coach:'matt', bookingType:'program' },
     { id:'b5',  date:today, spaceId:'secondary', startMins:14*60,    duration:90,  sessionType:'Small Group Session', athletes:['Aisha Thompson','Kai Okafor','Sam Liu'],                     coach:'jade', bookingType:'member' },
     { id:'b6',  date:today, spaceId:'shooting',  startMins:16*60+30, duration:60,  sessionType:'Volume Shooting',     athletes:['Devon Knox'],                                               coach:'matt', bookingType:'member' },
     { id:'b7',  date:today, spaceId:'meeting',   startMins:17*60,    duration:60,  sessionType:'Coach Meeting',       athletes:[],                                                           coach:'matt', bookingType:'member' },
     { id:'b8',  date:today, spaceId:'primary',   startMins:18*60,    duration:90,  sessionType:'Team Training',       athletes:['Liam Carter','Jordan Williams','Aisha Thompson','Tyler Ross','Zara Obi'], coach:'matt', bookingType:'member' },
     { id:'b9',  date:yd,   spaceId:'primary',   startMins:9*60,     duration:60,  sessionType:'Individual Work Out', athletes:['Tyler Ross'],                                               coach:'jade', bookingType:'member' },
     { id:'b10', date:yd,   spaceId:'meeting',   startMins:15*60,    duration:60,  sessionType:'Film Review',         athletes:['Jordan Williams','Marcus Davies'],                          coach:'matt', bookingType:'member' },
-    { id:'b11', date:d2,   spaceId:'secondary', startMins:10*60,    duration:90,  sessionType:'Programs',            athletes:[],                                                           coach:'matt', bookingType:'unavailable' },
+    { id:'b11', date:d2,   spaceId:'secondary', startMins:10*60,    duration:90,  sessionType:'Snipers Club',        athletes:[],                                                           coach:'matt', bookingType:'program' },
     { id:'b12', date:d2,   spaceId:'shooting',  startMins:14*60,    duration:60,  sessionType:'Volume Shooting',     athletes:['Kai Okafor'],                                              coach:'jade', bookingType:'member' },
     { id:'b13', date:tm,   spaceId:'primary',   startMins:8*60,     duration:90,  sessionType:'Small Group Session', athletes:['Liam Carter','Jordan Williams','Aisha Thompson'],           coach:'matt', bookingType:'member' },
     { id:'b14', date:tm,   spaceId:'meeting',   startMins:13*60,    duration:60,  sessionType:'Goal Setting',        athletes:['Devon Knox'],                                               coach:'jade', bookingType:'member' },
@@ -317,8 +317,8 @@ function makeSamples(today: string): Booking[] {
     { id:'sm1', date:today, spaceId:'shooting', startMins:10*60,     duration:60, sessionType:'Shooting Machine Rental', athletes:['Liam Carter'],    coach:'', bookingType:'casual' },
     { id:'sm2', date:tm,    spaceId:'shooting', startMins:13*60+30,  duration:45, sessionType:'Shooting Machine Rental', athletes:['Jordan Williams'], coach:'', bookingType:'casual' },
     // Program demos
-    { id:'pg1', date:today, spaceId:'secondary', startMins:12*60, duration:60, sessionType:'Mid Day Ladies Comp', athletes:[], coach:'jade', bookingType:'casual' },
-    { id:'pg2', date:tm,    spaceId:'primary',   startMins:10*60, duration:60, sessionType:'Domestic Academy',  athletes:['Aisha Thompson','Devon Knox','Tyler Ross','Priya Mehta','Sam Liu','Zara Obi'], coach:'matt', bookingType:'member' },
+    { id:'pg1', date:today, spaceId:'secondary', startMins:12*60, duration:60, sessionType:'Mid Day Ladies Comp', athletes:[], coach:'jade', bookingType:'program' },
+    { id:'pg2', date:tm,    spaceId:'primary',   startMins:10*60, duration:60, sessionType:'Domestic Academy',  athletes:['Aisha Thompson','Devon Knox','Tyler Ross','Priya Mehta','Sam Liu','Zara Obi'], coach:'matt', bookingType:'program' },
   ]
 }
 
@@ -779,8 +779,8 @@ function BookingBlock({
   const top    = toY(booking.startMins)
   const height = Math.max(SLOT_PX, (booking.duration / 15) * SLOT_PX)
   const coachBadge = booking.coach === 'matt' ? 'M' : booking.coach === 'jade' ? 'J' : booking.coach === 'other' ? 'O' : null
-  const chipColor = booking.bookingType === 'unavailable' ? '#ef4444' : color
-  const chipLight = booking.bookingType === 'unavailable' ? '#fee2e2' : light
+  const chipColor = booking.bookingType === 'unavailable' ? '#ef4444' : booking.bookingType === 'program' ? '#D4A520' : color
+  const chipLight = booking.bookingType === 'unavailable' ? '#fee2e2' : booking.bookingType === 'program' ? '#fdf5e0' : light
 
   const athleteStr = booking.athletes.length === 0 ? '' :
     booking.athletes.length <= 2
@@ -1362,7 +1362,7 @@ function BookingModal({
   const [coach,       setCoach]       = useState<'matt' | 'jade' | 'other' | ''>(modal.kind === 'add' ? '' : src!.coach)
   const [repeat,      setRepeat]      = useState<'none' | 'weekly' | 'fortnightly' | 'monthly' | 'yearly'>('none')
   const [repeatUntil, setRepeatUntil] = useState('')
-  const [bookingType, setBookingType] = useState<'member' | 'casual' | 'unavailable'>('member')
+  const [bookingType, setBookingType] = useState<'member' | 'casual' | 'unavailable' | 'program'>('member')
   const [seriesPrompt, setSeriesPrompt] = useState<'edit' | 'delete' | null>(null)
   const [seriesScope,  setSeriesScope]  = useState<'single' | 'future'>('single')
   const [casualAthletes, setCasualAthletes] = useState<CasualAthleteEntry[]>([newCasualAthlete()])
@@ -1372,7 +1372,7 @@ function BookingModal({
   const [customAthlete,  setCustomAthlete]  = useState('')
   const [memberTier,            setMemberTier]            = useState<MemberTier | ''>('')
   const [machineRentalDuration, setMachineRentalDuration] = useState<30 | 45 | 60>(60)
-  const accentColor  = bookingType === 'casual' ? '#6BAD6B' : bookingType === 'unavailable' ? '#ef4444' : '#6BA3D6'
+  const accentColor  = bookingType === 'casual' ? '#6BAD6B' : bookingType === 'unavailable' ? '#ef4444' : bookingType === 'program' ? '#D4A520' : '#6BA3D6'
   const isIndividual = bookingType === 'member' && sessionType === 'Individual Work Out'
   const isMachineRental = sessionType === 'Shooting Machine Rental'
 
@@ -1608,21 +1608,28 @@ function BookingModal({
               )}
               {/* Booking type toggle */}
               <div className="flex overflow-hidden rounded-xl border border-gray-200">
-                {(['member', 'casual', 'unavailable'] as const).map((type, i) => (
+                {(['member', 'casual', 'program', 'unavailable'] as const).map((type, i) => (
                   <button
                     key={type}
                     type="button"
                     onClick={() => {
                       setBookingType(type)
-                      if (type === 'member' && sessionType === 'Team Training') setSessionType('')
-                      if (type === 'unavailable') setSessionType('Unavailable')
+                      if (type === 'unavailable') {
+                        setSessionType('Unavailable')
+                      } else if (type === 'program') {
+                        setSessionType('')
+                      } else if (type === 'member') {
+                        if (sessionType === 'Team Training' || sessionType === 'Unavailable' || ALL_PROGRAM_NAMES.includes(sessionType)) setSessionType('')
+                      } else if (type === 'casual') {
+                        if (sessionType === 'Unavailable' || ALL_PROGRAM_NAMES.includes(sessionType)) setSessionType('')
+                      }
                     }}
                     className={`flex-1 py-2.5 text-sm font-semibold transition ${i === 0 ? '' : 'border-l border-gray-200'}`}
                     style={bookingType === type
-                      ? { backgroundColor: accentColor, color: 'white' }
+                      ? { backgroundColor: type === 'casual' ? '#6BAD6B' : type === 'unavailable' ? '#ef4444' : type === 'program' ? '#D4A520' : '#6BA3D6', color: 'white' }
                       : { backgroundColor: 'white', color: '#6b7280' }}
                   >
-                    {type === 'member' ? 'Member Booking' : type === 'casual' ? 'Casual Booking' : 'Unavailable'}
+                    {type === 'member' ? 'Member Booking' : type === 'casual' ? 'Casual Booking' : type === 'program' ? 'Programs' : 'Unavailable'}
                   </button>
                 ))}
               </div>
@@ -1654,26 +1661,6 @@ function BookingModal({
 
               {bookingType === 'unavailable' ? (
                 <>
-                  {/* Unavailable Reason toggle */}
-                  <div>
-                    <label className={LABEL}>Reason</label>
-                    <div className="flex overflow-hidden rounded-xl border border-gray-200">
-                      {(['Unavailable', 'Programs'] as const).map((reason, i) => (
-                        <button
-                          key={reason}
-                          type="button"
-                          onClick={() => setSessionType(reason)}
-                          className={`flex-1 py-2 text-sm font-semibold transition ${i > 0 ? 'border-l border-gray-200' : ''}`}
-                          style={sessionType === reason
-                            ? { backgroundColor: accentColor, color: 'white' }
-                            : { backgroundColor: 'white', color: '#6b7280' }}
-                        >
-                          {reason}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
                   {/* Unavailable Row 1: Date | Repeat */}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
@@ -1736,6 +1723,122 @@ function BookingModal({
                       </div>
                     </div>
                   )}
+                </>
+              ) : bookingType === 'program' ? (
+                <>
+                  {/* Row 1: Program | Date */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className={LABEL}>Program</label>
+                      <SelectPicker
+                        value={sessionType}
+                        onChange={setSessionType}
+                        accentColor={accentColor}
+                        panelMaxHeight={260}
+                        options={[
+                          { value: '', label: 'Select A Program', muted: true },
+                          { value: '_dev', label: 'Development Programs', header: true },
+                          ...PROGRAM_GROUPS['Development Programs'].map(p => ({ value: p, label: p })),
+                          { value: '_soc', label: 'Social Programs', header: true },
+                          ...PROGRAM_GROUPS['Social Programs'].map(p => ({ value: p, label: p })),
+                        ]}
+                      />
+                    </div>
+                    <div>
+                      <label className={LABEL}>Date</label>
+                      <DatePicker value={date} onChange={setDate} accentColor={accentColor} />
+                    </div>
+                  </div>
+
+                  {/* Row 2: Start Time | Finish Time */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className={LABEL}>Start time</label>
+                      <TimePicker
+                        value={startMins}
+                        onChange={s => { setStartMins(s); if (finishMins <= s) setFinishMins(s + 60) }}
+                        options={Array.from({ length: 95 }, (_, i) => i * 15)}
+                        accentColor={accentColor}
+                      />
+                    </div>
+                    <div>
+                      <label className={LABEL}>Finish time</label>
+                      <TimePicker
+                        value={finishMins}
+                        onChange={setFinishMins}
+                        options={Array.from({ length: 95 }, (_, i) => (i + 1) * 15).filter(m => m > startMins)}
+                        accentColor={accentColor}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Row 3: Coach | Repeat */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className={LABEL}>Coach</label>
+                      <SelectPicker
+                        value={coach}
+                        onChange={v => setCoach(v as 'matt' | 'jade' | 'other' | '')}
+                        accentColor={accentColor}
+                        options={[
+                          { value: '', label: 'No Coach Required', muted: true },
+                          { value: 'matt', label: 'Matt' },
+                          { value: 'jade', label: 'Jade' },
+                          { value: 'other', label: 'Other' },
+                        ]}
+                      />
+                    </div>
+                    <div>
+                      <label className={LABEL}>Repeat</label>
+                      <SelectPicker
+                        value={repeat}
+                        onChange={v => { setRepeat(v as typeof repeat); setRepeatUntil('') }}
+                        accentColor={accentColor}
+                        options={[
+                          { value: 'none', label: 'None' },
+                          { value: 'weekly', label: 'Weekly' },
+                          { value: 'fortnightly', label: 'Fortnightly' },
+                          { value: 'monthly', label: 'Monthly' },
+                          { value: 'yearly', label: 'Yearly' },
+                        ]}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Repeat details */}
+                  {repeat !== 'none' && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className={LABEL}>Ends on</label>
+                        <DatePicker value={repeatUntil} onChange={setRepeatUntil} accentColor={accentColor} />
+                      </div>
+                      <div>
+                        <label className={LABEL}>Sessions</label>
+                        <div className="flex h-10 w-full items-center justify-center rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-500">
+                          {repeatUntil
+                            ? `${occurrenceDates(date, repeat, repeatUntil).length} sessions`
+                            : '—'}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Athletes */}
+                  <div>
+                    <label className={LABEL}>Athletes</label>
+                    <SelectPicker
+                      value=""
+                      onChange={() => {}}
+                      multiValues={athletes}
+                      onChangeMulti={setAthletes}
+                      accentColor={accentColor}
+                      centerOnTrigger
+                      options={[
+                        { value: '', label: 'Select Athletes', muted: true },
+                        ...[...ATHLETES].sort().map(a => ({ value: a, label: a })),
+                      ]}
+                    />
+                  </div>
                 </>
               ) : (
                 <>
@@ -2437,13 +2540,6 @@ function BookingModal({
                     </button>
                     <button
                       type="button"
-                      onClick={handleReset}
-                      className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50"
-                    >
-                      Refresh Booking
-                    </button>
-                    <button
-                      type="button"
                       onClick={onClose}
                       className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50"
                     >
@@ -2472,18 +2568,11 @@ function BookingModal({
                   </button>
                   <button
                     type="button"
-                    onClick={handleReset}
-                    className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50"
-                  >
-                    Refresh Booking
-                  </button>
-                  <button
-                    type="button"
                     onClick={handleSave}
                     className="rounded-lg px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90"
                     style={{ backgroundColor: accentColor }}
                   >
-                    {(modal.kind === 'edit' || editSeriesFuture) ? 'Save Changes' : bookingType === 'unavailable' ? 'Mark Unavailability' : 'Create Booking'}
+                    {(modal.kind === 'edit' || editSeriesFuture) ? 'Save Changes' : bookingType === 'unavailable' ? 'Mark Unavailability' : bookingType === 'program' ? 'Save Program' : 'Create Booking'}
                   </button>
                 </div>
               )}
