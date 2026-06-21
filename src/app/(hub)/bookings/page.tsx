@@ -895,6 +895,20 @@ export default function BookingsPage() {
     setFacilityOverrides(prev => prev.filter(o => o.id !== id))
   }
 
+  function addFacilityOverrideDirect(date: string, type: 'block' | 'extra', note: string, startMins?: number, endMins?: number) {
+    setFacilityOverrides(prev => [...prev, {
+      id: uid(), date, type, note,
+      ...(type === 'extra' && startMins != null && endMins != null ? { startMins, endMins } : {}),
+    }])
+  }
+
+  function addCoachOverrideDirect(coachId: string, date: string, type: 'block' | 'extra', note: string, startMins?: number, endMins?: number) {
+    setDateOverrides(prev => [...prev, {
+      id: uid(), coachId, date, type, note,
+      ...(type === 'extra' && startMins != null && endMins != null ? { startMins, endMins } : {}),
+    }])
+  }
+
   // ── Join Request actions ──────────────────────────────────────────────────────
   function acceptJoinRequest(bookingId: string, requestId: string, athleteName: string) {
     setBookings(prev => prev.map(b => {
@@ -1141,6 +1155,7 @@ export default function BookingsPage() {
           fovNote={fovNote} setFovNote={setFovNote} fovError={fovError} editingFovId={editingFovId}
           resetFovForm={resetFovForm} startEditFacilityOverride={startEditFacilityOverride}
           addFacilityOverride={addFacilityOverride} deleteFacilityOverride={deleteFacilityOverride}
+          addFacilityOverrideDirect={addFacilityOverrideDirect} addCoachOverrideDirect={addCoachOverrideDirect}
         />
       )}
 
@@ -3564,6 +3579,7 @@ function AvailabilityTab({
   fovDate, setFovDate, fovType, setFovType, fovStart, setFovStart, fovEnd, setFovEnd,
   fovNote, setFovNote, fovError, editingFovId,
   resetFovForm, startEditFacilityOverride, addFacilityOverride, deleteFacilityOverride,
+  addFacilityOverrideDirect, addCoachOverrideDirect,
 }: {
   coaches: Coach[]
   addCoach: (name: string) => void
@@ -3603,10 +3619,26 @@ function AvailabilityTab({
   startEditFacilityOverride: (ov: FacilityDateOverride) => void
   addFacilityOverride: () => void
   deleteFacilityOverride: (id: string) => void
+  addFacilityOverrideDirect: (date: string, type: 'block' | 'extra', note: string, startMins?: number, endMins?: number) => void
+  addCoachOverrideDirect: (coachId: string, date: string, type: 'block' | 'extra', note: string, startMins?: number, endMins?: number) => void
 }) {
-  const [avSubTab, setAvSubTab] = useState<'facility' | 'coach'>('facility')
+  const [avSubTab, setAvSubTab] = useState<'overview' | 'facility' | 'coach'>('overview')
   const [addCoachOpen, setAddCoachOpen] = useState(false)
   const [newCoachName, setNewCoachName] = useState('')
+
+  // Overview tab state
+  const [ovYear, setOvYear] = useState(() => new Date().getFullYear())
+  const [ovMonth, setOvMonth] = useState(() => new Date().getMonth())
+  const [ovSelDate, setOvSelDate] = useState<string | null>(null)
+  const [ovPanelFacType, setOvPanelFacType] = useState<'block' | 'extra' | null>(null)
+  const [ovPanelFacNote, setOvPanelFacNote] = useState('')
+  const [ovPanelFacStart, setOvPanelFacStart] = useState(540)
+  const [ovPanelFacEnd, setOvPanelFacEnd] = useState(780)
+  const [ovPanelCchId, setOvPanelCchId] = useState<string | null>(null)
+  const [ovPanelCchType, setOvPanelCchType] = useState<'block' | 'extra' | null>(null)
+  const [ovPanelCchNote, setOvPanelCchNote] = useState('')
+  const [ovPanelCchStart, setOvPanelCchStart] = useState(540)
+  const [ovPanelCchEnd, setOvPanelCchEnd] = useState(780)
 
   const LABEL_CLS = 'mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-400'
   const INPUT_CLS = 'h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-800 outline-none transition focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/40'
@@ -3625,7 +3657,7 @@ function AvailabilityTab({
     <div className="flex flex-1 min-h-0 flex-col overflow-hidden bg-[#f4f6f9]">
       {/* Sub-tab bar */}
       <div className="flex shrink-0 items-center gap-1 border-b border-gray-200 bg-white px-6">
-        {([{ id: 'facility', label: 'Facility' }, { id: 'coach', label: 'Coach' }] as const).map(t => (
+        {([{ id: 'overview', label: 'Overview' }, { id: 'facility', label: 'Facility' }, { id: 'coach', label: 'Coach' }] as const).map(t => (
           <button
             key={t.id}
             onClick={() => setAvSubTab(t.id)}
@@ -3638,10 +3670,390 @@ function AvailabilityTab({
         ))}
       </div>
 
-      <div className="flex-1 overflow-y-auto min-h-0">
+      <div className={avSubTab === 'overview' ? 'flex min-h-0 flex-1 overflow-hidden' : 'flex-1 overflow-y-auto min-h-0'}>
+
+        {/* ── OVERVIEW SUB-TAB ── */}
+        {avSubTab === 'overview' && (() => {
+          const _td = new Date()
+          const todayIso = [_td.getFullYear(), String(_td.getMonth()+1).padStart(2,'0'), String(_td.getDate()).padStart(2,'0')].join('-')
+
+          function mkIso(dt: Date) {
+            return [dt.getFullYear(), String(dt.getMonth()+1).padStart(2,'0'), String(dt.getDate()).padStart(2,'0')].join('-')
+          }
+
+          const firstDow = (new Date(ovYear, ovMonth, 1).getDay() + 6) % 7
+          const daysInMon = new Date(ovYear, ovMonth + 1, 0).getDate()
+          const daysInPrev = new Date(ovYear, ovMonth, 0).getDate()
+
+          const cells: { iso: string; inMonth: boolean; d: number }[] = []
+          for (let i = firstDow - 1; i >= 0; i--)
+            cells.push({ iso: mkIso(new Date(ovYear, ovMonth - 1, daysInPrev - i)), inMonth: false, d: daysInPrev - i })
+          for (let d = 1; d <= daysInMon; d++)
+            cells.push({ iso: mkIso(new Date(ovYear, ovMonth, d)), inMonth: true, d })
+          for (let d = 1; cells.length < 42; d++)
+            cells.push({ iso: mkIso(new Date(ovYear, ovMonth + 1, d)), inMonth: false, d })
+
+          function facOpen(iso: string) {
+            if (facilityOverrides.some(o => o.date === iso && o.type === 'block')) return false
+            return facilitySchedule[jsDayToOurs(new Date(iso + 'T12:00:00').getDay())].available
+          }
+
+          function coachOn(coachId: string, iso: string) {
+            if (dateOverrides.some(o => o.coachId === coachId && o.date === iso && o.type === 'block')) return false
+            const sched = coachSchedules[coachId]
+            if (!sched) return false
+            const dow = jsDayToOurs(new Date(iso + 'T12:00:00').getDay())
+            return sched.days[dow].available || dateOverrides.some(o => o.coachId === coachId && o.date === iso && o.type === 'extra')
+          }
+
+          function clearPanel() {
+            setOvSelDate(null)
+            setOvPanelFacType(null); setOvPanelFacNote('')
+            setOvPanelCchId(null); setOvPanelCchType(null); setOvPanelCchNote('')
+          }
+
+          function selectDay(iso: string) {
+            if (iso === ovSelDate) { clearPanel(); return }
+            setOvSelDate(iso)
+            setOvPanelFacType(null); setOvPanelFacNote('')
+            setOvPanelCchId(null); setOvPanelCchType(null); setOvPanelCchNote('')
+          }
+
+          return (
+            <div className="flex min-h-0 flex-1 overflow-hidden">
+
+              {/* ── Calendar pane ── */}
+              <div className={`flex flex-col overflow-y-auto bg-[#f4f6f9] ${ovSelDate ? 'w-[58%]' : 'w-full'}`}>
+
+                {/* Month nav */}
+                <div className="sticky top-0 z-10 flex shrink-0 items-center justify-between border-b border-gray-200 bg-white px-6 py-3">
+                  <button type="button"
+                    onClick={() => { if (ovMonth === 0) { setOvMonth(11); setOvYear(y => y-1) } else setOvMonth(m => m-1) }}
+                    className="rounded-lg p-1.5 text-gray-500 transition hover:bg-gray-100">
+                    <IconChevronLeft size={16} />
+                  </button>
+                  <span className="text-sm font-bold text-gray-800">{MONTH_NAMES[ovMonth]} {ovYear}</span>
+                  <button type="button"
+                    onClick={() => { if (ovMonth === 11) { setOvMonth(0); setOvYear(y => y+1) } else setOvMonth(m => m+1) }}
+                    className="rounded-lg p-1.5 text-gray-500 transition hover:bg-gray-100">
+                    <IconChevronRight size={16} />
+                  </button>
+                </div>
+
+                {/* Day-of-week headers */}
+                <div className="grid grid-cols-7 border-b border-gray-200 bg-white px-3 py-2">
+                  {['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d => (
+                    <div key={d} className="text-center text-[10px] font-semibold uppercase tracking-wide text-gray-400">{d}</div>
+                  ))}
+                </div>
+
+                {/* Day grid */}
+                <div className="grid grid-cols-7 gap-1.5 p-3">
+                  {cells.map(cell => {
+                    const isToday = cell.iso === todayIso
+                    const isSel = cell.iso === ovSelDate
+                    const open = facOpen(cell.iso)
+                    const hasOv = facilityOverrides.some(o => o.date === cell.iso) || dateOverrides.some(o => o.date === cell.iso)
+                    return (
+                      <button key={cell.iso} type="button" onClick={() => selectDay(cell.iso)}
+                        className={`flex flex-col gap-1 rounded-xl border p-2 text-left transition ${
+                          isSel ? 'border-[#6BA3D6] bg-[#eff6ff] shadow-sm'
+                          : cell.inMonth ? 'border-gray-100 bg-white hover:border-gray-300 hover:shadow-sm'
+                          : 'border-transparent bg-white/50 hover:bg-white/80'
+                        }`}
+                        style={{ minHeight: 72 }}
+                      >
+                        <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-bold leading-none ${
+                          isToday ? 'bg-[#6BA3D6] text-white'
+                          : cell.inMonth ? 'text-gray-700' : 'text-gray-300'
+                        }`}>{cell.d}</span>
+                        {cell.inMonth && (
+                          <>
+                            <div className="flex items-center gap-1">
+                              <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${open ? 'bg-emerald-500' : 'bg-red-300'}`} />
+                              {hasOv && (
+                                <span className="rounded px-0.5 py-px text-[7px] font-bold uppercase leading-tight"
+                                  style={{ backgroundColor: '#fef3c7', color: '#b45309' }}>OV</span>
+                              )}
+                            </div>
+                            {coaches.length > 0 && (
+                              <div className="flex flex-wrap gap-0.5">
+                                {coaches.map(c => (
+                                  <span key={c.id} className="h-1.5 w-1.5 shrink-0 rounded-full"
+                                    style={{ backgroundColor: coachOn(c.id, cell.iso) ? c.color : '#e5e7eb' }} />
+                                ))}
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+
+                {/* Legend */}
+                <div className="shrink-0 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-gray-200 bg-white px-4 py-2.5">
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                    <span className="text-[11px] text-gray-500">Facility open</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-full bg-red-300" />
+                    <span className="text-[11px] text-gray-500">Facility closed</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="rounded px-1 py-px text-[7px] font-bold uppercase" style={{ backgroundColor: '#fef3c7', color: '#b45309' }}>OV</span>
+                    <span className="text-[11px] text-gray-500">Override active</span>
+                  </div>
+                  {coaches.map(c => (
+                    <div key={c.id} className="flex items-center gap-1.5">
+                      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: c.color }} />
+                      <span className="text-[11px] text-gray-500">{c.name}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* ── Day detail panel ── */}
+              {ovSelDate && (() => {
+                const iso = ovSelDate
+                const dt = new Date(iso + 'T12:00:00')
+                const facIsOpen = facOpen(iso)
+                const facBlockOv = facilityOverrides.find(o => o.date === iso && o.type === 'block')
+                const facExtraOvs = facilityOverrides.filter(o => o.date === iso && o.type === 'extra')
+
+                return (
+                  <div className="flex w-[42%] shrink-0 flex-col border-l border-gray-200 bg-white">
+                    {/* Panel header */}
+                    <div className="flex shrink-0 items-start justify-between border-b border-gray-200 px-5 py-4">
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+                          {dt.toLocaleDateString('en-AU', { weekday: 'long' })}
+                        </p>
+                        <p className="text-base font-bold text-gray-900">
+                          {dt.toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })}
+                        </p>
+                      </div>
+                      <button type="button" onClick={clearPanel}
+                        className="mt-0.5 rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100">
+                        <IconX size={16} />
+                      </button>
+                    </div>
+
+                    {/* Scrollable body */}
+                    <div className="flex-1 space-y-6 overflow-y-auto px-5 py-4">
+
+                      {/* Facility */}
+                      <div>
+                        <div className="mb-3 flex items-center gap-2">
+                          <IconBuilding size={14} style={{ color: FACIL_COLOR }} />
+                          <span className="text-[11px] font-bold uppercase tracking-wide text-gray-600">Facility</span>
+                          <span className={`ml-auto rounded-full px-2 py-0.5 text-[10px] font-bold ${facIsOpen ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'}`}>
+                            {facIsOpen ? 'Open' : 'Closed'}
+                          </span>
+                        </div>
+
+                        {/* Existing facility overrides */}
+                        {(facBlockOv || facExtraOvs.length > 0) && (
+                          <div className="mb-3 space-y-1.5">
+                            {facBlockOv && (
+                              <div className="flex items-start justify-between gap-2 rounded-lg border border-red-100 bg-red-50 px-3 py-2">
+                                <div>
+                                  <p className="text-xs font-semibold text-red-700">Closed — override</p>
+                                  {facBlockOv.note && <p className="mt-0.5 text-[11px] text-red-400">{facBlockOv.note}</p>}
+                                </div>
+                                <button type="button" onClick={() => deleteFacilityOverride(facBlockOv.id)}
+                                  className="shrink-0 rounded-lg p-1 text-red-300 transition hover:bg-red-100 hover:text-red-500">
+                                  <IconTrash size={13} />
+                                </button>
+                              </div>
+                            )}
+                            {facExtraOvs.map(ov => (
+                              <div key={ov.id} className="flex items-start justify-between gap-2 rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2">
+                                <div>
+                                  <p className="text-xs font-semibold text-emerald-700">
+                                    Extra hours{ov.startMins != null ? ` · ${minsToAvLabel(ov.startMins)} – ${minsToAvLabel(ov.endMins!)}` : ''}
+                                  </p>
+                                  {ov.note && <p className="mt-0.5 text-[11px] text-emerald-500">{ov.note}</p>}
+                                </div>
+                                <button type="button" onClick={() => deleteFacilityOverride(ov.id)}
+                                  className="shrink-0 rounded-lg p-1 text-emerald-300 transition hover:bg-emerald-100 hover:text-emerald-500">
+                                  <IconTrash size={13} />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Add facility override */}
+                        {ovPanelFacType === null ? (
+                          <div className="flex gap-2">
+                            {!facBlockOv && (
+                              <button type="button" onClick={() => { setOvPanelFacType('block'); setOvPanelFacNote('') }}
+                                className="flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-100">
+                                <IconX size={11} /> Block facility
+                              </button>
+                            )}
+                            <button type="button" onClick={() => { setOvPanelFacType('extra'); setOvPanelFacNote(''); setOvPanelFacStart(540); setOvPanelFacEnd(780) }}
+                              className="flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100">
+                              <IconPlus size={11} /> Extra hours
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                            <p className="mb-3 text-[10px] font-bold uppercase tracking-wide text-gray-500">
+                              {ovPanelFacType === 'block' ? 'Block facility' : 'Add extra hours'}
+                            </p>
+                            {ovPanelFacType === 'extra' && (
+                              <div className="mb-2.5 flex gap-2">
+                                <div className="flex-1">
+                                  <label className={LABEL_CLS}>Start</label>
+                                  <AvTimeSelect value={ovPanelFacStart} onChange={setOvPanelFacStart} />
+                                </div>
+                                <div className="flex-1">
+                                  <label className={LABEL_CLS}>End</label>
+                                  <AvTimeSelect value={ovPanelFacEnd} onChange={setOvPanelFacEnd} minMins={ovPanelFacStart} />
+                                </div>
+                              </div>
+                            )}
+                            <div className="mb-2.5">
+                              <label className={LABEL_CLS}>Note (optional)</label>
+                              <input type="text" value={ovPanelFacNote} onChange={e => setOvPanelFacNote(e.target.value)}
+                                placeholder={ovPanelFacType === 'block' ? 'e.g. Public holiday' : 'e.g. Early opening'}
+                                className={INPUT_CLS} />
+                            </div>
+                            <div className="flex gap-2">
+                              <button type="button" onClick={() => setOvPanelFacType(null)}
+                                className="flex-1 rounded-lg border border-gray-300 py-2 text-xs font-semibold text-gray-600 transition hover:bg-gray-100">Cancel</button>
+                              <button type="button" onClick={() => {
+                                if (ovPanelFacType === 'extra' && ovPanelFacEnd <= ovPanelFacStart) return
+                                addFacilityOverrideDirect(iso, ovPanelFacType, ovPanelFacNote.trim(),
+                                  ovPanelFacType === 'extra' ? ovPanelFacStart : undefined,
+                                  ovPanelFacType === 'extra' ? ovPanelFacEnd : undefined)
+                                setOvPanelFacType(null); setOvPanelFacNote('')
+                              }}
+                                className="flex-1 rounded-lg py-2 text-xs font-semibold text-white transition hover:opacity-90"
+                                style={{ backgroundColor: FACIL_COLOR }}>Save</button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Per-coach sections */}
+                      {coaches.map(coach => {
+                        const on = coachOn(coach.id, iso)
+                        const blockOv = dateOverrides.find(o => o.coachId === coach.id && o.date === iso && o.type === 'block')
+                        const extraOvs = dateOverrides.filter(o => o.coachId === coach.id && o.date === iso && o.type === 'extra')
+                        const addingHere = ovPanelCchId === coach.id && ovPanelCchType !== null
+                        return (
+                          <div key={coach.id}>
+                            <div className="mb-3 flex items-center gap-2">
+                              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: coach.color }} />
+                              <span className="text-[11px] font-bold uppercase tracking-wide text-gray-600">{coach.name}</span>
+                              <span className="ml-auto rounded-full px-2 py-0.5 text-[10px] font-bold"
+                                style={on ? { backgroundColor: coach.color + '22', color: coach.color } : { backgroundColor: '#f3f4f6', color: '#9ca3af' }}>
+                                {on ? 'Available' : 'Off'}
+                              </span>
+                            </div>
+
+                            {/* Existing coach overrides */}
+                            {(blockOv || extraOvs.length > 0) && (
+                              <div className="mb-3 space-y-1.5">
+                                {blockOv && (
+                                  <div className="flex items-start justify-between gap-2 rounded-lg border border-red-100 bg-red-50 px-3 py-2">
+                                    <div>
+                                      <p className="text-xs font-semibold text-red-700">Blocked — override</p>
+                                      {blockOv.note && <p className="mt-0.5 text-[11px] text-red-400">{blockOv.note}</p>}
+                                    </div>
+                                    <button type="button" onClick={() => deleteOverride(blockOv.id)}
+                                      className="shrink-0 rounded-lg p-1 text-red-300 transition hover:bg-red-100 hover:text-red-500">
+                                      <IconTrash size={13} />
+                                    </button>
+                                  </div>
+                                )}
+                                {extraOvs.map(ov => (
+                                  <div key={ov.id} className="flex items-start justify-between gap-2 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2">
+                                    <div>
+                                      <p className="text-xs font-semibold text-blue-700">
+                                        Extra hours{ov.startMins != null ? ` · ${minsToAvLabel(ov.startMins)} – ${minsToAvLabel(ov.endMins!)}` : ''}
+                                      </p>
+                                      {ov.note && <p className="mt-0.5 text-[11px] text-blue-400">{ov.note}</p>}
+                                    </div>
+                                    <button type="button" onClick={() => deleteOverride(ov.id)}
+                                      className="shrink-0 rounded-lg p-1 text-blue-300 transition hover:bg-blue-100 hover:text-blue-500">
+                                      <IconTrash size={13} />
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            {/* Add coach override */}
+                            {!addingHere ? (
+                              <div className="flex gap-2">
+                                {!blockOv && (
+                                  <button type="button" onClick={() => { setOvPanelCchId(coach.id); setOvPanelCchType('block'); setOvPanelCchNote('') }}
+                                    className="flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-100">
+                                    <IconX size={11} /> Block
+                                  </button>
+                                )}
+                                <button type="button" onClick={() => { setOvPanelCchId(coach.id); setOvPanelCchType('extra'); setOvPanelCchNote(''); setOvPanelCchStart(540); setOvPanelCchEnd(780) }}
+                                  className="flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-600 transition hover:bg-blue-100">
+                                  <IconPlus size={11} /> Extra hours
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                                <p className="mb-3 text-[10px] font-bold uppercase tracking-wide text-gray-500">
+                                  {ovPanelCchType === 'block' ? `Block ${coach.name}` : `Extra hours — ${coach.name}`}
+                                </p>
+                                {ovPanelCchType === 'extra' && (
+                                  <div className="mb-2.5 flex gap-2">
+                                    <div className="flex-1">
+                                      <label className={LABEL_CLS}>Start</label>
+                                      <AvTimeSelect value={ovPanelCchStart} onChange={setOvPanelCchStart} />
+                                    </div>
+                                    <div className="flex-1">
+                                      <label className={LABEL_CLS}>End</label>
+                                      <AvTimeSelect value={ovPanelCchEnd} onChange={setOvPanelCchEnd} minMins={ovPanelCchStart} />
+                                    </div>
+                                  </div>
+                                )}
+                                <div className="mb-2.5">
+                                  <label className={LABEL_CLS}>Note (optional)</label>
+                                  <input type="text" value={ovPanelCchNote} onChange={e => setOvPanelCchNote(e.target.value)}
+                                    placeholder={ovPanelCchType === 'block' ? 'e.g. Sick day' : 'e.g. Evening session'}
+                                    className={INPUT_CLS} />
+                                </div>
+                                <div className="flex gap-2">
+                                  <button type="button" onClick={() => { setOvPanelCchId(null); setOvPanelCchType(null); setOvPanelCchNote('') }}
+                                    className="flex-1 rounded-lg border border-gray-300 py-2 text-xs font-semibold text-gray-600 transition hover:bg-gray-100">Cancel</button>
+                                  <button type="button" onClick={() => {
+                                    if (ovPanelCchType === 'extra' && ovPanelCchEnd <= ovPanelCchStart) return
+                                    addCoachOverrideDirect(coach.id, iso, ovPanelCchType!, ovPanelCchNote.trim(),
+                                      ovPanelCchType === 'extra' ? ovPanelCchStart : undefined,
+                                      ovPanelCchType === 'extra' ? ovPanelCchEnd : undefined)
+                                    setOvPanelCchId(null); setOvPanelCchType(null); setOvPanelCchNote('')
+                                  }}
+                                    className="flex-1 rounded-lg py-2 text-xs font-semibold text-white transition hover:opacity-90"
+                                    style={{ backgroundColor: coach.color }}>Save</button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })()}
+            </div>
+          )
+        })()}
+
         {/* ── FACILITY SUB-TAB ── */}
         {avSubTab === 'facility' && (
-          <div className="mx-auto max-w-[1100px] space-y-6 p-6">
+          <div className="overflow-y-auto"><div className="mx-auto max-w-[1100px] space-y-6 p-6">
             <div className="rounded-xl border border-gray-200 bg-white p-5">
               <div className="flex items-center gap-2 mb-4">
                 <IconBuilding size={16} style={{ color: FACIL_COLOR }} />
@@ -3797,12 +4209,12 @@ function AvailabilityTab({
                 </div>
               </div>
             </div>
-          </div>
+          </div></div>
         )}
 
         {/* ── COACH SUB-TAB ── */}
         {avSubTab === 'coach' && (
-          <div className="mx-auto max-w-[1100px] space-y-6 p-6">
+          <div className="overflow-y-auto"><div className="mx-auto max-w-[1100px] space-y-6 p-6">
 
             {/* One panel per coach */}
             {coaches.map(c => {
@@ -4019,7 +4431,7 @@ function AvailabilityTab({
               </div>
             </div>
 
-          </div>
+          </div></div>
         )}
       </div>
     </div>
