@@ -19,6 +19,7 @@ import {
   IconUsers,
   IconBuilding,
   IconClipboardList,
+  IconChevronDown,
 } from '@tabler/icons-react'
 
 // ── Grid constants ─────────────────────────────────────────────────────────────
@@ -3482,13 +3483,65 @@ function Toggle({ on, onChange, color = '#6BA3D6' }: { on: boolean; onChange: (v
   )
 }
 
+function SessionMultiSelect({ types, selected, onChange, color }: { types: string[]; selected: string[]; onChange: (v: string[]) => void; color: string }) {
+  const [open, setOpen] = useState(false)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState({ top: 0, left: 0, width: 0 })
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (!triggerRef.current?.contains(e.target as Node) && !panelRef.current?.contains(e.target as Node)) setOpen(false)
+    }
+    if (open) document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  function handleOpen() {
+    if (triggerRef.current) {
+      const r = triggerRef.current.getBoundingClientRect()
+      setPos({ top: r.bottom + 4, left: r.left, width: Math.max(r.width, 160) })
+    }
+    setOpen(o => !o)
+  }
+
+  const label = selected.length === 0 ? 'None'
+    : selected.length === types.length ? 'All sessions'
+    : selected.length === 1 ? selected[0]
+    : `${selected.length} selected`
+
+  return (
+    <div className="relative w-full">
+      <button ref={triggerRef} type="button" onClick={handleOpen}
+        className="flex w-full items-center justify-between rounded-lg border border-gray-200 bg-white px-2 py-1 text-[11px] text-gray-700 outline-none transition focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/40">
+        <span className="truncate">{label}</span>
+        <IconChevronDown size={9} className="shrink-0 ml-1 text-gray-400" />
+      </button>
+      {open && createPortal(
+        <div ref={panelRef} className="rounded-lg border border-gray-200 bg-white py-1 shadow-lg"
+          style={{ position: 'fixed', top: pos.top, left: pos.left, width: pos.width, zIndex: 9999 }}>
+          {types.map(st => (
+            <label key={st} className="flex cursor-pointer items-center gap-2 px-3 py-1.5 hover:bg-gray-50">
+              <input type="checkbox" checked={selected.includes(st)}
+                onChange={() => onChange(selected.includes(st) ? selected.filter(s => s !== st) : [...selected, st])}
+                className="h-3 w-3 rounded" style={{ accentColor: color }} />
+              <span className="whitespace-nowrap text-[11px] text-gray-600">{st}</span>
+            </label>
+          ))}
+        </div>,
+        document.body
+      )}
+    </div>
+  )
+}
+
 function AvTimeSelect({ value, onChange, minMins }: { value: number; onChange: (v: number) => void; minMins?: number }) {
   const opts = minMins ? AV_TIME_OPTIONS.filter(o => o.mins > minMins) : AV_TIME_OPTIONS
   return (
     <select
       value={value}
       onChange={e => onChange(Number(e.target.value))}
-      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-800 outline-none transition focus:border-[#6BA3D6] focus:ring-2 focus:ring-[#6BA3D6]/10"
+      className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-800 outline-none transition focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/40"
     >
       {opts.map(o => (
         <option key={o.mins} value={o.mins}>{o.label}</option>
@@ -3555,8 +3608,9 @@ function AvailabilityTab({
   const [addCoachOpen, setAddCoachOpen] = useState(false)
   const [newCoachName, setNewCoachName] = useState('')
 
-  const LABEL_CLS = 'mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500'
-  const INPUT_CLS = 'w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-[#6BA3D6] focus:ring-2 focus:ring-[#6BA3D6]/10'
+  const LABEL_CLS = 'mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-400'
+  const INPUT_CLS = 'h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-800 outline-none transition focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/40'
+  const SELECT_CLS = 'h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-800 outline-none transition focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/40'
   const FACIL_COLOR = '#059669'
 
   function handleAddCoach() {
@@ -3618,10 +3672,10 @@ function AvailabilityTab({
                               {wi > 0 && <div className="mb-1 text-center text-[9px] font-bold uppercase tracking-wide text-gray-400">+ also</div>}
                               <div className="flex items-start gap-0.5">
                                 <div className="flex flex-col gap-0.5 flex-1 min-w-0">
-                                  <select value={win.startMins} onChange={e => { const v = Number(e.target.value); updateFacilityWindow(dow, win.id, { startMins: v, ...(win.endMins <= v ? { endMins: Math.min(v + 30, 1320) } : {}) }) }} className="w-full rounded-md border border-gray-200 px-1 py-1 text-[11px] text-gray-700 outline-none">
+                                  <select value={win.startMins} onChange={e => { const v = Number(e.target.value); updateFacilityWindow(dow, win.id, { startMins: v, ...(win.endMins <= v ? { endMins: Math.min(v + 30, 1320) } : {}) }) }} className="w-full rounded-lg border border-gray-200 bg-white px-2 py-1 text-[11px] text-gray-700 outline-none transition focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/40">
                                     {AV_TIME_OPTIONS.filter(o => o.mins < 1320).map(o => <option key={o.mins} value={o.mins}>{o.label}</option>)}
                                   </select>
-                                  <select value={win.endMins} onChange={e => updateFacilityWindow(dow, win.id, { endMins: Number(e.target.value) })} className="w-full rounded-md border border-gray-200 px-1 py-1 text-[11px] text-gray-700 outline-none">
+                                  <select value={win.endMins} onChange={e => updateFacilityWindow(dow, win.id, { endMins: Number(e.target.value) })} className="w-full rounded-lg border border-gray-200 bg-white px-2 py-1 text-[11px] text-gray-700 outline-none transition focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/40">
                                     {AV_TIME_OPTIONS.filter(o => o.mins > win.startMins).map(o => <option key={o.mins} value={o.mins}>{o.label}</option>)}
                                   </select>
                                 </div>
@@ -3631,13 +3685,13 @@ function AvailabilityTab({
                                   </button>
                                 )}
                               </div>
-                              <div className="mt-1 flex flex-col gap-0.5">
-                                {FACILITY_SESSION_TYPES.map(st => (
-                                  <label key={st} className="flex items-center gap-1 cursor-pointer">
-                                    <input type="checkbox" checked={win.sessionTypes.includes(st)} onChange={() => toggleFacilityWindowSessionType(dow, win.id, st)} className="h-3 w-3 rounded" style={{ accentColor: FACIL_COLOR }} />
-                                    <span className="text-[10px] text-gray-600">{st}</span>
-                                  </label>
-                                ))}
+                              <div className="mt-1">
+                                <SessionMultiSelect
+                                  types={FACILITY_SESSION_TYPES}
+                                  selected={win.sessionTypes}
+                                  onChange={v => updateFacilityWindow(dow, win.id, { sessionTypes: v })}
+                                  color={FACIL_COLOR}
+                                />
                               </div>
                             </div>
                           ))}
@@ -3703,11 +3757,11 @@ function AvailabilityTab({
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                   <div>
                     <label className={LABEL_CLS}>Date</label>
-                    <input type="date" value={fovDate} onChange={e => setFovDate(e.target.value)} className={INPUT_CLS} />
+                    <DatePicker value={fovDate} onChange={setFovDate} />
                   </div>
                   <div>
                     <label className={LABEL_CLS}>Type</label>
-                    <select value={fovType} onChange={e => setFovType(e.target.value as 'block' | 'extra')} className={INPUT_CLS}>
+                    <select value={fovType} onChange={e => setFovType(e.target.value as 'block' | 'extra')} className={SELECT_CLS}>
                       <option value="block">Close facility</option>
                       <option value="extra">Add extra hours</option>
                     </select>
@@ -3792,10 +3846,10 @@ function AvailabilityTab({
                                   {wi > 0 && <div className="mb-1 text-center text-[9px] font-bold uppercase tracking-wide text-gray-400">+ also</div>}
                                   <div className="flex items-start gap-0.5">
                                     <div className="flex flex-col gap-0.5 flex-1 min-w-0">
-                                      <select value={win.startMins} onChange={e => { const v = Number(e.target.value); updateWindow(c.id, dow, win.id, { startMins: v, ...(win.endMins <= v ? { endMins: Math.min(v + 30, 1320) } : {}) }) }} className="w-full rounded-md border border-gray-200 px-1 py-1 text-[11px] text-gray-700 outline-none">
+                                      <select value={win.startMins} onChange={e => { const v = Number(e.target.value); updateWindow(c.id, dow, win.id, { startMins: v, ...(win.endMins <= v ? { endMins: Math.min(v + 30, 1320) } : {}) }) }} className="w-full rounded-lg border border-gray-200 bg-white px-2 py-1 text-[11px] text-gray-700 outline-none transition focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/40">
                                         {AV_TIME_OPTIONS.filter(o => o.mins < 1320).map(o => <option key={o.mins} value={o.mins}>{o.label}</option>)}
                                       </select>
-                                      <select value={win.endMins} onChange={e => updateWindow(c.id, dow, win.id, { endMins: Number(e.target.value) })} className="w-full rounded-md border border-gray-200 px-1 py-1 text-[11px] text-gray-700 outline-none">
+                                      <select value={win.endMins} onChange={e => updateWindow(c.id, dow, win.id, { endMins: Number(e.target.value) })} className="w-full rounded-lg border border-gray-200 bg-white px-2 py-1 text-[11px] text-gray-700 outline-none transition focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/40">
                                         {AV_TIME_OPTIONS.filter(o => o.mins > win.startMins).map(o => <option key={o.mins} value={o.mins}>{o.label}</option>)}
                                       </select>
                                     </div>
@@ -3805,13 +3859,13 @@ function AvailabilityTab({
                                       </button>
                                     )}
                                   </div>
-                                  <div className="mt-1 flex flex-col gap-0.5">
-                                    {COACH_SESSION_TYPES.map(st => (
-                                      <label key={st} className="flex items-center gap-1 cursor-pointer">
-                                        <input type="checkbox" checked={win.sessionTypes.includes(st)} onChange={() => toggleWindowSessionType(c.id, dow, win.id, st)} className="h-3 w-3 rounded" style={{ accentColor: c.color }} />
-                                        <span className="text-[10px] text-gray-600">{st}</span>
-                                      </label>
-                                    ))}
+                                  <div className="mt-1">
+                                    <SessionMultiSelect
+                                      types={COACH_SESSION_TYPES}
+                                      selected={win.sessionTypes}
+                                      onChange={v => updateWindow(c.id, dow, win.id, { sessionTypes: v })}
+                                      color={c.color}
+                                    />
                                   </div>
                                 </div>
                               ))}
@@ -3918,17 +3972,17 @@ function AvailabilityTab({
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                   <div>
                     <label className={LABEL_CLS}>Coach</label>
-                    <select value={ovCoach} onChange={e => setOvCoach(e.target.value)} className={INPUT_CLS}>
+                    <select value={ovCoach} onChange={e => setOvCoach(e.target.value)} className={SELECT_CLS}>
                       {coaches.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
                   </div>
                   <div>
                     <label className={LABEL_CLS}>Date</label>
-                    <input type="date" value={ovDate} onChange={e => setOvDate(e.target.value)} className={INPUT_CLS} />
+                    <DatePicker value={ovDate} onChange={setOvDate} />
                   </div>
                   <div>
                     <label className={LABEL_CLS}>Type</label>
-                    <select value={ovType} onChange={e => setOvType(e.target.value as 'block' | 'extra')} className={INPUT_CLS}>
+                    <select value={ovType} onChange={e => setOvType(e.target.value as 'block' | 'extra')} className={SELECT_CLS}>
                       <option value="block">Block (unavailable)</option>
                       <option value="extra">Add extra hours</option>
                     </select>
