@@ -19,6 +19,8 @@ import {
   IconUsers,
   IconUser,
   IconCalendar,
+  IconPencil,
+  IconCreditCard,
 } from '@tabler/icons-react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -358,6 +360,8 @@ export default function PricingPage() {
   const [expandedSession, setExpandedSession] = useState<string | null>(null)
   const [sessionFilter, setSessionFilter] = useState<'all' | 'upcoming' | 'locked' | 'completed'>('all')
   const [addingTo, setAddingTo] = useState<string | null>(null)
+  const [editingSession, setEditingSession] = useState<string | null>(null)
+  const [editAttendance, setEditAttendance] = useState<Record<string, AttendanceStatus>>({})
 
   const now = DEMO_NOW
 
@@ -425,6 +429,55 @@ export default function PricingPage() {
       return { ...s, athletes: [...s.athletes, { athleteId, attendanceStatus: null, paymentStatus: 'pending', lockedPrice: null }] }
     }))
     setAddingTo(null)
+  }
+
+  function startEditSession(sessionId: string) {
+    const session = sessions.find(s => s.id === sessionId)
+    if (!session) return
+    const attendance: Record<string, AttendanceStatus> = {}
+    session.athletes.forEach(sa => { attendance[sa.athleteId] = sa.attendanceStatus })
+    setEditAttendance(attendance)
+    setEditingSession(sessionId)
+  }
+
+  function saveEditSession(sessionId: string) {
+    setSessions(prev => prev.map(s => {
+      if (s.id !== sessionId) return s
+      const updated = s.athletes.map(sa => {
+        const newAttendance = editAttendance[sa.athleteId] ?? sa.attendanceStatus
+        const athlete = ATHLETES.find(a => a.id === sa.athleteId)!
+        let paymentStatus: PaymentStatus = sa.paymentStatus
+        if (newAttendance === 'attended') {
+          paymentStatus = athlete.paymentMethod === 'automatic' ? 'paid' : 'payment-required'
+        } else if (newAttendance === 'no-show') {
+          paymentStatus = settings.chargeNoShow
+            ? (athlete.paymentMethod === 'automatic' ? 'paid' : 'payment-required')
+            : 'waived'
+        } else if (newAttendance === 'excused') {
+          paymentStatus = settings.chargeExcusedAbsence
+            ? (athlete.paymentMethod === 'automatic' ? 'paid' : 'payment-required')
+            : 'waived'
+        }
+        return { ...sa, attendanceStatus: newAttendance, paymentStatus }
+      })
+      return { ...s, athletes: updated }
+    }))
+    setEditingSession(null)
+    setEditAttendance({})
+  }
+
+  function cancelEditSession() {
+    setEditingSession(null)
+    setEditAttendance({})
+  }
+
+  function runPayments(sessionId: string) {
+    setSessions(prev => prev.map(s => s.id !== sessionId ? s : {
+      ...s,
+      athletes: s.athletes.map(sa =>
+        sa.paymentStatus === 'payment-required' ? { ...sa, paymentStatus: 'paid' as PaymentStatus } : sa
+      ),
+    }))
   }
 
   // ── Render ───────────────────────────────────────────────────────────────
@@ -696,61 +749,112 @@ export default function PricingPage() {
                         <>
                           <div className="mb-3 flex items-center justify-between">
                             <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Attendance &amp; Payment</p>
-                            {session.completedAt && (
-                              <p className="text-xs text-gray-400">
-                                Completed {new Date(session.completedAt).toLocaleString('en-AU', { dateStyle: 'medium', timeStyle: 'short' })}
-                              </p>
-                            )}
+                            <div className="flex items-center gap-3">
+                              {session.completedAt && (
+                                <p className="text-xs text-gray-400">
+                                  Completed {new Date(session.completedAt).toLocaleString('en-AU', { dateStyle: 'medium', timeStyle: 'short' })}
+                                </p>
+                              )}
+                              {editingSession === session.id ? (
+                                <div className="flex items-center gap-1.5">
+                                  <button
+                                    onClick={cancelEditSession}
+                                    className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 transition hover:bg-gray-50"
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button
+                                    onClick={() => saveEditSession(session.id)}
+                                    className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition hover:opacity-90"
+                                    style={{ backgroundColor: ACCENT }}
+                                  >
+                                    <IconCheck size={12} /> Save Changes
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => startEditSession(session.id)}
+                                  className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 transition hover:bg-gray-50"
+                                >
+                                  <IconPencil size={12} /> Edit Attendance
+                                </button>
+                              )}
+                            </div>
                           </div>
 
                           <div className="mb-4 space-y-2">
                             {session.athletes.map(sa => {
                               const athlete = ATHLETES.find(a => a.id === sa.athleteId)!
                               const ps = PAY_STATUS[sa.paymentStatus]
+                              const isEditing = editingSession === session.id
+                              const currentAttendance = isEditing
+                                ? (editAttendance[sa.athleteId] ?? sa.attendanceStatus)
+                                : sa.attendanceStatus
                               return (
                                 <div key={sa.athleteId} className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2.5">
                                   <div className="flex items-center gap-3">
                                     <IconUser size={14} className="text-gray-400" />
                                     <span className="text-sm font-medium text-gray-800">{athlete.name}</span>
-                                    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                                      sa.attendanceStatus === 'attended' ? 'bg-green-100 text-green-700'
-                                      : sa.attendanceStatus === 'no-show' ? 'bg-red-100 text-red-700'
-                                      : 'bg-amber-100 text-amber-700'
-                                    }`}>
-                                      {sa.attendanceStatus === 'attended' ? '✓ Attended' : sa.attendanceStatus === 'no-show' ? '✗ No Show' : '~ Excused'}
-                                    </span>
+                                    {isEditing ? (
+                                      <div className="flex items-center gap-1">
+                                        {(['attended', 'no-show', 'excused'] as AttendanceStatus[]).map(status => (
+                                          <button
+                                            key={status as string}
+                                            onClick={() => setEditAttendance(prev => ({ ...prev, [sa.athleteId]: status }))}
+                                            className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-all ${
+                                              currentAttendance === status
+                                                ? status === 'attended' ? 'border-green-400 bg-green-100 text-green-700'
+                                                : status === 'no-show' ? 'border-red-400 bg-red-100 text-red-700'
+                                                : 'border-amber-400 bg-amber-100 text-amber-700'
+                                                : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
+                                            }`}
+                                          >
+                                            {status === 'attended' ? '✓ Attended' : status === 'no-show' ? '✗ No Show' : '~ Excused'}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                                        sa.attendanceStatus === 'attended' ? 'bg-green-100 text-green-700'
+                                        : sa.attendanceStatus === 'no-show' ? 'bg-red-100 text-red-700'
+                                        : 'bg-amber-100 text-amber-700'
+                                      }`}>
+                                        {sa.attendanceStatus === 'attended' ? '✓ Attended' : sa.attendanceStatus === 'no-show' ? '✗ No Show' : '~ Excused'}
+                                      </span>
+                                    )}
                                     {sa.lockedPrice != null && (
                                       <span className="text-xs text-gray-400">${sa.lockedPrice}/session</span>
                                     )}
                                   </div>
-                                  <div className="flex items-center gap-2">
-                                    <span className="rounded-full px-2.5 py-0.5 text-xs font-semibold" style={{ backgroundColor: ps.bg, color: ps.color }}>
-                                      {ps.label}
-                                    </span>
-                                    {/* Admin action icons */}
-                                    <div className="flex items-center gap-0.5">
-                                      {sa.paymentStatus !== 'paid' && sa.paymentStatus !== 'waived' && sa.paymentStatus !== 'refunded' && (
-                                        <button title="Mark as Paid" onClick={() => overridePayment(session.id, sa.athleteId, 'paid')} className="rounded p-1 text-gray-400 transition-colors hover:bg-green-50 hover:text-green-600">
-                                          <IconCheck size={13} />
-                                        </button>
-                                      )}
-                                      {sa.paymentStatus === 'paid' && (
-                                        <button title="Issue Refund" onClick={() => overridePayment(session.id, sa.athleteId, 'refunded')} className="rounded p-1 text-gray-400 transition-colors hover:bg-blue-50 hover:text-blue-600">
-                                          <IconRefresh size={13} />
-                                        </button>
-                                      )}
-                                      {sa.paymentStatus !== 'waived' && (
-                                        <button title="Waive Fee" onClick={() => overridePayment(session.id, sa.athleteId, 'waived')} className="rounded p-1 text-gray-400 transition-colors hover:bg-gray-200 hover:text-gray-700">
-                                          <IconBan size={13} />
-                                        </button>
-                                      )}
-                                      {(sa.paymentStatus === 'waived' || sa.paymentStatus === 'refunded') && (
-                                        <button title="Override — require payment" onClick={() => overridePayment(session.id, sa.athleteId, 'payment-required')} className="rounded p-1 text-gray-400 transition-colors hover:bg-amber-50 hover:text-amber-600">
-                                          <IconCurrencyDollar size={13} />
-                                        </button>
-                                      )}
+                                  {!isEditing && (
+                                    <div className="flex items-center gap-2">
+                                      <span className="rounded-full px-2.5 py-0.5 text-xs font-semibold" style={{ backgroundColor: ps.bg, color: ps.color }}>
+                                        {ps.label}
+                                      </span>
+                                      <div className="flex items-center gap-0.5">
+                                        {sa.paymentStatus !== 'paid' && sa.paymentStatus !== 'waived' && sa.paymentStatus !== 'refunded' && (
+                                          <button title="Mark as Paid" onClick={() => overridePayment(session.id, sa.athleteId, 'paid')} className="rounded p-1 text-gray-400 transition-colors hover:bg-green-50 hover:text-green-600">
+                                            <IconCheck size={13} />
+                                          </button>
+                                        )}
+                                        {sa.paymentStatus === 'paid' && (
+                                          <button title="Issue Refund" onClick={() => overridePayment(session.id, sa.athleteId, 'refunded')} className="rounded p-1 text-gray-400 transition-colors hover:bg-blue-50 hover:text-blue-600">
+                                            <IconRefresh size={13} />
+                                          </button>
+                                        )}
+                                        {sa.paymentStatus !== 'waived' && (
+                                          <button title="Waive Fee" onClick={() => overridePayment(session.id, sa.athleteId, 'waived')} className="rounded p-1 text-gray-400 transition-colors hover:bg-gray-200 hover:text-gray-700">
+                                            <IconBan size={13} />
+                                          </button>
+                                        )}
+                                        {(sa.paymentStatus === 'waived' || sa.paymentStatus === 'refunded') && (
+                                          <button title="Override — require payment" onClick={() => overridePayment(session.id, sa.athleteId, 'payment-required')} className="rounded p-1 text-gray-400 transition-colors hover:bg-amber-50 hover:text-amber-600">
+                                            <IconCurrencyDollar size={13} />
+                                          </button>
+                                        )}
+                                      </div>
                                     </div>
-                                  </div>
+                                  )}
                                 </div>
                               )
                             })}
@@ -769,6 +873,25 @@ export default function PricingPage() {
                               )
                             })}
                           </div>
+
+                          {/* Run Payments */}
+                          {editingSession !== session.id && session.athletes.some(sa => sa.paymentStatus === 'payment-required') && (
+                            <div className="mt-3 flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+                              <div>
+                                <p className="text-sm font-semibold text-amber-800">
+                                  {session.athletes.filter(sa => sa.paymentStatus === 'payment-required').length} athlete{session.athletes.filter(sa => sa.paymentStatus === 'payment-required').length !== 1 ? 's' : ''} pending payment
+                                </p>
+                                <p className="text-xs text-amber-600 mt-0.5">Requires Stripe connection in production</p>
+                              </div>
+                              <button
+                                onClick={() => runPayments(session.id)}
+                                className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+                                style={{ backgroundColor: '#16a34a' }}
+                              >
+                                <IconCreditCard size={15} /> Run Payments
+                              </button>
+                            </div>
+                          )}
                         </>
                       )}
                     </div>
