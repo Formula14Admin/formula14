@@ -36,6 +36,13 @@ interface DateOverride {
   note: string
 }
 
+interface FacilityDateOverride {
+  id: string
+  date: string
+  type: 'block' | 'extra'
+  note: string
+}
+
 interface SessionSlot {
   id: string
   date: string
@@ -90,6 +97,20 @@ const OVERRIDES: DateOverride[] = [
   { id: 'ov1', coachId: 'matt', date: '2026-06-23', type: 'block', note: 'Public holiday — unavailable' },
   { id: 'ov2', coachId: 'jade', date: '2026-06-25', type: 'extra', startMins: 780, endMins: 1020, note: 'Extra availability — filling in for Matt' },
 ]
+
+// Facility schedule — which days the facility is open for self-serve bookings
+const FACILITY_SCHEDULE: Record<DayOfWeek, { available: boolean }> = {
+  0: { available: true  }, // Mon
+  1: { available: true  }, // Tue
+  2: { available: true  }, // Wed
+  3: { available: true  }, // Thu
+  4: { available: true  }, // Fri
+  5: { available: true  }, // Sat
+  6: { available: false }, // Sun — closed
+}
+
+// Date-specific facility overrides (e.g. public holidays)
+const FACILITY_OVERRIDES: FacilityDateOverride[] = []
 
 // Session configs for coached slots
 const COACHED_SESSIONS = [
@@ -154,6 +175,23 @@ function getMondayOf(dateStr: string): string {
 
 // ─── Slot Builder ─────────────────────────────────────────────────────────────
 
+function isFacilityOpen(dateStr: string): boolean {
+  if (FACILITY_OVERRIDES.some(o => o.date === dateStr && o.type === 'block')) return false
+  const dow = jsDayToOurs(new Date(dateStr + 'T00:00:00').getDay())
+  return FACILITY_SCHEDULE[dow].available
+}
+
+function anyCoachAvailableOn(dateStr: string): boolean {
+  const dow = jsDayToOurs(new Date(dateStr + 'T00:00:00').getDay())
+  for (const [cid, sched] of Object.entries(SCHEDULES) as [CoachId, CoachSchedule][]) {
+    const dayOvs = OVERRIDES.filter(o => o.coachId === cid && o.date === dateStr)
+    const isBlocked = dayOvs.some(o => o.type === 'block')
+    const hasExtra = dayOvs.some(o => o.type === 'extra')
+    if ((!isBlocked && sched.days[dow].available) || hasExtra) return true
+  }
+  return false
+}
+
 function buildSlotsForWeek(mondayStr: string): SessionSlot[] {
   const slots: SessionSlot[] = []
 
@@ -161,21 +199,27 @@ function buildSlotsForWeek(mondayStr: string): SessionSlot[] {
     const dateStr = addDays(mondayStr, i)
     const dow = jsDayToOurs(new Date(dateStr + 'T00:00:00').getDay())
 
-    // ── Self-serve slots (always shown) ───────────────────────────────────
-    for (const ss of SELF_SERVE_SESSIONS) {
-      // 3 slots per day for self-serve: 9am, 11am, 1pm
-      const times = [540, 660, 780]
-      for (const t of times) {
-        slots.push({
-          id: uid(),
-          date: dateStr,
-          startMins: t,
-          endMins: t + ss.durationMins,
-          sessionType: ss.type,
-          space: ss.space,
-          coach: 'self-serve',
-          price: ss.price,
-        })
+    // ── Self-serve slots ───────────────────────────────────────────────────
+    // Only available when the facility is open.
+    // When any coach is on that day, Casual Shooting is blocked — the space
+    // is reserved for coached sessions. Shooting Machine Session remains open.
+    if (isFacilityOpen(dateStr)) {
+      const coachPresent = anyCoachAvailableOn(dateStr)
+      for (const ss of SELF_SERVE_SESSIONS) {
+        if (ss.type === 'Casual Shooting' && coachPresent) continue
+        const times = [540, 660, 780]
+        for (const t of times) {
+          slots.push({
+            id: uid(),
+            date: dateStr,
+            startMins: t,
+            endMins: t + ss.durationMins,
+            sessionType: ss.type,
+            space: ss.space,
+            coach: 'self-serve',
+            price: ss.price,
+          })
+        }
       }
     }
 
@@ -198,7 +242,6 @@ function buildSlotsForWeek(mondayStr: string): SessionSlot[] {
       for (const win of windows) {
         // Primary: Individual Work Out (60min) — fill first half
         const midpoint = Math.floor((win.start + win.end) / 2)
-        // Generate Individual Work Out slots in first half
         let cur = win.start
         while (cur + 60 <= midpoint) {
           slots.push({

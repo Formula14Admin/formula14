@@ -972,6 +972,16 @@ export default function BookingsPage() {
         }
       }
 
+      // Check 1b: Casual Shooting is unavailable whenever any coach is available that day
+      if (data.sessionType === 'Casual Shooting') {
+        const anyCoachOn = coaches.some(c => getCoachWindowsForDate(c.id, bookDate).length > 0)
+        if (anyCoachOn) {
+          const dl = parse(bookDate).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })
+          setConflictMsg(`Casual Shooting is not available on ${dl} — the space is reserved for coached sessions when a coach is on.`)
+          return
+        }
+      }
+
       // Check 2: Coach Availability (for coach-required types with a coach assigned)
       if (COACH_SESSION_TYPES.includes(data.sessionType) && data.coach && coachSchedules[data.coach]) {
         const coachId = data.coach
