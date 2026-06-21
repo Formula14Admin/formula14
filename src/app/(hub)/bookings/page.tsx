@@ -3679,6 +3679,38 @@ function AvailabilityTab({
               )
             })}
 
+            {/* Add Coach button */}
+            {addCoachOpen ? (
+              <div className="rounded-xl border border-dashed border-gray-300 bg-white p-4">
+                <p className="mb-3 text-xs font-bold uppercase tracking-wide text-gray-500">New Coach</p>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={newCoachName}
+                    onChange={e => setNewCoachName(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') handleAddCoach(); if (e.key === 'Escape') { setAddCoachOpen(false); setNewCoachName('') } }}
+                    placeholder="Coach name…"
+                    autoFocus
+                    className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-[#6BA3D6] focus:ring-2 focus:ring-[#6BA3D6]/10"
+                  />
+                  <button type="button" onClick={handleAddCoach} className="rounded-lg px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90" style={{ backgroundColor: '#6BA3D6' }}>
+                    Add
+                  </button>
+                  <button type="button" onClick={() => { setAddCoachOpen(false); setNewCoachName('') }} className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50">
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setAddCoachOpen(true)}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-300 py-3 text-sm font-semibold text-gray-400 transition hover:border-gray-400 hover:text-gray-600"
+              >
+                <IconPlus size={16} /> Add Another Coach
+              </button>
+            )}
+
             {/* Date Overrides — all coaches combined */}
             <div className="rounded-xl border border-gray-200 bg-white p-5">
               <h2 className="text-sm font-bold text-gray-700 mb-4">Date Overrides</h2>
@@ -3783,38 +3815,6 @@ function AvailabilityTab({
                 </div>
               </div>
             </div>
-
-            {/* Add Coach button */}
-            {addCoachOpen ? (
-              <div className="rounded-xl border border-dashed border-gray-300 bg-white p-4">
-                <p className="mb-3 text-xs font-bold uppercase tracking-wide text-gray-500">New Coach</p>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={newCoachName}
-                    onChange={e => setNewCoachName(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') handleAddCoach(); if (e.key === 'Escape') { setAddCoachOpen(false); setNewCoachName('') } }}
-                    placeholder="Coach name…"
-                    autoFocus
-                    className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-[#6BA3D6] focus:ring-2 focus:ring-[#6BA3D6]/10"
-                  />
-                  <button type="button" onClick={handleAddCoach} className="rounded-lg px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90" style={{ backgroundColor: '#6BA3D6' }}>
-                    Add
-                  </button>
-                  <button type="button" onClick={() => { setAddCoachOpen(false); setNewCoachName('') }} className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50">
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setAddCoachOpen(true)}
-                className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-300 py-3 text-sm font-semibold text-gray-400 transition hover:border-gray-400 hover:text-gray-600"
-              >
-                <IconPlus size={16} /> Add Another Coach
-              </button>
-            )}
 
           </div>
         )}
