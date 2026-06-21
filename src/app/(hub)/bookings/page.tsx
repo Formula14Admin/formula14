@@ -205,7 +205,13 @@ type JoinRequest = {
 }
 
 // ── Coach Availability (merged from availability/page.tsx) ─────────────────────
-type CoachId = 'matt' | 'jade'
+type CoachId = string
+
+interface Coach {
+  id: string
+  name: string
+  color: string
+}
 type DayOfWeek = 0 | 1 | 2 | 3 | 4 | 5 | 6
 
 interface TimeWindow {
@@ -282,9 +288,14 @@ for (let m = 360; m <= 1320; m += 30) {
 
 const ACCENT_MATT = '#6BA3D6'
 const ACCENT_JADE = '#6BAD6B'
+const COACH_COLORS = ['#6BA3D6', '#6BAD6B', '#D4A520', '#A06BD6', '#E57373', '#4DB6AC', '#F97316', '#0EA5E9']
+const DEFAULT_COACHES: Coach[] = [
+  { id: 'matt', name: 'Matt', color: '#6BA3D6' },
+  { id: 'jade', name: 'Jade', color: '#6BAD6B' },
+]
 
 // ── Availability initial data ──────────────────────────────────────────────────
-const INIT_COACH_SCHEDULES: Record<CoachId, CoachSchedule> = {
+const INIT_COACH_SCHEDULES: Record<string, CoachSchedule> = {
   matt: {
     coachId: 'matt',
     days: {
@@ -520,8 +531,8 @@ export default function BookingsPage() {
   const [pageTab, setPageTab] = useState<'calendar' | 'availability' | 'join-requests'>('calendar')
 
   // Coach Availability state (merged from old availability page)
-  const [activeCoach, setActiveCoach] = useState<CoachId>('matt')
-  const [coachSchedules, setCoachSchedules] = useState<Record<CoachId, CoachSchedule>>(INIT_COACH_SCHEDULES)
+  const [coaches, setCoaches] = useState<Coach[]>(DEFAULT_COACHES)
+  const [coachSchedules, setCoachSchedules] = useState<Record<string, CoachSchedule>>(INIT_COACH_SCHEDULES)
   const [dateOverrides, setDateOverrides] = useState<DateOverride[]>(INIT_DATE_OVERRIDES)
   // Override form state
   const [ovDate, setOvDate] = useState('')
@@ -531,6 +542,7 @@ export default function BookingsPage() {
   const [ovNote, setOvNote] = useState('')
   const [ovError, setOvError] = useState('')
   const [editingOvId, setEditingOvId] = useState<string | null>(null)
+  const [ovCoach, setOvCoach] = useState<string>('matt')
 
   // Facility Availability state
   const [facilitySchedule, setFacilitySchedule] = useState<FacilitySchedule>(INIT_FACILITY_SCHEDULE)
@@ -586,55 +598,55 @@ export default function BookingsPage() {
   }
 
   // ── Coach Availability helpers ────────────────────────────────────────────────
-  function setDayAvailable(dow: DayOfWeek, available: boolean) {
+  function setDayAvailable(coachId: string, dow: DayOfWeek, available: boolean) {
     setCoachSchedules(prev => ({
       ...prev,
-      [activeCoach]: {
-        ...prev[activeCoach],
-        days: { ...prev[activeCoach].days, [dow]: { ...prev[activeCoach].days[dow], available } },
+      [coachId]: {
+        ...prev[coachId],
+        days: { ...prev[coachId].days, [dow]: { ...prev[coachId].days[dow], available } },
       },
     }))
   }
 
-  function addWindow(dow: DayOfWeek) {
+  function addWindow(coachId: string, dow: DayOfWeek) {
     setCoachSchedules(prev => {
-      const day = prev[activeCoach].days[dow]
+      const day = prev[coachId].days[dow]
       const last = day.windows[day.windows.length - 1]
       const start = last ? Math.min(last.endMins, 1290) : 540
       const end = Math.min(start + 60, 1320)
       const win: TimeWindow = { id: uid(), startMins: start, endMins: end, sessionTypes: [] }
       return {
         ...prev,
-        [activeCoach]: {
-          ...prev[activeCoach],
-          days: { ...prev[activeCoach].days, [dow]: { ...day, windows: [...day.windows, win] } },
+        [coachId]: {
+          ...prev[coachId],
+          days: { ...prev[coachId].days, [dow]: { ...day, windows: [...day.windows, win] } },
         },
       }
     })
   }
 
-  function removeWindow(dow: DayOfWeek, winId: string) {
+  function removeWindow(coachId: string, dow: DayOfWeek, winId: string) {
     setCoachSchedules(prev => {
-      const day = prev[activeCoach].days[dow]
+      const day = prev[coachId].days[dow]
       return {
         ...prev,
-        [activeCoach]: {
-          ...prev[activeCoach],
-          days: { ...prev[activeCoach].days, [dow]: { ...day, windows: day.windows.filter(w => w.id !== winId) } },
+        [coachId]: {
+          ...prev[coachId],
+          days: { ...prev[coachId].days, [dow]: { ...day, windows: day.windows.filter(w => w.id !== winId) } },
         },
       }
     })
   }
 
-  function updateWindow(dow: DayOfWeek, winId: string, patch: Partial<{ startMins: number; endMins: number; sessionTypes: string[] }>) {
+  function updateWindow(coachId: string, dow: DayOfWeek, winId: string, patch: Partial<{ startMins: number; endMins: number; sessionTypes: string[] }>) {
     setCoachSchedules(prev => {
-      const day = prev[activeCoach].days[dow]
+      const day = prev[coachId].days[dow]
       return {
         ...prev,
-        [activeCoach]: {
-          ...prev[activeCoach],
+        [coachId]: {
+          ...prev[coachId],
           days: {
-            ...prev[activeCoach].days,
+            ...prev[coachId].days,
             [dow]: { ...day, windows: day.windows.map(w => w.id === winId ? { ...w, ...patch } : w) },
           },
         },
@@ -642,15 +654,15 @@ export default function BookingsPage() {
     })
   }
 
-  function toggleWindowSessionType(dow: DayOfWeek, winId: string, sessionType: string) {
+  function toggleWindowSessionType(coachId: string, dow: DayOfWeek, winId: string, sessionType: string) {
     setCoachSchedules(prev => {
-      const day = prev[activeCoach].days[dow]
+      const day = prev[coachId].days[dow]
       return {
         ...prev,
-        [activeCoach]: {
-          ...prev[activeCoach],
+        [coachId]: {
+          ...prev[coachId],
           days: {
-            ...prev[activeCoach].days,
+            ...prev[coachId].days,
             [dow]: {
               ...day,
               windows: day.windows.map(w => {
@@ -667,6 +679,7 @@ export default function BookingsPage() {
 
   function resetOvForm() {
     setOvDate(''); setOvType('block'); setOvStart(540); setOvEnd(780); setOvNote(''); setOvError(''); setEditingOvId(null)
+    setOvCoach(coaches[0]?.id ?? 'matt')
   }
 
   function startEditOverride(ov: DateOverride) {
@@ -676,6 +689,7 @@ export default function BookingsPage() {
     setOvStart(ov.startMins ?? 540)
     setOvEnd(ov.endMins ?? 780)
     setOvNote(ov.note)
+    setOvCoach(ov.coachId)
     setOvError('')
   }
 
@@ -685,7 +699,7 @@ export default function BookingsPage() {
     if (editingOvId) {
       setDateOverrides(prev => prev.map(o =>
         o.id === editingOvId
-          ? { ...o, date: ovDate, type: ovType, note: ovNote.trim(), ...(ovType === 'extra' ? { startMins: ovStart, endMins: ovEnd } : { startMins: undefined, endMins: undefined }) }
+          ? { ...o, coachId: ovCoach, date: ovDate, type: ovType, note: ovNote.trim(), ...(ovType === 'extra' ? { startMins: ovStart, endMins: ovEnd } : { startMins: undefined, endMins: undefined }) }
           : o
       ))
       resetOvForm()
@@ -693,7 +707,7 @@ export default function BookingsPage() {
     }
     const newOv: DateOverride = {
       id: uid(),
-      coachId: activeCoach,
+      coachId: ovCoach,
       date: ovDate,
       type: ovType,
       ...(ovType === 'extra' ? { startMins: ovStart, endMins: ovEnd } : {}),
@@ -706,6 +720,33 @@ export default function BookingsPage() {
   function deleteOverride(id: string) {
     if (editingOvId === id) resetOvForm()
     setDateOverrides(prev => prev.filter(o => o.id !== id))
+  }
+
+  function addCoach(name: string) {
+    const id = uid()
+    const color = COACH_COLORS[coaches.length % COACH_COLORS.length]
+    setCoaches(prev => [...prev, { id, name: name.trim(), color }])
+    setCoachSchedules(prev => ({
+      ...prev,
+      [id]: {
+        coachId: id,
+        days: {
+          0: { available: false, windows: [{ id: uid(), startMins: 540, endMins: 1020, sessionTypes: [] }] },
+          1: { available: false, windows: [{ id: uid(), startMins: 540, endMins: 1020, sessionTypes: [] }] },
+          2: { available: false, windows: [{ id: uid(), startMins: 540, endMins: 1020, sessionTypes: [] }] },
+          3: { available: false, windows: [{ id: uid(), startMins: 540, endMins: 1020, sessionTypes: [] }] },
+          4: { available: false, windows: [{ id: uid(), startMins: 540, endMins: 1020, sessionTypes: [] }] },
+          5: { available: false, windows: [{ id: uid(), startMins: 540, endMins: 1020, sessionTypes: [] }] },
+          6: { available: false, windows: [{ id: uid(), startMins: 540, endMins: 1020, sessionTypes: [] }] },
+        } as Record<DayOfWeek, DaySchedule>,
+      },
+    }))
+  }
+
+  function removeCoach(id: string) {
+    setCoaches(prev => prev.filter(c => c.id !== id))
+    setCoachSchedules(prev => { const next = { ...prev }; delete next[id]; return next })
+    setDateOverrides(prev => prev.filter(o => o.coachId !== id))
   }
 
   // ── Facility Availability helpers ─────────────────────────────────────────────
@@ -813,13 +854,13 @@ export default function BookingsPage() {
       }
 
       // Check 2: Coach Availability (for coach-required types with a coach assigned)
-      if (COACH_SESSION_TYPES.includes(data.sessionType) && (data.coach === 'matt' || data.coach === 'jade')) {
-        const coachId = data.coach as CoachId
+      if (COACH_SESSION_TYPES.includes(data.sessionType) && data.coach && coachSchedules[data.coach]) {
+        const coachId = data.coach
         const sched = coachSchedules[coachId]
         const coachDay = sched.days[dow]
         const dateOvs = dateOverrides.filter(o => o.coachId === coachId && o.date === bookDate)
         const isBlocked = dateOvs.some(o => o.type === 'block')
-        const coachName = coachId === 'matt' ? 'Matt' : 'Jade'
+        const coachName = coaches.find(c => c.id === coachId)?.name ?? coachId
         const dl = parse(bookDate).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })
         if (isBlocked) {
           setConflictMsg(`${coachName} is blocked/unavailable on ${dl}. Check Coach Availability.`)
@@ -972,7 +1013,7 @@ export default function BookingsPage() {
 
       {pageTab === 'availability' && (
         <AvailabilityTab
-          activeCoach={activeCoach} setActiveCoach={setActiveCoach}
+          coaches={coaches} addCoach={addCoach} removeCoach={removeCoach}
           coachSchedules={coachSchedules}
           setDayAvailable={setDayAvailable} addWindow={addWindow} removeWindow={removeWindow}
           updateWindow={updateWindow} toggleWindowSessionType={toggleWindowSessionType}
@@ -980,6 +1021,7 @@ export default function BookingsPage() {
           ovDate={ovDate} setOvDate={setOvDate} ovType={ovType} setOvType={setOvType}
           ovStart={ovStart} setOvStart={setOvStart} ovEnd={ovEnd} setOvEnd={setOvEnd}
           ovNote={ovNote} setOvNote={setOvNote} ovError={ovError} editingOvId={editingOvId}
+          ovCoach={ovCoach} setOvCoach={setOvCoach}
           resetOvForm={resetOvForm} startEditOverride={startEditOverride}
           addOverride={addOverride} deleteOverride={deleteOverride}
           facilitySchedule={facilitySchedule}
@@ -3236,25 +3278,26 @@ function AvTimeSelect({ value, onChange, minMins }: { value: number; onChange: (
   )
 }
 
-// ── Availability Tab (Coach + Facility merged) ──────────────────────────────────
+// ── Availability Tab ────────────────────────────────────────────────────────────
 function AvailabilityTab({
-  activeCoach, setActiveCoach,
+  coaches, addCoach, removeCoach,
   coachSchedules, setDayAvailable, addWindow, removeWindow, updateWindow, toggleWindowSessionType,
   dateOverrides,
   ovDate, setOvDate, ovType, setOvType, ovStart, setOvStart, ovEnd, setOvEnd,
-  ovNote, setOvNote, ovError, editingOvId,
+  ovNote, setOvNote, ovError, editingOvId, ovCoach, setOvCoach,
   resetOvForm, startEditOverride, addOverride, deleteOverride,
   facilitySchedule, setFacilityDayAvailable, addFacilityWindow, removeFacilityWindow,
   updateFacilityWindow, toggleFacilityWindowSessionType,
 }: {
-  activeCoach: CoachId
-  setActiveCoach: (c: CoachId) => void
-  coachSchedules: Record<CoachId, CoachSchedule>
-  setDayAvailable: (dow: DayOfWeek, available: boolean) => void
-  addWindow: (dow: DayOfWeek) => void
-  removeWindow: (dow: DayOfWeek, winId: string) => void
-  updateWindow: (dow: DayOfWeek, winId: string, patch: Partial<{ startMins: number; endMins: number; sessionTypes: string[] }>) => void
-  toggleWindowSessionType: (dow: DayOfWeek, winId: string, sessionType: string) => void
+  coaches: Coach[]
+  addCoach: (name: string) => void
+  removeCoach: (id: string) => void
+  coachSchedules: Record<string, CoachSchedule>
+  setDayAvailable: (coachId: string, dow: DayOfWeek, available: boolean) => void
+  addWindow: (coachId: string, dow: DayOfWeek) => void
+  removeWindow: (coachId: string, dow: DayOfWeek, winId: string) => void
+  updateWindow: (coachId: string, dow: DayOfWeek, winId: string, patch: Partial<{ startMins: number; endMins: number; sessionTypes: string[] }>) => void
+  toggleWindowSessionType: (coachId: string, dow: DayOfWeek, winId: string, sessionType: string) => void
   dateOverrides: DateOverride[]
   ovDate: string; setOvDate: (v: string) => void
   ovType: 'block' | 'extra'; setOvType: (v: 'block' | 'extra') => void
@@ -3262,6 +3305,7 @@ function AvailabilityTab({
   ovEnd: number; setOvEnd: (v: number) => void
   ovNote: string; setOvNote: (v: string) => void
   ovError: string; editingOvId: string | null
+  ovCoach: string; setOvCoach: (v: string) => void
   resetOvForm: () => void
   startEditOverride: (ov: DateOverride) => void
   addOverride: () => void
@@ -3273,349 +3317,330 @@ function AvailabilityTab({
   updateFacilityWindow: (dow: DayOfWeek, winId: string, patch: Partial<{ startMins: number; endMins: number; sessionTypes: string[] }>) => void
   toggleFacilityWindowSessionType: (dow: DayOfWeek, winId: string, sessionType: string) => void
 }) {
-  const coach = coachSchedules[activeCoach]
-  const coachColor = activeCoach === 'matt' ? ACCENT_MATT : ACCENT_JADE
-  const coachName = activeCoach === 'matt' ? 'Matt' : 'Jade'
-  const coachOverrides = dateOverrides.filter(o => o.coachId === activeCoach)
+  const [avSubTab, setAvSubTab] = useState<'facility' | 'coach'>('facility')
+  const [addCoachOpen, setAddCoachOpen] = useState(false)
+  const [newCoachName, setNewCoachName] = useState('')
 
   const LABEL_CLS = 'mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500'
   const INPUT_CLS = 'w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-[#6BA3D6] focus:ring-2 focus:ring-[#6BA3D6]/10'
+  const FACIL_COLOR = '#059669'
+
+  function handleAddCoach() {
+    const name = newCoachName.trim()
+    if (!name) return
+    addCoach(name)
+    setNewCoachName('')
+    setAddCoachOpen(false)
+  }
 
   return (
-    <div className="flex-1 overflow-y-auto min-h-0 bg-[#f4f6f9]">
-      <div className="border-b border-gray-200 bg-white px-6 py-4">
-        <div className="flex items-center gap-3">
-          <IconCalendarTime size={22} style={{ color: ACCENT_MATT }} />
-          <div>
-            <h1 className="text-xl font-bold text-gray-900">Availability</h1>
-            <p className="text-sm text-gray-500">Manage coach schedules, date overrides, and facility open hours</p>
-          </div>
-        </div>
+    <div className="flex h-full flex-col overflow-hidden bg-[#f4f6f9]">
+      {/* Sub-tab bar */}
+      <div className="flex shrink-0 items-center gap-1 border-b border-gray-200 bg-white px-6">
+        {([{ id: 'facility', label: 'Facility' }, { id: 'coach', label: 'Coach' }] as const).map(t => (
+          <button
+            key={t.id}
+            onClick={() => setAvSubTab(t.id)}
+            className={`px-4 py-3 text-sm font-semibold border-b-2 transition ${
+              avSubTab === t.id ? 'border-[#6BA3D6] text-[#6BA3D6]' : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
 
-      <div className="mx-auto max-w-[1100px] space-y-6 p-6">
-        {/* Coach tab bar */}
-        <div className="flex gap-1 rounded-xl border border-gray-200 bg-white p-1 w-fit">
-          {(['matt', 'jade'] as CoachId[]).map(c => {
-            const color = c === 'matt' ? ACCENT_MATT : ACCENT_JADE
-            const name = c === 'matt' ? 'Matt' : 'Jade'
-            const active = activeCoach === c
-            return (
-              <button
-                key={c}
-                type="button"
-                onClick={() => { setActiveCoach(c); resetOvForm() }}
-                className="rounded-lg px-6 py-2.5 text-sm font-semibold transition"
-                style={active ? { backgroundColor: color, color: 'white' } : { color: '#6b7280' }}
-              >
-                {name}
-              </button>
-            )
-          })}
-        </div>
-
-        {/* Weekly Recurring Schedule */}
-        <div className="rounded-xl border border-gray-200 bg-white p-5">
-          <h2 className="text-sm font-bold text-gray-700 mb-4">Weekly Recurring Schedule — {coachName}</h2>
-          <div className="flex gap-3 overflow-x-auto pb-1">
-            {(Object.keys(DAYS_LABEL) as unknown as DayOfWeek[]).map(dow => {
-              const day = coach.days[dow]
-              return (
-                <div
-                  key={dow}
-                  className="flex w-52 shrink-0 flex-col items-center gap-2 rounded-xl border p-3"
-                  style={{
-                    borderColor: day.available ? coachColor + '40' : '#e5e7eb',
-                    backgroundColor: day.available ? coachColor + '08' : '#fafafa',
-                  }}
-                >
-                  <span className="text-xs font-bold text-gray-600">{DAYS_FULL[dow].slice(0, 3)}</span>
-                  <Toggle on={day.available} onChange={v => setDayAvailable(dow, v)} color={coachColor} />
-                  <span className="text-[10px] font-semibold" style={{ color: day.available ? coachColor : '#9ca3af' }}>
-                    {day.available ? 'Available' : 'Off'}
-                  </span>
-                  {day.available && (
-                    <div className="flex flex-col gap-2 w-full">
-                      {day.windows.map((win, wi) => (
-                        <div key={win.id} className="w-full">
-                          {wi > 0 && (
-                            <div className="mb-1 text-center text-[9px] font-bold uppercase tracking-wide text-gray-400">+ also</div>
-                          )}
-                          <div className="flex items-start gap-0.5">
-                            <div className="flex flex-col gap-0.5 flex-1 min-w-0">
-                              <select
-                                value={win.startMins}
-                                onChange={e => {
-                                  const v = Number(e.target.value)
-                                  updateWindow(dow, win.id, { startMins: v, ...(win.endMins <= v ? { endMins: Math.min(v + 30, 1320) } : {}) })
-                                }}
-                                className="w-full rounded-md border border-gray-200 px-1 py-1 text-[11px] text-gray-700 outline-none focus:border-[#6BA3D6]"
-                              >
-                                {AV_TIME_OPTIONS.filter(o => o.mins < 1320).map(o => (
-                                  <option key={o.mins} value={o.mins}>{o.label}</option>
-                                ))}
-                              </select>
-                              <select
-                                value={win.endMins}
-                                onChange={e => updateWindow(dow, win.id, { endMins: Number(e.target.value) })}
-                                className="w-full rounded-md border border-gray-200 px-1 py-1 text-[11px] text-gray-700 outline-none focus:border-[#6BA3D6]"
-                              >
-                                {AV_TIME_OPTIONS.filter(o => o.mins > win.startMins).map(o => (
-                                  <option key={o.mins} value={o.mins}>{o.label}</option>
-                                ))}
-                              </select>
-                            </div>
-                            {day.windows.length > 1 && (
-                              <button
-                                type="button"
-                                onClick={() => removeWindow(dow, win.id)}
-                                className="mt-0.5 shrink-0 rounded p-0.5 text-gray-300 transition hover:bg-red-50 hover:text-red-400"
-                              >
-                                <IconX size={11} />
-                              </button>
-                            )}
-                          </div>
-                          {/* Session type checkboxes */}
-                          <div className="mt-1 flex flex-col gap-0.5">
-                            {COACH_SESSION_TYPES.map(st => (
-                              <label key={st} className="flex items-center gap-1 cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  checked={win.sessionTypes.includes(st)}
-                                  onChange={() => toggleWindowSessionType(dow, win.id, st)}
-                                  className="h-3 w-3 rounded"
-                                  style={{ accentColor: coachColor }}
-                                />
-                                <span className="text-[10px] text-gray-600">{st}</span>
-                              </label>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                      <button
-                        type="button"
-                        onClick={() => addWindow(dow)}
-                        className="flex items-center justify-center gap-1 w-full rounded-md border border-dashed border-gray-300 py-1 text-[10px] font-semibold text-gray-400 transition hover:border-gray-400 hover:text-gray-500"
-                      >
-                        <IconPlus size={10} /> Add
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* Date Overrides */}
-        <div className="rounded-xl border border-gray-200 bg-white p-5">
-          <h2 className="text-sm font-bold text-gray-700 mb-4">Date Overrides — {coachName}</h2>
-
-          {coachOverrides.length === 0 ? (
-            <p className="mb-4 text-sm text-gray-400 italic">No overrides for {coachName}.</p>
-          ) : (
-            <div className="mb-4 space-y-2">
-              {coachOverrides.map(ov => (
-                <div
-                  key={ov.id}
-                  className="flex items-center justify-between rounded-xl border px-4 py-3"
-                  style={
-                    editingOvId === ov.id
-                      ? { backgroundColor: '#eff6ff', borderColor: '#3b82f6', boxShadow: '0 0 0 2px #3b82f620' }
-                      : ov.type === 'block'
-                      ? { backgroundColor: '#fff1f2', borderColor: '#fecdd3' }
-                      : { backgroundColor: '#eff6ff', borderColor: '#bfdbfe' }
-                  }
-                >
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span
-                        className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase"
-                        style={ov.type === 'block' ? { backgroundColor: '#fee2e2', color: '#b91c1c' } : { backgroundColor: '#dbeafe', color: '#1d4ed8' }}
-                      >
-                        {ov.type === 'block' ? 'Block' : 'Extra'}
+      <div className="flex-1 overflow-y-auto min-h-0">
+        {/* ── FACILITY SUB-TAB ── */}
+        {avSubTab === 'facility' && (
+          <div className="mx-auto max-w-[1100px] space-y-6 p-6">
+            <div className="rounded-xl border border-gray-200 bg-white p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <IconBuilding size={16} style={{ color: FACIL_COLOR }} />
+                <h2 className="text-sm font-bold text-gray-700">Facility Weekly Schedule</h2>
+                <span className="text-xs text-gray-400 ml-1">— open hours for self-serve sessions</span>
+              </div>
+              <div className="flex gap-3 overflow-x-auto pb-1">
+                {(Object.keys(DAYS_LABEL) as unknown as DayOfWeek[]).map(dow => {
+                  const day = facilitySchedule[dow]
+                  return (
+                    <div
+                      key={dow}
+                      className="flex w-52 shrink-0 flex-col items-center gap-2 rounded-xl border p-3"
+                      style={{
+                        borderColor: day.available ? FACIL_COLOR + '40' : '#e5e7eb',
+                        backgroundColor: day.available ? FACIL_COLOR + '08' : '#fafafa',
+                      }}
+                    >
+                      <span className="text-xs font-bold text-gray-600">{DAYS_FULL[dow].slice(0, 3)}</span>
+                      <Toggle on={day.available} onChange={v => setFacilityDayAvailable(dow, v)} color={FACIL_COLOR} />
+                      <span className="text-[10px] font-semibold" style={{ color: day.available ? FACIL_COLOR : '#9ca3af' }}>
+                        {day.available ? 'Open' : 'Closed'}
                       </span>
-                      <span className="text-sm font-semibold text-gray-800">{dateLabel(ov.date)}</span>
-                      {ov.type === 'extra' && ov.startMins !== undefined && ov.endMins !== undefined && (
-                        <span className="text-sm text-gray-500">{minsToAvLabel(ov.startMins)} – {minsToAvLabel(ov.endMins)}</span>
+                      {day.available && (
+                        <div className="flex flex-col gap-2 w-full">
+                          {day.windows.map((win, wi) => (
+                            <div key={win.id} className="w-full">
+                              {wi > 0 && <div className="mb-1 text-center text-[9px] font-bold uppercase tracking-wide text-gray-400">+ also</div>}
+                              <div className="flex items-start gap-0.5">
+                                <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+                                  <select value={win.startMins} onChange={e => { const v = Number(e.target.value); updateFacilityWindow(dow, win.id, { startMins: v, ...(win.endMins <= v ? { endMins: Math.min(v + 30, 1320) } : {}) }) }} className="w-full rounded-md border border-gray-200 px-1 py-1 text-[11px] text-gray-700 outline-none">
+                                    {AV_TIME_OPTIONS.filter(o => o.mins < 1320).map(o => <option key={o.mins} value={o.mins}>{o.label}</option>)}
+                                  </select>
+                                  <select value={win.endMins} onChange={e => updateFacilityWindow(dow, win.id, { endMins: Number(e.target.value) })} className="w-full rounded-md border border-gray-200 px-1 py-1 text-[11px] text-gray-700 outline-none">
+                                    {AV_TIME_OPTIONS.filter(o => o.mins > win.startMins).map(o => <option key={o.mins} value={o.mins}>{o.label}</option>)}
+                                  </select>
+                                </div>
+                                {day.windows.length > 1 && (
+                                  <button type="button" onClick={() => removeFacilityWindow(dow, win.id)} className="mt-0.5 shrink-0 rounded p-0.5 text-gray-300 transition hover:bg-red-50 hover:text-red-400">
+                                    <IconX size={11} />
+                                  </button>
+                                )}
+                              </div>
+                              <div className="mt-1 flex flex-col gap-0.5">
+                                {FACILITY_SESSION_TYPES.map(st => (
+                                  <label key={st} className="flex items-center gap-1 cursor-pointer">
+                                    <input type="checkbox" checked={win.sessionTypes.includes(st)} onChange={() => toggleFacilityWindowSessionType(dow, win.id, st)} className="h-3 w-3 rounded" style={{ accentColor: FACIL_COLOR }} />
+                                    <span className="text-[10px] text-gray-600">{st}</span>
+                                  </label>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                          <button type="button" onClick={() => addFacilityWindow(dow)} className="flex items-center justify-center gap-1 w-full rounded-md border border-dashed border-gray-300 py-1 text-[10px] font-semibold text-gray-400 transition hover:border-gray-400 hover:text-gray-500">
+                            <IconPlus size={10} /> Add
+                          </button>
+                        </div>
                       )}
                     </div>
-                    {ov.note && <p className="mt-0.5 text-xs text-gray-500">{ov.note}</p>}
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => editingOvId === ov.id ? resetOvForm() : startEditOverride(ov)}
-                      className="rounded-lg p-1.5 text-gray-400 transition hover:bg-blue-50 hover:text-blue-500"
-                    >
-                      {editingOvId === ov.id ? <IconX size={15} /> : <IconPencil size={15} />}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => deleteOverride(ov.id)}
-                      className="rounded-lg p-1.5 text-gray-400 transition hover:bg-red-50 hover:text-red-500"
-                    >
-                      <IconTrash size={15} />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Add / Edit override form */}
-          <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-            <p className="mb-3 text-xs font-bold uppercase tracking-wide text-gray-500">{editingOvId ? 'Edit Override' : 'Add Override'}</p>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <div>
-                <label className={LABEL_CLS}>Date</label>
-                <input type="date" value={ovDate} onChange={e => setOvDate(e.target.value)} className={INPUT_CLS} />
+                  )
+                })}
               </div>
-              <div>
-                <label className={LABEL_CLS}>Type</label>
-                <select value={ovType} onChange={e => setOvType(e.target.value as 'block' | 'extra')} className={INPUT_CLS}>
-                  <option value="block">Block (unavailable)</option>
-                  <option value="extra">Add extra hours</option>
-                </select>
-              </div>
-              {ovType === 'extra' && (
-                <>
-                  <div>
-                    <label className={LABEL_CLS}>Start</label>
-                    <AvTimeSelect value={ovStart} onChange={setOvStart} />
-                  </div>
-                  <div>
-                    <label className={LABEL_CLS}>End</label>
-                    <AvTimeSelect value={ovEnd} onChange={setOvEnd} minMins={ovStart} />
-                  </div>
-                </>
-              )}
-            </div>
-            <div className="mt-3">
-              <label className={LABEL_CLS}>Note (optional)</label>
-              <input type="text" value={ovNote} onChange={e => setOvNote(e.target.value)} placeholder="Reason for override…" className={INPUT_CLS} />
-            </div>
-            {ovError && <p className="mt-2 text-xs text-red-500">{ovError}</p>}
-            <div className="mt-3 flex justify-end gap-2">
-              {editingOvId && (
-                <button
-                  type="button"
-                  onClick={resetOvForm}
-                  className="flex items-center gap-2 rounded-xl border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50"
-                >
-                  <IconX size={15} /> Cancel
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={addOverride}
-                className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
-                style={{ backgroundColor: coachColor }}
-              >
-                {editingOvId ? <IconCheck size={15} /> : <IconPlus size={15} />}
-                {editingOvId ? 'Save Changes' : 'Add Override'}
-              </button>
             </div>
           </div>
-        </div>
+        )}
 
-        {/* ── Facility Availability ─────────────────────────────────────────── */}
-        <div className="rounded-xl border border-gray-200 bg-white p-5">
-          <div className="flex items-center gap-2 mb-4">
-            <IconBuilding size={16} style={{ color: '#059669' }} />
-            <h2 className="text-sm font-bold text-gray-700">Facility Availability</h2>
-            <span className="text-xs text-gray-400">— controls self-serve session access</span>
-          </div>
-          <div className="flex gap-3 overflow-x-auto pb-1">
-            {(Object.keys(DAYS_LABEL) as unknown as DayOfWeek[]).map(dow => {
-              const FACIL_COLOR = '#059669'
-              const day = facilitySchedule[dow]
+        {/* ── COACH SUB-TAB ── */}
+        {avSubTab === 'coach' && (
+          <div className="mx-auto max-w-[1100px] space-y-6 p-6">
+
+            {/* One panel per coach */}
+            {coaches.map(c => {
+              const sched = coachSchedules[c.id]
+              if (!sched) return null
+              const isDefault = c.id === 'matt' || c.id === 'jade'
               return (
-                <div
-                  key={dow}
-                  className="flex w-52 shrink-0 flex-col items-center gap-2 rounded-xl border p-3"
-                  style={{
-                    borderColor: day.available ? FACIL_COLOR + '40' : '#e5e7eb',
-                    backgroundColor: day.available ? FACIL_COLOR + '08' : '#fafafa',
-                  }}
-                >
-                  <span className="text-xs font-bold text-gray-600">{DAYS_FULL[dow].slice(0, 3)}</span>
-                  <Toggle on={day.available} onChange={v => setFacilityDayAvailable(dow, v)} color={FACIL_COLOR} />
-                  <span className="text-[10px] font-semibold" style={{ color: day.available ? FACIL_COLOR : '#9ca3af' }}>
-                    {day.available ? 'Open' : 'Closed'}
-                  </span>
-                  {day.available && (
-                    <div className="flex flex-col gap-2 w-full">
-                      {day.windows.map((win, wi) => (
-                        <div key={win.id} className="w-full">
-                          {wi > 0 && (
-                            <div className="mb-1 text-center text-[9px] font-bold uppercase tracking-wide text-gray-400">+ also</div>
-                          )}
-                          <div className="flex items-start gap-0.5">
-                            <div className="flex flex-col gap-0.5 flex-1 min-w-0">
-                              <select
-                                value={win.startMins}
-                                onChange={e => {
-                                  const v = Number(e.target.value)
-                                  updateFacilityWindow(dow, win.id, { startMins: v, ...(win.endMins <= v ? { endMins: Math.min(v + 30, 1320) } : {}) })
-                                }}
-                                className="w-full rounded-md border border-gray-200 px-1 py-1 text-[11px] text-gray-700 outline-none"
-                              >
-                                {AV_TIME_OPTIONS.filter(o => o.mins < 1320).map(o => (
-                                  <option key={o.mins} value={o.mins}>{o.label}</option>
-                                ))}
-                              </select>
-                              <select
-                                value={win.endMins}
-                                onChange={e => updateFacilityWindow(dow, win.id, { endMins: Number(e.target.value) })}
-                                className="w-full rounded-md border border-gray-200 px-1 py-1 text-[11px] text-gray-700 outline-none"
-                              >
-                                {AV_TIME_OPTIONS.filter(o => o.mins > win.startMins).map(o => (
-                                  <option key={o.mins} value={o.mins}>{o.label}</option>
-                                ))}
-                              </select>
-                            </div>
-                            {day.windows.length > 1 && (
-                              <button
-                                type="button"
-                                onClick={() => removeFacilityWindow(dow, win.id)}
-                                className="mt-0.5 shrink-0 rounded p-0.5 text-gray-300 transition hover:bg-red-50 hover:text-red-400"
-                              >
-                                <IconX size={11} />
-                              </button>
-                            )}
-                          </div>
-                          <div className="mt-1 flex flex-col gap-0.5">
-                            {FACILITY_SESSION_TYPES.map(st => (
-                              <label key={st} className="flex items-center gap-1 cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  checked={win.sessionTypes.includes(st)}
-                                  onChange={() => toggleFacilityWindowSessionType(dow, win.id, st)}
-                                  className="h-3 w-3 rounded"
-                                  style={{ accentColor: FACIL_COLOR }}
-                                />
-                                <span className="text-[10px] text-gray-600">{st}</span>
-                              </label>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                      <button
-                        type="button"
-                        onClick={() => addFacilityWindow(dow)}
-                        className="flex items-center justify-center gap-1 w-full rounded-md border border-dashed border-gray-300 py-1 text-[10px] font-semibold text-gray-400 transition hover:border-gray-400 hover:text-gray-500"
-                      >
-                        <IconPlus size={10} /> Add
-                      </button>
+                <div key={c.id} className="rounded-xl border border-gray-200 bg-white p-5">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <span className="h-3 w-3 rounded-full" style={{ backgroundColor: c.color }} />
+                      <h2 className="text-sm font-bold text-gray-700">{c.name}&apos;s Weekly Schedule</h2>
                     </div>
-                  )}
+                    {!isDefault && (
+                      <button type="button" onClick={() => removeCoach(c.id)} className="rounded-lg p-1.5 text-gray-300 transition hover:bg-red-50 hover:text-red-500">
+                        <IconTrash size={14} />
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex gap-3 overflow-x-auto pb-1">
+                    {(Object.keys(DAYS_LABEL) as unknown as DayOfWeek[]).map(dow => {
+                      const day = sched.days[dow]
+                      return (
+                        <div
+                          key={dow}
+                          className="flex w-52 shrink-0 flex-col items-center gap-2 rounded-xl border p-3"
+                          style={{
+                            borderColor: day.available ? c.color + '40' : '#e5e7eb',
+                            backgroundColor: day.available ? c.color + '08' : '#fafafa',
+                          }}
+                        >
+                          <span className="text-xs font-bold text-gray-600">{DAYS_FULL[dow].slice(0, 3)}</span>
+                          <Toggle on={day.available} onChange={v => setDayAvailable(c.id, dow, v)} color={c.color} />
+                          <span className="text-[10px] font-semibold" style={{ color: day.available ? c.color : '#9ca3af' }}>
+                            {day.available ? 'Available' : 'Off'}
+                          </span>
+                          {day.available && (
+                            <div className="flex flex-col gap-2 w-full">
+                              {day.windows.map((win, wi) => (
+                                <div key={win.id} className="w-full">
+                                  {wi > 0 && <div className="mb-1 text-center text-[9px] font-bold uppercase tracking-wide text-gray-400">+ also</div>}
+                                  <div className="flex items-start gap-0.5">
+                                    <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+                                      <select value={win.startMins} onChange={e => { const v = Number(e.target.value); updateWindow(c.id, dow, win.id, { startMins: v, ...(win.endMins <= v ? { endMins: Math.min(v + 30, 1320) } : {}) }) }} className="w-full rounded-md border border-gray-200 px-1 py-1 text-[11px] text-gray-700 outline-none">
+                                        {AV_TIME_OPTIONS.filter(o => o.mins < 1320).map(o => <option key={o.mins} value={o.mins}>{o.label}</option>)}
+                                      </select>
+                                      <select value={win.endMins} onChange={e => updateWindow(c.id, dow, win.id, { endMins: Number(e.target.value) })} className="w-full rounded-md border border-gray-200 px-1 py-1 text-[11px] text-gray-700 outline-none">
+                                        {AV_TIME_OPTIONS.filter(o => o.mins > win.startMins).map(o => <option key={o.mins} value={o.mins}>{o.label}</option>)}
+                                      </select>
+                                    </div>
+                                    {day.windows.length > 1 && (
+                                      <button type="button" onClick={() => removeWindow(c.id, dow, win.id)} className="mt-0.5 shrink-0 rounded p-0.5 text-gray-300 transition hover:bg-red-50 hover:text-red-400">
+                                        <IconX size={11} />
+                                      </button>
+                                    )}
+                                  </div>
+                                  <div className="mt-1 flex flex-col gap-0.5">
+                                    {COACH_SESSION_TYPES.map(st => (
+                                      <label key={st} className="flex items-center gap-1 cursor-pointer">
+                                        <input type="checkbox" checked={win.sessionTypes.includes(st)} onChange={() => toggleWindowSessionType(c.id, dow, win.id, st)} className="h-3 w-3 rounded" style={{ accentColor: c.color }} />
+                                        <span className="text-[10px] text-gray-600">{st}</span>
+                                      </label>
+                                    ))}
+                                  </div>
+                                </div>
+                              ))}
+                              <button type="button" onClick={() => addWindow(c.id, dow)} className="flex items-center justify-center gap-1 w-full rounded-md border border-dashed border-gray-300 py-1 text-[10px] font-semibold text-gray-400 transition hover:border-gray-400 hover:text-gray-500">
+                                <IconPlus size={10} /> Add
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
                 </div>
               )
             })}
-          </div>
-        </div>
 
+            {/* Date Overrides — all coaches combined */}
+            <div className="rounded-xl border border-gray-200 bg-white p-5">
+              <h2 className="text-sm font-bold text-gray-700 mb-4">Date Overrides</h2>
+
+              {dateOverrides.length === 0 ? (
+                <p className="mb-4 text-sm text-gray-400 italic">No date overrides yet.</p>
+              ) : (
+                <div className="mb-4 space-y-2">
+                  {dateOverrides.map(ov => {
+                    const coachObj = coaches.find(c => c.id === ov.coachId)
+                    return (
+                      <div
+                        key={ov.id}
+                        className="flex items-center justify-between rounded-xl border px-4 py-3"
+                        style={
+                          editingOvId === ov.id
+                            ? { backgroundColor: '#eff6ff', borderColor: '#3b82f6', boxShadow: '0 0 0 2px #3b82f620' }
+                            : ov.type === 'block'
+                            ? { backgroundColor: '#fff1f2', borderColor: '#fecdd3' }
+                            : { backgroundColor: '#eff6ff', borderColor: '#bfdbfe' }
+                        }
+                      >
+                        <div>
+                          <div className="flex items-center gap-2">
+                            {coachObj && (
+                              <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ backgroundColor: coachObj.color + '20', color: coachObj.color }}>
+                                {coachObj.name}
+                              </span>
+                            )}
+                            <span className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase" style={ov.type === 'block' ? { backgroundColor: '#fee2e2', color: '#b91c1c' } : { backgroundColor: '#dbeafe', color: '#1d4ed8' }}>
+                              {ov.type === 'block' ? 'Block' : 'Extra'}
+                            </span>
+                            <span className="text-sm font-semibold text-gray-800">{dateLabel(ov.date)}</span>
+                            {ov.type === 'extra' && ov.startMins !== undefined && ov.endMins !== undefined && (
+                              <span className="text-sm text-gray-500">{minsToAvLabel(ov.startMins)} – {minsToAvLabel(ov.endMins)}</span>
+                            )}
+                          </div>
+                          {ov.note && <p className="mt-0.5 text-xs text-gray-500">{ov.note}</p>}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <button type="button" onClick={() => editingOvId === ov.id ? resetOvForm() : startEditOverride(ov)} className="rounded-lg p-1.5 text-gray-400 transition hover:bg-blue-50 hover:text-blue-500">
+                            {editingOvId === ov.id ? <IconX size={15} /> : <IconPencil size={15} />}
+                          </button>
+                          <button type="button" onClick={() => deleteOverride(ov.id)} className="rounded-lg p-1.5 text-gray-400 transition hover:bg-red-50 hover:text-red-500">
+                            <IconTrash size={15} />
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+
+              <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                <p className="mb-3 text-xs font-bold uppercase tracking-wide text-gray-500">{editingOvId ? 'Edit Override' : 'Add Override'}</p>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <div>
+                    <label className={LABEL_CLS}>Coach</label>
+                    <select value={ovCoach} onChange={e => setOvCoach(e.target.value)} className={INPUT_CLS}>
+                      {coaches.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className={LABEL_CLS}>Date</label>
+                    <input type="date" value={ovDate} onChange={e => setOvDate(e.target.value)} className={INPUT_CLS} />
+                  </div>
+                  <div>
+                    <label className={LABEL_CLS}>Type</label>
+                    <select value={ovType} onChange={e => setOvType(e.target.value as 'block' | 'extra')} className={INPUT_CLS}>
+                      <option value="block">Block (unavailable)</option>
+                      <option value="extra">Add extra hours</option>
+                    </select>
+                  </div>
+                  {ovType === 'extra' && (
+                    <div className="flex gap-2 sm:col-span-1 col-span-2">
+                      <div className="flex-1">
+                        <label className={LABEL_CLS}>Start</label>
+                        <AvTimeSelect value={ovStart} onChange={setOvStart} />
+                      </div>
+                      <div className="flex-1">
+                        <label className={LABEL_CLS}>End</label>
+                        <AvTimeSelect value={ovEnd} onChange={setOvEnd} minMins={ovStart} />
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <div className="mt-3">
+                  <label className={LABEL_CLS}>Note (optional)</label>
+                  <input type="text" value={ovNote} onChange={e => setOvNote(e.target.value)} placeholder="Reason for override…" className={INPUT_CLS} />
+                </div>
+                {ovError && <p className="mt-2 text-xs text-red-500">{ovError}</p>}
+                <div className="mt-3 flex justify-end gap-2">
+                  {editingOvId && (
+                    <button type="button" onClick={resetOvForm} className="flex items-center gap-2 rounded-xl border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50">
+                      <IconX size={15} /> Cancel
+                    </button>
+                  )}
+                  <button type="button" onClick={addOverride} className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90" style={{ backgroundColor: coaches.find(c => c.id === ovCoach)?.color ?? '#6BA3D6' }}>
+                    {editingOvId ? <IconCheck size={15} /> : <IconPlus size={15} />}
+                    {editingOvId ? 'Save Changes' : 'Add Override'}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Add Coach button */}
+            {addCoachOpen ? (
+              <div className="rounded-xl border border-dashed border-gray-300 bg-white p-4">
+                <p className="mb-3 text-xs font-bold uppercase tracking-wide text-gray-500">New Coach</p>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={newCoachName}
+                    onChange={e => setNewCoachName(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') handleAddCoach(); if (e.key === 'Escape') { setAddCoachOpen(false); setNewCoachName('') } }}
+                    placeholder="Coach name…"
+                    autoFocus
+                    className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-[#6BA3D6] focus:ring-2 focus:ring-[#6BA3D6]/10"
+                  />
+                  <button type="button" onClick={handleAddCoach} className="rounded-lg px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90" style={{ backgroundColor: '#6BA3D6' }}>
+                    Add
+                  </button>
+                  <button type="button" onClick={() => { setAddCoachOpen(false); setNewCoachName('') }} className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50">
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setAddCoachOpen(true)}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-300 py-3 text-sm font-semibold text-gray-400 transition hover:border-gray-400 hover:text-gray-600"
+              >
+                <IconPlus size={16} /> Add Another Coach
+              </button>
+            )}
+
+          </div>
+        )}
       </div>
     </div>
   )
