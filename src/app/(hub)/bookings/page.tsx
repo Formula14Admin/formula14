@@ -22,11 +22,11 @@ import {
 } from '@tabler/icons-react'
 
 // ── Grid constants ─────────────────────────────────────────────────────────────
-const START_H  = 6
-const END_H    = 21
+const START_H  = 0
+const END_H    = 24
 const SLOT_PX  = 15                               // px per 15-min slot → 60px/hr
-const TOTAL_PX = (END_H - START_H) * 4 * SLOT_PX // 900px total
-const TOP_PAD  = 8                                // px above first slot so 6am isn't clipped
+const TOTAL_PX = (END_H - START_H) * 4 * SLOT_PX // total grid height
+const TOP_PAD  = 8                                // px above first slot so 12am isn't clipped
 
 // ── Spaces ─────────────────────────────────────────────────────────────────────
 const SPACES = [
@@ -1302,7 +1302,7 @@ export default function BookingsPage() {
             {hours.map(h => (
               <div key={h} className="relative" style={{ height: SLOT_PX * 4 }}>
                 <span className="absolute right-2 top-0 -translate-y-1/2 text-[11px] leading-none text-gray-400">
-                  {h === 12 ? '12pm' : h > 12 ? `${h - 12}pm` : `${h}am`}
+                  {h === 0 ? '12am' : h === 12 ? '12pm' : h > 12 ? `${h - 12}pm` : `${h}am`}
                 </span>
               </div>
             ))}
@@ -1364,7 +1364,7 @@ export default function BookingsPage() {
                   >
                     {/* Facility closed overlay */}
                     {getClosedRanges(getFacilityWindowsForDate(visibleDates[0])).map((r, ri) => (
-                      <div key={`fc${ri}`} className="pointer-events-none absolute left-0 right-0" style={{ top: toY(r.startMins), height: Math.max(0, toY(r.endMins) - toY(r.startMins)), background: 'repeating-linear-gradient(45deg, rgba(0,0,0,0.025), rgba(0,0,0,0.025) 3px, transparent 3px, transparent 9px)' }} />
+                      <div key={`fc${ri}`} className="pointer-events-none absolute left-0 right-0" style={{ top: toY(r.startMins), height: Math.max(0, toY(r.endMins) - toY(r.startMins)), background: 'repeating-linear-gradient(45deg, rgba(239,68,68,0.07), rgba(239,68,68,0.07) 3px, transparent 3px, transparent 9px)' }} />
                     ))}
                     {/* Slot hover highlight */}
                     {hoverMatch && (
@@ -1429,7 +1429,7 @@ export default function BookingsPage() {
                   >
                     {/* Facility closed overlay */}
                     {getClosedRanges(getFacilityWindowsForDate(d)).map((r, ri) => (
-                      <div key={`fc${ri}`} className="pointer-events-none absolute left-0 right-0" style={{ top: toY(r.startMins), height: Math.max(0, toY(r.endMins) - toY(r.startMins)), background: 'repeating-linear-gradient(45deg, rgba(0,0,0,0.025), rgba(0,0,0,0.025) 3px, transparent 3px, transparent 9px)' }} />
+                      <div key={`fc${ri}`} className="pointer-events-none absolute left-0 right-0" style={{ top: toY(r.startMins), height: Math.max(0, toY(r.endMins) - toY(r.startMins)), background: 'repeating-linear-gradient(45deg, rgba(239,68,68,0.07), rgba(239,68,68,0.07) 3px, transparent 3px, transparent 9px)' }} />
                     ))}
                     {/* Slot hover highlight */}
                     {hoverMatch && (
