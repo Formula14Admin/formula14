@@ -51,8 +51,8 @@ const ALL_PROGRAM_NAMES = Object.values(PROGRAM_GROUPS).flat()
 
 // ── Session types per space ────────────────────────────────────────────────────
 const SESSION_TYPES: Record<SpaceId, string[]> = {
-  primary:   ['Casual Shooting', 'Individual Work Out', 'Small Group Session', 'Team Training', 'Volume Shooting', ...ALL_PROGRAM_NAMES],
-  secondary: ['Casual Shooting', 'Individual Work Out', 'Small Group Session', 'Team Training', 'Volume Shooting', ...ALL_PROGRAM_NAMES],
+  primary:   ['Casual Shooting', 'Individual Work Out', 'Small Group Session', 'Volume Shooting'],
+  secondary: ['Casual Shooting', 'Individual Work Out', 'Small Group Session', 'Volume Shooting'],
   shooting:  ['Casual Shooting', 'Individual Work Out', 'Small Group Session', 'Team Training', 'Volume Shooting'],
   meeting:   ['Coach Meeting', 'Film Review', 'Goal Setting', 'Meeting (General)', 'Parent Meeting', 'Player Meeting', 'Team Meeting'],
 }
