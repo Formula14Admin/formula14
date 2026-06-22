@@ -124,6 +124,145 @@ const SELF_SERVE_SESSIONS = [
   { type: 'Shooting Machine Session', space: 'Shooting Bay', durationMins: 60, price: 15 as number | 'membership' },
 ]
 
+// ─── Program Data (admin-configured programs visible to athletes) ──────────────
+
+const PROGRAM_COLOR = '#D4A520'
+const PROGRAM_BG    = '#fdf5e0'
+
+type ProgramCategory = 'Development Program' | 'Social Program'
+
+interface PortalProgram {
+  id: string
+  name: string
+  category: ProgramCategory
+  coach: CoachId
+  dayOfWeek: string
+  startMins: number
+  endMins: number
+  space: string
+  costPerSession: number
+  capacity: number
+  enrolled: number
+  seriesStart: string
+  seriesEnd: string
+  repeat: string
+}
+
+const PORTAL_PROGRAMS: PortalProgram[] = [
+  {
+    id: 'pg-perf-lab',
+    name: 'Performance Lab',
+    category: 'Development Program',
+    coach: 'matt',
+    dayOfWeek: 'Monday',
+    startMins: 9 * 60,
+    endMins: 10 * 60 + 30,
+    space: 'Primary Station',
+    costPerSession: 45,
+    capacity: 15,
+    enrolled: 8,
+    seriesStart: '2026-07-06',
+    seriesEnd: '2026-09-28',
+    repeat: 'Weekly',
+  },
+  {
+    id: 'pg-dom-academy',
+    name: 'Domestic Academy',
+    category: 'Development Program',
+    coach: 'matt',
+    dayOfWeek: 'Wednesday',
+    startMins: 11 * 60,
+    endMins: 12 * 60,
+    space: 'Primary Station',
+    costPerSession: 45,
+    capacity: 15,
+    enrolled: 15,
+    seriesStart: '2026-07-01',
+    seriesEnd: '2026-09-30',
+    repeat: 'Weekly',
+  },
+  {
+    id: 'pg-snipers',
+    name: 'Snipers Club',
+    category: 'Development Program',
+    coach: 'jade',
+    dayOfWeek: 'Thursday',
+    startMins: 10 * 60,
+    endMins: 11 * 60 + 30,
+    space: 'Secondary Station',
+    costPerSession: 40,
+    capacity: 15,
+    enrolled: 11,
+    seriesStart: '2026-07-02',
+    seriesEnd: '2026-09-24',
+    repeat: 'Weekly',
+  },
+  {
+    id: 'pg-shooters-lab',
+    name: 'Shooters Lab',
+    category: 'Development Program',
+    coach: 'matt',
+    dayOfWeek: 'Friday',
+    startMins: 16 * 60,
+    endMins: 17 * 60 + 30,
+    space: 'Primary Station',
+    costPerSession: 40,
+    capacity: 15,
+    enrolled: 6,
+    seriesStart: '2026-07-03',
+    seriesEnd: '2026-09-25',
+    repeat: 'Weekly',
+  },
+  {
+    id: 'pg-walking-bball',
+    name: 'Walking Basketball',
+    category: 'Social Program',
+    coach: 'jade',
+    dayOfWeek: 'Tuesday',
+    startMins: 10 * 60,
+    endMins: 11 * 60,
+    space: 'Primary Station',
+    costPerSession: 15,
+    capacity: 20,
+    enrolled: 12,
+    seriesStart: '2026-07-07',
+    seriesEnd: '2026-09-29',
+    repeat: 'Weekly',
+  },
+  {
+    id: 'pg-midday-ladies',
+    name: 'Mid Day Ladies Comp',
+    category: 'Social Program',
+    coach: 'jade',
+    dayOfWeek: 'Wednesday',
+    startMins: 12 * 60,
+    endMins: 13 * 60,
+    space: 'Secondary Station',
+    costPerSession: 20,
+    capacity: 20,
+    enrolled: 18,
+    seriesStart: '2026-07-01',
+    seriesEnd: '2026-09-30',
+    repeat: 'Weekly',
+  },
+  {
+    id: 'pg-adult-beginner',
+    name: 'Adult Beginner School',
+    category: 'Social Program',
+    coach: 'matt',
+    dayOfWeek: 'Saturday',
+    startMins: 9 * 60,
+    endMins: 10 * 60,
+    space: 'Primary Station',
+    costPerSession: 25,
+    capacity: 20,
+    enrolled: 7,
+    seriesStart: '2026-07-04',
+    seriesEnd: '2026-09-26',
+    repeat: 'Weekly',
+  },
+]
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function minsToLabel(mins: number): string {
@@ -303,6 +442,11 @@ export default function PortalPage() {
   const [bookerName, setBookerName] = useState('')
   const [toastMsg, setToastMsg] = useState('')
   const [bookedIds, setBookedIds] = useState<Set<string>>(new Set())
+  const [portalTab,       setPortalTab]       = useState<'sessions' | 'programs'>('sessions')
+  const [enrolledPrograms, setEnrolledPrograms] = useState<Set<string>>(new Set())
+  const [waitlistPrograms, setWaitlistPrograms] = useState<Set<string>>(new Set())
+  const [enrolModal,      setEnrolModal]      = useState<PortalProgram | null>(null)
+  const [enrolName,       setEnrolName]       = useState('')
 
   const weekDates = useMemo(() => {
     return Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
@@ -342,12 +486,26 @@ export default function PortalPage() {
     return `$${price} casual rate`
   }
 
+  function confirmEnrol() {
+    if (!enrolModal || !enrolName.trim()) return
+    const prog = enrolModal
+    if (prog.enrolled >= prog.capacity) {
+      setWaitlistPrograms(prev => new Set([...prev, prog.id]))
+    } else {
+      setEnrolledPrograms(prev => new Set([...prev, prog.id]))
+    }
+    setEnrolModal(null)
+    setEnrolName('')
+    setToastMsg(prog.enrolled >= prog.capacity ? `Added to waitlist for ${prog.name}` : `Enrolled in ${prog.name}!`)
+    setTimeout(() => setToastMsg(''), 3000)
+  }
+
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#f4f6f9' }}>
 
       {/* ── Page header ──────────────────────────────────────────────────────── */}
-      <div className="sticky top-0 z-20 border-b border-gray-200 bg-white px-6 py-4">
-        <div className="flex items-center gap-3">
+      <div className="sticky top-0 z-20 border-b border-gray-200 bg-white">
+        <div className="px-6 pt-4 pb-0 flex items-center gap-3">
           <IconCalendarEvent size={22} style={{ color: '#6BA3D6' }} />
           <div>
             <h1 className="text-xl font-bold text-gray-900">Book a Session</h1>
@@ -356,10 +514,32 @@ export default function PortalPage() {
             </p>
           </div>
         </div>
+        {/* Tab nav */}
+        <div className="mt-3 flex gap-0 px-6">
+          {([
+            { id: 'sessions' as const, label: 'Sessions' },
+            { id: 'programs' as const, label: 'Programs' },
+          ]).map(t => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setPortalTab(t.id)}
+              className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition ${
+                portalTab === t.id
+                  ? 'border-[#6BA3D6] text-[#6BA3D6]'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="mx-auto max-w-[1200px] p-6">
 
+        {portalTab === 'sessions' && (
+        <>
         {/* ── Week navigation ───────────────────────────────────────────────── */}
         <div className="mb-5 flex items-center justify-between">
           <button
@@ -492,6 +672,151 @@ export default function PortalPage() {
             )
           })}
         </div>
+        </>
+        )}
+
+        {portalTab === 'programs' && (
+          <div className="space-y-6">
+            {(['Development Program', 'Social Program'] as ProgramCategory[]).map(cat => {
+              const catPrograms = PORTAL_PROGRAMS.filter(p => p.category === cat)
+              return (
+                <div key={cat}>
+                  <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-gray-500">{cat}s</h2>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {catPrograms.map(prog => {
+                      const isEnrolled  = enrolledPrograms.has(prog.id)
+                      const isWaitlisted = waitlistPrograms.has(prog.id)
+                      const isFull      = prog.enrolled >= prog.capacity
+                      const spotsLeft   = Math.max(0, prog.capacity - prog.enrolled)
+                      const coachColor  = prog.coach === 'matt' ? COACH_MATT_COLOR : COACH_JADE_COLOR
+                      return (
+                        <div key={prog.id}
+                          className="rounded-2xl border bg-white p-5 shadow-sm"
+                          style={{ borderColor: isEnrolled ? '#86efac' : isWaitlisted ? '#fde68a' : '#e5e7eb', backgroundColor: isEnrolled ? '#f0fdf4' : isWaitlisted ? '#fffbeb' : 'white' }}>
+                          {/* Program name + category badge */}
+                          <div className="mb-3 flex items-start justify-between gap-2">
+                            <div>
+                              <p className="text-base font-bold text-gray-900">{prog.name}</p>
+                              <span className="mt-0.5 inline-block rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+                                style={{ backgroundColor: PROGRAM_BG, color: PROGRAM_COLOR }}>
+                                {prog.category}
+                              </span>
+                            </div>
+                            {(isEnrolled || isWaitlisted) && (
+                              <span className="shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide"
+                                style={{ backgroundColor: isEnrolled ? '#dcfce7' : '#fef3c7', color: isEnrolled ? '#16a34a' : '#d97706' }}>
+                                {isEnrolled ? 'Enrolled' : 'Waitlisted'}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Details */}
+                          <div className="space-y-1.5 text-sm">
+                            <div className="flex items-center justify-between">
+                              <span className="text-gray-500">Coach</span>
+                              <span className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-semibold text-white"
+                                style={{ backgroundColor: coachColor }}>
+                                {COACH_NAMES[prog.coach]}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-gray-500">Schedule</span>
+                              <span className="font-medium text-gray-800">{prog.repeat} · {prog.dayOfWeek}s</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-gray-500">Time</span>
+                              <span className="font-medium text-gray-800">{minsToLabel(prog.startMins)} – {minsToLabel(prog.endMins)}</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-gray-500">Space</span>
+                              <span className="font-medium text-gray-800">{prog.space}</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-gray-500">Cost</span>
+                              <span className="font-semibold text-gray-900">${prog.costPerSession} / session</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-gray-500">Dates</span>
+                              <span className="text-xs font-medium text-gray-700">
+                                {new Date(prog.seriesStart + 'T00:00:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })} –{' '}
+                                {new Date(prog.seriesEnd + 'T00:00:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Capacity bar */}
+                          <div className="mt-4">
+                            <div className="mb-1 flex items-center justify-between text-xs">
+                              <span className="text-gray-500">Spots</span>
+                              <span className={`font-semibold ${isFull ? 'text-red-500' : 'text-gray-700'}`}>
+                                {isFull ? 'Full' : `${spotsLeft} of ${prog.capacity} remaining`}
+                              </span>
+                            </div>
+                            <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-200">
+                              <div
+                                className="h-full rounded-full transition-all"
+                                style={{
+                                  width: `${Math.min(100, (prog.enrolled / prog.capacity) * 100)}%`,
+                                  backgroundColor: isFull ? '#ef4444' : PROGRAM_COLOR,
+                                }}
+                              />
+                            </div>
+                          </div>
+
+                          {/* CTA */}
+                          <div className="mt-4">
+                            {isEnrolled ? (
+                              <div className="flex items-center justify-center gap-1.5 rounded-xl border border-green-200 bg-green-50 py-2 text-sm font-semibold text-green-700">
+                                <IconCheck size={15} strokeWidth={2.5} /> Enrolled in all sessions
+                              </div>
+                            ) : isWaitlisted ? (
+                              <div className="flex items-center justify-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 py-2 text-sm font-semibold text-amber-700">
+                                On Waitlist
+                              </div>
+                            ) : isFull ? (
+                              <button type="button"
+                                onClick={() => { setEnrolModal(prog); setEnrolName('') }}
+                                className="w-full rounded-xl border border-amber-300 bg-amber-50 py-2.5 text-sm font-bold text-amber-700 transition hover:bg-amber-100">
+                                Full — Join Waitlist
+                              </button>
+                            ) : (
+                              <button type="button"
+                                onClick={() => { setEnrolModal(prog); setEnrolName('') }}
+                                className="w-full rounded-xl py-2.5 text-sm font-bold text-white transition hover:opacity-90"
+                                style={{ backgroundColor: PROGRAM_COLOR }}>
+                                Enrol Now
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })}
+
+            {/* My enrolled programs */}
+            {enrolledPrograms.size > 0 && (
+              <div>
+                <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-gray-500">My Programs</h2>
+                <div className="rounded-2xl border border-green-200 bg-green-50 p-5">
+                  <div className="space-y-2">
+                    {PORTAL_PROGRAMS.filter(p => enrolledPrograms.has(p.id)).map(prog => (
+                      <div key={prog.id} className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <IconCheck size={14} strokeWidth={2.5} className="text-green-600" />
+                          <span className="text-sm font-semibold text-gray-900">{prog.name}</span>
+                        </div>
+                        <span className="text-xs text-gray-500">{prog.dayOfWeek}s · {minsToLabel(prog.startMins)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ── Toast notification ───────────────────────────────────────────────── */}
@@ -502,6 +827,58 @@ export default function PortalPage() {
         >
           <IconCheck size={16} strokeWidth={2.5} />
           {toastMsg}
+        </div>
+      )}
+
+      {/* ── Enrol Modal ───────────────────────────────────────────────────────── */}
+      {enrolModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+              <div>
+                <h2 className="text-base font-bold text-gray-900">
+                  {enrolModal.enrolled >= enrolModal.capacity ? 'Join Waitlist' : 'Enrol in Program'}
+                </h2>
+                <p className="mt-0.5 text-sm text-gray-500">{enrolModal.name}</p>
+              </div>
+              <button type="button" onClick={() => setEnrolModal(null)}
+                className="rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100">
+                <IconX size={18} />
+              </button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 space-y-2 text-sm">
+                <div className="flex justify-between"><span className="text-gray-500">Program</span><span className="font-semibold text-gray-800">{enrolModal.name}</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">Schedule</span><span className="font-semibold text-gray-800">{enrolModal.repeat} · {enrolModal.dayOfWeek}s · {minsToLabel(enrolModal.startMins)}</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">Cost</span><span className="font-semibold text-gray-800">${enrolModal.costPerSession} / session</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">Dates</span><span className="font-semibold text-gray-800">
+                  {new Date(enrolModal.seriesStart + 'T00:00:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })} – {new Date(enrolModal.seriesEnd + 'T00:00:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}
+                </span></div>
+              </div>
+              {enrolModal.enrolled >= enrolModal.capacity && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                  This program is currently full. Join the waitlist and we'll contact you if a spot opens up.
+                </div>
+              )}
+              <div>
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">Your Name</label>
+                <input type="text" value={enrolName} onChange={e => setEnrolName(e.target.value)}
+                  placeholder="e.g. Jordan Mitchell" autoFocus
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-[#D4A520] focus:ring-2 focus:ring-[#D4A520]/20" />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 border-t border-gray-100 px-6 py-4">
+              <button type="button" onClick={() => setEnrolModal(null)}
+                className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50">
+                Cancel
+              </button>
+              <button type="button" onClick={confirmEnrol} disabled={!enrolName.trim()}
+                className="rounded-xl px-5 py-2 text-sm font-bold text-white transition hover:opacity-90 disabled:opacity-40"
+                style={{ backgroundColor: enrolModal.enrolled >= enrolModal.capacity ? '#D97706' : '#D4A520' }}>
+                {enrolModal.enrolled >= enrolModal.capacity ? 'Join Waitlist' : 'Confirm Enrolment'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

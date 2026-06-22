@@ -1643,6 +1643,11 @@ function BookingBlock({
             {athleteStr}
           </p>
         )}
+        {!compact && height >= 52 && booking.bookingType === 'program' && booking.capacity != null && (
+          <p className="mt-0.5 text-[10px] font-semibold" style={{ color: chipColor + 'cc' }}>
+            {booking.athletes.length}/{booking.capacity} enrolled
+          </p>
+        )}
         {!compact && height >= 24 && coachBadge && booking.bookingType !== 'unavailable' && (
           <span
             className="absolute top-0.5 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-black text-white"
@@ -2216,6 +2221,7 @@ function BookingModal({
   const [memberTier,            setMemberTier]            = useState<MemberTier | ''>('')
   const [machineRentalDuration, setMachineRentalDuration] = useState<30 | 45 | 60>(60)
   const [adminOverride, setAdminOverride] = useState(src?.adminOverride ?? false)
+  const [capacity, setCapacity] = useState<number>(src?.capacity ?? 15)
   const accentColor  = bookingType === 'casual' ? '#6BAD6B' : bookingType === 'unavailable' ? '#ef4444' : bookingType === 'program' ? '#D4A520' : '#6BA3D6'
   const isIndividual = bookingType === 'member' && sessionType === 'Individual Work Out'
   const isMachineRental = sessionType === 'Shooting Machine Rental'
@@ -2299,7 +2305,7 @@ function BookingModal({
     const effectiveAthletes = isIndividual
       ? (singleAthlete === 'other' ? (customAthlete.trim() ? [customAthlete.trim()] : []) : singleAthlete ? [singleAthlete] : [])
       : [...athletes, ...memberCasualNames]
-    const base = { spaceId, startMins, duration, sessionType, athletes: effectiveAthletes, coach, bookingType, memberTier: memberTier || undefined, adminOverride: adminOverride || undefined }
+    const base = { spaceId, startMins, duration, sessionType, athletes: effectiveAthletes, coach, bookingType, memberTier: memberTier || undefined, adminOverride: adminOverride || undefined, capacity: bookingType === 'program' ? capacity : undefined }
     if (editSeriesFuture) {
       onSaveFrom(src!.date, src!.seriesId!, base)
     } else if (repeat === 'none' || !repeatUntil) {
@@ -2488,6 +2494,7 @@ function BookingModal({
                         setUnavailableSpaces([spaceId])
                       } else if (type === 'program') {
                         setSessionType('')
+                        setRepeat('weekly')
                       } else if (type === 'member') {
                         if (sessionType === 'Team Training' || sessionType === 'Unavailable' || ALL_PROGRAM_NAMES.includes(sessionType)) setSessionType('')
                       } else if (type === 'casual') {
@@ -2621,7 +2628,11 @@ function BookingModal({
                       <label className={LABEL}>Program</label>
                       <SelectPicker
                         value={sessionType}
-                        onChange={setSessionType}
+                        onChange={v => {
+                          setSessionType(v)
+                          if (PROGRAM_GROUPS['Development Programs'].includes(v)) setCapacity(15)
+                          else if (PROGRAM_GROUPS['Social Programs'].includes(v)) setCapacity(20)
+                        }}
                         accentColor={accentColor}
                         panelMaxHeight={260}
                         options={[
@@ -2711,6 +2722,27 @@ function BookingModal({
                       </div>
                     </div>
                   )}
+
+                  {/* Capacity */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className={LABEL}>Capacity (max athletes)</label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={100}
+                        value={capacity}
+                        onChange={e => setCapacity(parseInt(e.target.value) || 1)}
+                        className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-center text-sm text-gray-800 outline-none transition focus:border-[#D4A520] focus:ring-1 focus:ring-[#D4A520]/40"
+                      />
+                    </div>
+                    <div>
+                      <label className={LABEL}>Spots Available</label>
+                      <div className="flex h-10 w-full items-center justify-center rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-500">
+                        {Math.max(0, capacity - athletes.length)} of {capacity}
+                      </div>
+                    </div>
+                  </div>
 
                   {/* Athletes */}
                   <div>
