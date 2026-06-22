@@ -3626,16 +3626,9 @@ function AvailabilityTab({
   const [addCoachOpen, setAddCoachOpen] = useState(false)
   const [newCoachName, setNewCoachName] = useState('')
 
-  // Weekly overview state
-  const [weekStart, setWeekStart] = useState<Date>(() => {
-    const d = new Date()
-    const jsDay = d.getDay()
-    const diff = jsDay === 0 ? -6 : 1 - jsDay
-    const mon = new Date(d)
-    mon.setDate(d.getDate() + diff)
-    mon.setHours(0, 0, 0, 0)
-    return mon
-  })
+  // Monthly overview state
+  const [ovYear, setOvYear] = useState(() => new Date().getFullYear())
+  const [ovMonth, setOvMonth] = useState(() => new Date().getMonth())
   // Exception modal state
   const [exOpen, setExOpen] = useState(false)
   const [exWho, setExWho] = useState<string[]>([])
@@ -3682,12 +3675,6 @@ function AvailabilityTab({
 
         {/* ── OVERVIEW SUB-TAB ── */}
         {avSubTab === 'overview' && (() => {
-          const OV_HOUR_PX = 48
-          const OV_START = 6
-          const OV_END = 22
-          const OV_TOTAL_H = (OV_END - OV_START) * OV_HOUR_PX
-          const TL_W = 56
-
           const VIC_PH: { date: string; name: string }[] = [
             { date: '2026-01-01', name: "New Year's Day" },
             { date: '2026-01-26', name: "Australia Day" },
@@ -3707,51 +3694,29 @@ function AvailabilityTab({
           const _td = new Date()
           const todayIso = [_td.getFullYear(), String(_td.getMonth()+1).padStart(2,'0'), String(_td.getDate()).padStart(2,'0')].join('-')
 
-          const weekDays = Array.from({ length: 7 }, (_, i) => {
-            const d = new Date(weekStart)
-            d.setDate(weekStart.getDate() + i)
-            const iso = [d.getFullYear(), String(d.getMonth()+1).padStart(2,'0'), String(d.getDate()).padStart(2,'0')].join('-')
-            const dow = jsDayToOurs(d.getDay()) as DayOfWeek
-            const pubHol = VIC_PH.find(h => h.date === iso) ?? null
-            return { d, iso, dow, pubHol }
+          const FAC_COL = '#D97706'
+          const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December']
+
+          const firstDay = new Date(ovYear, ovMonth, 1)
+          const daysInMonth = new Date(ovYear, ovMonth + 1, 0).getDate()
+          const firstDow = jsDayToOurs(firstDay.getDay())
+          const totalCells = Math.ceil((firstDow + daysInMonth) / 7) * 7
+
+          const monthPubHols = VIC_PH.filter(h => {
+            const d = new Date(h.date + 'T12:00:00')
+            return d.getFullYear() === ovYear && d.getMonth() === ovMonth
           })
 
-          function minsToTop(mins: number) {
-            return ((mins / 60) - OV_START) * OV_HOUR_PX
-          }
-          function winH(s: number, e: number) {
-            const cs = Math.max(s, OV_START * 60), ce = Math.min(e, OV_END * 60)
-            return ((ce - cs) / 60) * OV_HOUR_PX
+          function fmtIso(d: Date) {
+            return [d.getFullYear(), String(d.getMonth()+1).padStart(2,'0'), String(d.getDate()).padStart(2,'0')].join('-')
           }
 
-          function facWins(iso: string) {
+          function isDayOpen(iso: string): boolean {
             const dow = jsDayToOurs(new Date(iso + 'T12:00:00').getDay()) as DayOfWeek
             const day = facilitySchedule[dow]
-            const blks = facilityOverrides.filter(o => o.date === iso && o.type === 'block')
-            const exts = facilityOverrides.filter(o => o.date === iso && o.type === 'extra')
-            const r: { s: number; e: number; block: boolean }[] = []
-            const fullBlk = blks.find(o => o.startMins == null)
-            if (!fullBlk && day.available) day.windows.forEach(w => r.push({ s: w.startMins, e: w.endMins, block: false }))
-            exts.filter(o => o.startMins != null).forEach(o => r.push({ s: o.startMins!, e: o.endMins!, block: false }))
-            blks.filter(o => o.startMins != null).forEach(o => r.push({ s: o.startMins!, e: o.endMins!, block: true }))
-            if (fullBlk) r.push({ s: OV_START * 60, e: OV_END * 60, block: true })
-            return r
-          }
-
-          function coachWins(coachId: string, iso: string) {
-            const dow = jsDayToOurs(new Date(iso + 'T12:00:00').getDay()) as DayOfWeek
-            const sched = coachSchedules[coachId]
-            if (!sched) return [] as { s: number; e: number; block: boolean }[]
-            const day = sched.days[dow]
-            const blks = dateOverrides.filter(o => o.coachId === coachId && o.date === iso && o.type === 'block')
-            const exts = dateOverrides.filter(o => o.coachId === coachId && o.date === iso && o.type === 'extra')
-            const r: { s: number; e: number; block: boolean }[] = []
-            const fullBlk = blks.find(o => o.startMins == null)
-            if (!fullBlk && day.available) day.windows.forEach(w => r.push({ s: w.startMins, e: w.endMins, block: false }))
-            exts.filter(o => o.startMins != null).forEach(o => r.push({ s: o.startMins!, e: o.endMins!, block: false }))
-            blks.filter(o => o.startMins != null).forEach(o => r.push({ s: o.startMins!, e: o.endMins!, block: true }))
-            if (fullBlk) r.push({ s: OV_START * 60, e: OV_END * 60, block: true })
-            return r
+            if (!day.available) return false
+            const fullBlock = facilityOverrides.find(o => o.date === iso && o.type === 'block' && o.startMins == null)
+            return !fullBlock
           }
 
           function submitException() {
@@ -3762,7 +3727,7 @@ function AvailabilityTab({
               const cur = new Date(exDate + 'T12:00:00')
               const last = new Date(exDateEnd + 'T12:00:00')
               while (cur <= last) {
-                dates.push([cur.getFullYear(), String(cur.getMonth()+1).padStart(2,'0'), String(cur.getDate()).padStart(2,'0')].join('-'))
+                dates.push(fmtIso(cur))
                 cur.setDate(cur.getDate() + 1)
               }
             } else if (exDate) {
@@ -3787,40 +3752,26 @@ function AvailabilityTab({
             setExOpen(true)
           }
 
-          const FAC_COL = '#D97706'
-
-          const wEnd = new Date(weekStart)
-          wEnd.setDate(weekStart.getDate() + 6)
-          const wLabel = weekStart.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' }) +
-            ' – ' + wEnd.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })
-
           return (
             <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
 
-              {/* ── Week nav ── */}
+              {/* ── Month nav ── */}
               <div className="flex shrink-0 items-center gap-2 border-b border-gray-200 bg-white px-4 py-2.5">
-
                 <button type="button"
-                  onClick={() => { const d = new Date(weekStart); d.setDate(d.getDate()-7); setWeekStart(d) }}
+                  onClick={() => { if (ovMonth === 0) { setOvMonth(11); setOvYear(y => y - 1) } else setOvMonth(m => m - 1) }}
                   className="rounded-lg p-1.5 text-gray-500 transition hover:bg-gray-100">
                   <IconChevronLeft size={16} />
                 </button>
-                <span className="min-w-[220px] text-center text-sm font-bold text-gray-800">{wLabel}</span>
+                <span className="min-w-[180px] text-center text-sm font-bold text-gray-800">
+                  {MONTH_NAMES[ovMonth]} {ovYear}
+                </span>
                 <button type="button"
-                  onClick={() => { const d = new Date(weekStart); d.setDate(d.getDate()+7); setWeekStart(d) }}
+                  onClick={() => { if (ovMonth === 11) { setOvMonth(0); setOvYear(y => y + 1) } else setOvMonth(m => m + 1) }}
                   className="rounded-lg p-1.5 text-gray-500 transition hover:bg-gray-100">
                   <IconChevronRight size={16} />
                 </button>
                 <button type="button"
-                  onClick={() => {
-                    const d = new Date()
-                    const jsDay = d.getDay()
-                    const diff = jsDay === 0 ? -6 : 1 - jsDay
-                    const mon = new Date(d)
-                    mon.setDate(d.getDate() + diff)
-                    mon.setHours(0,0,0,0)
-                    setWeekStart(mon)
-                  }}
+                  onClick={() => { setOvYear(_td.getFullYear()); setOvMonth(_td.getMonth()) }}
                   className="ml-1 rounded-lg border border-gray-200 px-3 py-1 text-xs font-semibold text-gray-600 transition hover:bg-gray-100">
                   Today
                 </button>
@@ -3830,101 +3781,58 @@ function AvailabilityTab({
                   style={{ backgroundColor: '#6BA3D6' }}>
                   <IconPlus size={13} /> Add Exception
                 </button>
+              </div>
 
-              </div>{/* end week nav */}
-
-              {/* ── Timeline ── */}
-              <div className="flex flex-1 min-h-0 overflow-auto">
-                {/* Sticky time-label column */}
-                <div className="sticky left-0 z-20 shrink-0 bg-white border-r border-gray-200" style={{ width: TL_W }}>
-                  <div className="sticky top-0 z-10 border-b border-gray-200 bg-gray-50" style={{ height: 56 }} />
-                  <div className="relative" style={{ height: OV_TOTAL_H }}>
-                    {Array.from({ length: OV_END - OV_START + 1 }, (_, i) => {
-                      const h = OV_START + i
-                      const lbl = h === 12 ? '12pm' : h > 12 ? `${h-12}pm` : `${h}am`
-                      return (
-                        <div key={h} className="absolute right-2 text-[10px] text-gray-400 leading-none"
-                          style={{ top: i * OV_HOUR_PX - 6 }}>
-                          {lbl}
-                        </div>
-                      )
-                    })}
-                  </div>
+              {/* ── Calendar grid ── */}
+              <div className="flex-1 overflow-y-auto p-4">
+                {/* Day-of-week headers */}
+                <div className="mb-2 grid grid-cols-7">
+                  {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => (
+                    <div key={d} className="py-1.5 text-center text-xs font-semibold uppercase tracking-wide text-gray-400">{d}</div>
+                  ))}
                 </div>
-
-                {/* Day columns */}
-                <div className="flex min-w-0 flex-1">
-                  {weekDays.map(({ d, iso, dow, pubHol }) => {
+                {/* Day cells */}
+                <div className="grid grid-cols-7 gap-1.5">
+                  {Array.from({ length: totalCells }, (_, idx) => {
+                    const cellDay = idx - firstDow + 1
+                    const inMonth = cellDay >= 1 && cellDay <= daysInMonth
+                    if (!inMonth) {
+                      return <div key={idx} className="rounded-xl" style={{ minHeight: 72 }} />
+                    }
+                    const d = new Date(ovYear, ovMonth, cellDay)
+                    const iso = fmtIso(d)
+                    const pubHol = VIC_PH.find(h => h.date === iso) ?? null
+                    const open = isDayOpen(iso)
                     const isToday = iso === todayIso
-                    const fWins = facWins(iso)
                     return (
-                      <div key={iso} className="flex min-w-[90px] flex-1 flex-col border-l border-gray-200">
-                        {/* Day header */}
-                        <div className="sticky top-0 z-10 flex shrink-0 flex-col items-center justify-center border-b border-gray-200 px-1 py-1"
-                          style={{ height: 56, backgroundColor: isToday ? '#eff6ff' : pubHol ? '#fef2f2' : '#f9fafb' }}>
-                          <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">{DAYS_LABEL[dow]}</span>
-                          <span className={`mt-0.5 text-sm font-bold leading-none ${isToday ? 'text-[#6BA3D6]' : 'text-gray-700'}`}>{d.getDate()}</span>
-                          {pubHol && (
-                            <span className="mt-0.5 w-full truncate px-0.5 text-center text-[8px] font-bold leading-tight text-red-500" title={pubHol.name}>
-                              {pubHol.name}
-                            </span>
-                          )}
+                      <div
+                        key={iso}
+                        onClick={() => openEx(iso, ['facility'])}
+                        className="cursor-pointer rounded-xl p-2.5 transition hover:brightness-95"
+                        style={{
+                          minHeight: 72,
+                          backgroundColor: open ? '#dbeafe' : '#fee2e2',
+                          outline: isToday ? '2px solid #6BA3D6' : 'none',
+                          outlineOffset: '-2px',
+                        }}
+                      >
+                        <div className="flex items-start justify-between gap-1">
+                          <span
+                            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold"
+                            style={{
+                              backgroundColor: isToday ? '#6BA3D6' : 'transparent',
+                              color: isToday ? 'white' : open ? '#1d4ed8' : '#dc2626',
+                            }}
+                          >
+                            {cellDay}
+                          </span>
+                          <span className={`mt-0.5 text-[9px] font-bold uppercase tracking-wide ${open ? 'text-blue-600' : 'text-red-500'}`}>
+                            {open ? 'Open' : 'Closed'}
+                          </span>
                         </div>
-                        {/* Entity sub-columns */}
-                        <div className="relative flex flex-1" style={{ height: OV_TOTAL_H }}>
-                          {Array.from({ length: OV_END - OV_START + 1 }, (_, i) => (
-                            <div key={i} className="pointer-events-none absolute inset-x-0 border-t border-gray-100"
-                              style={{ top: i * OV_HOUR_PX }} />
-                          ))}
-                          {pubHol && (
-                            <div className="pointer-events-none absolute inset-0 z-10"
-                              style={{ background: 'repeating-linear-gradient(45deg,rgba(239,68,68,0.08) 0px,rgba(239,68,68,0.08) 3px,transparent 3px,transparent 10px)' }} />
-                          )}
-                          {/* Facility lane */}
-                          <div className="relative flex-1 cursor-pointer border-r border-gray-100 transition-colors hover:bg-amber-50/30"
-                            onClick={() => openEx(iso, ['facility'])}>
-                            {fWins.map((w, wi) => {
-                              const top = minsToTop(w.s)
-                              const h = winH(w.s, w.e)
-                              if (h <= 0) return null
-                              return (
-                                <div key={wi} className="absolute inset-x-0.5 rounded-sm"
-                                  style={{
-                                    top, height: h,
-                                    background: w.block
-                                      ? 'repeating-linear-gradient(45deg,rgba(239,68,68,0.3) 0px,rgba(239,68,68,0.3) 3px,rgba(239,68,68,0.1) 3px,rgba(239,68,68,0.1) 9px)'
-                                      : FAC_COL + '30',
-                                    borderLeft: `2px solid ${w.block ? '#ef4444' : FAC_COL}`,
-                                  }} />
-                              )
-                            })}
-                          </div>
-                          {/* Coach lanes */}
-                          {coaches.map((coach, ci) => {
-                            const cWins = coachWins(coach.id, iso)
-                            return (
-                              <div key={coach.id}
-                                className={`relative flex-1 cursor-pointer transition-colors hover:bg-gray-50/50 ${ci < coaches.length - 1 ? 'border-r border-gray-100' : ''}`}
-                                onClick={() => openEx(iso, [coach.id])}>
-                                {cWins.map((w, wi) => {
-                                  const top = minsToTop(w.s)
-                                  const h = winH(w.s, w.e)
-                                  if (h <= 0) return null
-                                  return (
-                                    <div key={wi} className="absolute inset-x-0.5 rounded-sm"
-                                      style={{
-                                        top, height: h,
-                                        background: w.block
-                                          ? 'repeating-linear-gradient(45deg,rgba(239,68,68,0.3) 0px,rgba(239,68,68,0.3) 3px,rgba(239,68,68,0.1) 3px,rgba(239,68,68,0.1) 9px)'
-                                          : coach.color + '30',
-                                        borderLeft: `2px solid ${w.block ? '#ef4444' : coach.color}`,
-                                      }} />
-                                  )
-                                })}
-                              </div>
-                            )
-                          })}
-                        </div>
+                        {pubHol && (
+                          <p className="mt-1 truncate text-[10px] font-medium text-red-600">{pubHol.name}</p>
+                        )}
                       </div>
                     )
                   })}
@@ -3932,28 +3840,20 @@ function AvailabilityTab({
               </div>
 
               {/* ── Legend ── */}
-              <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-t border-gray-200 bg-white px-4 py-2">
+              <div className="flex shrink-0 flex-wrap items-center gap-4 border-t border-gray-200 bg-white px-4 py-2.5">
                 <div className="flex items-center gap-1.5">
-                  <span className="h-2.5 w-3 rounded-sm" style={{ backgroundColor: FAC_COL + '50', borderLeft: `2px solid ${FAC_COL}` }} />
-                  <span className="text-[11px] text-gray-500">Facility</span>
-                </div>
-                {coaches.map(c => (
-                  <div key={c.id} className="flex items-center gap-1.5">
-                    <span className="h-2.5 w-3 rounded-sm" style={{ backgroundColor: c.color + '50', borderLeft: `2px solid ${c.color}` }} />
-                    <span className="text-[11px] text-gray-500">{c.name}</span>
-                  </div>
-                ))}
-                <div className="flex items-center gap-1.5">
-                  <span className="h-2.5 w-3 overflow-hidden rounded-sm"
-                    style={{ background: 'repeating-linear-gradient(45deg,rgba(239,68,68,0.5) 0px,rgba(239,68,68,0.5) 3px,rgba(239,68,68,0.15) 3px,rgba(239,68,68,0.15) 9px)', borderLeft: '2px solid #ef4444' }} />
-                  <span className="text-[11px] text-gray-500">Blocked</span>
+                  <span className="h-3 w-3 rounded-sm" style={{ backgroundColor: '#dbeafe' }} />
+                  <span className="text-xs text-gray-500">Open</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <span className="h-2.5 w-3 overflow-hidden rounded-sm"
-                    style={{ background: 'repeating-linear-gradient(45deg,rgba(239,68,68,0.12) 0px,rgba(239,68,68,0.12) 3px,transparent 3px,transparent 10px)' }} />
-                  <span className="text-[11px] text-gray-500">Public holiday</span>
+                  <span className="h-3 w-3 rounded-sm" style={{ backgroundColor: '#fee2e2' }} />
+                  <span className="text-xs text-gray-500">Closed</span>
                 </div>
-                <span className="ml-auto text-[10px] text-gray-400">Click any lane to add an exception</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="inline-flex h-4 w-4 items-center justify-center rounded-full text-[8px] font-bold text-white" style={{ backgroundColor: '#6BA3D6' }}>1</span>
+                  <span className="text-xs text-gray-500">Today</span>
+                </div>
+                <span className="ml-auto text-[10px] text-gray-400">Click any day to add an exception</span>
               </div>
 
               {/* ── Exception modal ── */}
@@ -4054,19 +3954,19 @@ function AvailabilityTab({
                           placeholder={exType === 'block' ? 'e.g. Public holiday' : 'e.g. Special training day'}
                           className="h-10 w-full rounded-lg border border-gray-200 px-3 text-sm text-gray-800 outline-none transition focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/40" />
                       </div>
-                      {weekDays.some(wd => wd.pubHol) && (
+                      {monthPubHols.length > 0 && (
                         <div className="rounded-xl border border-red-100 bg-red-50 p-3">
-                          <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-red-500">Victoria public holidays this week</p>
+                          <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-red-500">Victoria public holidays this month</p>
                           <div className="space-y-1.5">
-                            {weekDays.filter(wd => wd.pubHol).map(({ iso, pubHol: ph }) => (
-                              <div key={iso} className="flex items-center justify-between gap-2">
+                            {monthPubHols.map(ph => (
+                              <div key={ph.date} className="flex items-center justify-between gap-2">
                                 <span className="text-xs text-red-700">
-                                  {ph!.name} — {new Date(iso + 'T12:00:00').toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })}
+                                  {ph.name} — {new Date(ph.date + 'T12:00:00').toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })}
                                 </span>
                                 <button type="button"
                                   onClick={() => {
-                                    setExDate(iso); setExDateEnd(iso); setExDateRange(false)
-                                    setExType('block'); setExAllDay(true); setExReason(ph!.name); setExWho(['all'])
+                                    setExDate(ph.date); setExDateEnd(ph.date); setExDateRange(false)
+                                    setExType('block'); setExAllDay(true); setExReason(ph.name); setExWho(['all'])
                                   }}
                                   className="shrink-0 rounded-md border border-red-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-red-600 transition hover:bg-red-100">
                                   Apply
@@ -4093,7 +3993,7 @@ function AvailabilityTab({
                 </div>,
                 document.body
               )}
-              {/* end new overview content */}
+              {/* end overview */}
             </div>
           )
         })()}
