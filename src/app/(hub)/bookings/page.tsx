@@ -3626,19 +3626,27 @@ function AvailabilityTab({
   const [addCoachOpen, setAddCoachOpen] = useState(false)
   const [newCoachName, setNewCoachName] = useState('')
 
-  // Overview tab state
-  const [ovYear, setOvYear] = useState(() => new Date().getFullYear())
-  const [ovMonth, setOvMonth] = useState(() => new Date().getMonth())
-  const [ovSelDate, setOvSelDate] = useState<string | null>(null)
-  const [ovPanelFacType, setOvPanelFacType] = useState<'block' | 'extra' | null>(null)
-  const [ovPanelFacNote, setOvPanelFacNote] = useState('')
-  const [ovPanelFacStart, setOvPanelFacStart] = useState(540)
-  const [ovPanelFacEnd, setOvPanelFacEnd] = useState(780)
-  const [ovPanelCchId, setOvPanelCchId] = useState<string | null>(null)
-  const [ovPanelCchType, setOvPanelCchType] = useState<'block' | 'extra' | null>(null)
-  const [ovPanelCchNote, setOvPanelCchNote] = useState('')
-  const [ovPanelCchStart, setOvPanelCchStart] = useState(540)
-  const [ovPanelCchEnd, setOvPanelCchEnd] = useState(780)
+  // Weekly overview state
+  const [weekStart, setWeekStart] = useState<Date>(() => {
+    const d = new Date()
+    const jsDay = d.getDay()
+    const diff = jsDay === 0 ? -6 : 1 - jsDay
+    const mon = new Date(d)
+    mon.setDate(d.getDate() + diff)
+    mon.setHours(0, 0, 0, 0)
+    return mon
+  })
+  // Exception modal state
+  const [exOpen, setExOpen] = useState(false)
+  const [exWho, setExWho] = useState<string[]>([])
+  const [exType, setExType] = useState<'block' | 'extra'>('block')
+  const [exDate, setExDate] = useState('')
+  const [exDateEnd, setExDateEnd] = useState('')
+  const [exDateRange, setExDateRange] = useState(false)
+  const [exAllDay, setExAllDay] = useState(true)
+  const [exStart, setExStart] = useState(540)
+  const [exEnd, setExEnd] = useState(1020)
+  const [exReason, setExReason] = useState('')
 
   const LABEL_CLS = 'mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-400'
   const INPUT_CLS = 'h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-800 outline-none transition focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/40'
@@ -3670,383 +3678,422 @@ function AvailabilityTab({
         ))}
       </div>
 
-      <div className={avSubTab === 'overview' ? 'flex min-h-0 flex-1 overflow-hidden' : 'flex-1 overflow-y-auto min-h-0'}>
+      <div className={avSubTab === 'overview' ? 'flex flex-col min-h-0 flex-1 overflow-hidden' : 'flex-1 overflow-y-auto min-h-0'}>
 
         {/* ── OVERVIEW SUB-TAB ── */}
         {avSubTab === 'overview' && (() => {
+          const OV_HOUR_PX = 48
+          const OV_START = 6
+          const OV_END = 22
+          const OV_TOTAL_H = (OV_END - OV_START) * OV_HOUR_PX
+          const TL_W = 56
+
+          const VIC_PH: { date: string; name: string }[] = [
+            { date: '2026-01-01', name: "New Year's Day" },
+            { date: '2026-01-26', name: "Australia Day" },
+            { date: '2026-03-09', name: "Labour Day" },
+            { date: '2026-04-03', name: "Good Friday" },
+            { date: '2026-04-04', name: "Easter Saturday" },
+            { date: '2026-04-05', name: "Easter Sunday" },
+            { date: '2026-04-06', name: "Easter Monday" },
+            { date: '2026-04-27', name: "ANZAC Day (observed)" },
+            { date: '2026-06-08', name: "King's Birthday" },
+            { date: '2026-11-03', name: "Melbourne Cup" },
+            { date: '2026-12-25', name: "Christmas Day" },
+            { date: '2026-12-26', name: "Boxing Day" },
+            { date: '2026-12-28', name: "Boxing Day (sub.)" },
+          ]
+
           const _td = new Date()
           const todayIso = [_td.getFullYear(), String(_td.getMonth()+1).padStart(2,'0'), String(_td.getDate()).padStart(2,'0')].join('-')
 
-          function mkIso(dt: Date) {
-            return [dt.getFullYear(), String(dt.getMonth()+1).padStart(2,'0'), String(dt.getDate()).padStart(2,'0')].join('-')
+          const weekDays = Array.from({ length: 7 }, (_, i) => {
+            const d = new Date(weekStart)
+            d.setDate(weekStart.getDate() + i)
+            const iso = [d.getFullYear(), String(d.getMonth()+1).padStart(2,'0'), String(d.getDate()).padStart(2,'0')].join('-')
+            const dow = jsDayToOurs(d.getDay()) as DayOfWeek
+            const pubHol = VIC_PH.find(h => h.date === iso) ?? null
+            return { d, iso, dow, pubHol }
+          })
+
+          function minsToTop(mins: number) {
+            return ((mins / 60) - OV_START) * OV_HOUR_PX
+          }
+          function winH(s: number, e: number) {
+            const cs = Math.max(s, OV_START * 60), ce = Math.min(e, OV_END * 60)
+            return ((ce - cs) / 60) * OV_HOUR_PX
           }
 
-          const firstDow = (new Date(ovYear, ovMonth, 1).getDay() + 6) % 7
-          const daysInMon = new Date(ovYear, ovMonth + 1, 0).getDate()
-          const daysInPrev = new Date(ovYear, ovMonth, 0).getDate()
-
-          const cells: { iso: string; inMonth: boolean; d: number }[] = []
-          for (let i = firstDow - 1; i >= 0; i--)
-            cells.push({ iso: mkIso(new Date(ovYear, ovMonth - 1, daysInPrev - i)), inMonth: false, d: daysInPrev - i })
-          for (let d = 1; d <= daysInMon; d++)
-            cells.push({ iso: mkIso(new Date(ovYear, ovMonth, d)), inMonth: true, d })
-          for (let d = 1; cells.length < 42; d++)
-            cells.push({ iso: mkIso(new Date(ovYear, ovMonth + 1, d)), inMonth: false, d })
-
-          function facOpen(iso: string) {
-            if (facilityOverrides.some(o => o.date === iso && o.type === 'block')) return false
-            return facilitySchedule[jsDayToOurs(new Date(iso + 'T12:00:00').getDay())].available
+          function facWins(iso: string) {
+            const dow = jsDayToOurs(new Date(iso + 'T12:00:00').getDay()) as DayOfWeek
+            const day = facilitySchedule[dow]
+            const blks = facilityOverrides.filter(o => o.date === iso && o.type === 'block')
+            const exts = facilityOverrides.filter(o => o.date === iso && o.type === 'extra')
+            const r: { s: number; e: number; block: boolean }[] = []
+            const fullBlk = blks.find(o => o.startMins == null)
+            if (!fullBlk && day.available) day.windows.forEach(w => r.push({ s: w.startMins, e: w.endMins, block: false }))
+            exts.filter(o => o.startMins != null).forEach(o => r.push({ s: o.startMins!, e: o.endMins!, block: false }))
+            blks.filter(o => o.startMins != null).forEach(o => r.push({ s: o.startMins!, e: o.endMins!, block: true }))
+            if (fullBlk) r.push({ s: OV_START * 60, e: OV_END * 60, block: true })
+            return r
           }
 
-          function coachOn(coachId: string, iso: string) {
-            if (dateOverrides.some(o => o.coachId === coachId && o.date === iso && o.type === 'block')) return false
+          function coachWins(coachId: string, iso: string) {
+            const dow = jsDayToOurs(new Date(iso + 'T12:00:00').getDay()) as DayOfWeek
             const sched = coachSchedules[coachId]
-            if (!sched) return false
-            const dow = jsDayToOurs(new Date(iso + 'T12:00:00').getDay())
-            return sched.days[dow].available || dateOverrides.some(o => o.coachId === coachId && o.date === iso && o.type === 'extra')
+            if (!sched) return [] as { s: number; e: number; block: boolean }[]
+            const day = sched.days[dow]
+            const blks = dateOverrides.filter(o => o.coachId === coachId && o.date === iso && o.type === 'block')
+            const exts = dateOverrides.filter(o => o.coachId === coachId && o.date === iso && o.type === 'extra')
+            const r: { s: number; e: number; block: boolean }[] = []
+            const fullBlk = blks.find(o => o.startMins == null)
+            if (!fullBlk && day.available) day.windows.forEach(w => r.push({ s: w.startMins, e: w.endMins, block: false }))
+            exts.filter(o => o.startMins != null).forEach(o => r.push({ s: o.startMins!, e: o.endMins!, block: false }))
+            blks.filter(o => o.startMins != null).forEach(o => r.push({ s: o.startMins!, e: o.endMins!, block: true }))
+            if (fullBlk) r.push({ s: OV_START * 60, e: OV_END * 60, block: true })
+            return r
           }
 
-          function clearPanel() {
-            setOvSelDate(null)
-            setOvPanelFacType(null); setOvPanelFacNote('')
-            setOvPanelCchId(null); setOvPanelCchType(null); setOvPanelCchNote('')
+          function submitException() {
+            const allIds = ['facility', ...coaches.map(c => c.id)]
+            const targets = exWho.includes('all') ? allIds : exWho
+            const dates: string[] = []
+            if (exDateRange && exDateEnd && exDateEnd >= exDate) {
+              const cur = new Date(exDate + 'T12:00:00')
+              const last = new Date(exDateEnd + 'T12:00:00')
+              while (cur <= last) {
+                dates.push([cur.getFullYear(), String(cur.getMonth()+1).padStart(2,'0'), String(cur.getDate()).padStart(2,'0')].join('-'))
+                cur.setDate(cur.getDate() + 1)
+              }
+            } else if (exDate) {
+              dates.push(exDate)
+            }
+            for (const iso of dates) {
+              for (const t of targets) {
+                const s = exAllDay ? undefined : exStart
+                const e = exAllDay ? undefined : exEnd
+                if (t === 'facility') addFacilityOverrideDirect(iso, exType, exReason.trim(), s, e)
+                else addCoachOverrideDirect(t, iso, exType, exReason.trim(), s, e)
+              }
+            }
+            setExOpen(false); setExWho([]); setExType('block')
+            setExDate(''); setExDateEnd(''); setExDateRange(false)
+            setExAllDay(true); setExStart(540); setExEnd(1020); setExReason('')
           }
 
-          function selectDay(iso: string) {
-            if (iso === ovSelDate) { clearPanel(); return }
-            setOvSelDate(iso)
-            setOvPanelFacType(null); setOvPanelFacNote('')
-            setOvPanelCchId(null); setOvPanelCchType(null); setOvPanelCchNote('')
+          function openEx(iso: string, who: string[]) {
+            setExDate(iso); setExDateEnd(iso); setExWho(who)
+            setExType('block'); setExAllDay(true); setExReason(''); setExDateRange(false)
+            setExOpen(true)
           }
+
+          const FAC_COL = '#D97706'
+
+          const wEnd = new Date(weekStart)
+          wEnd.setDate(weekStart.getDate() + 6)
+          const wLabel = weekStart.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' }) +
+            ' – ' + wEnd.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })
 
           return (
-            <div className="flex min-h-0 flex-1 overflow-hidden">
+            <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
 
-              {/* ── Calendar pane ── */}
-              <div className={`flex flex-col overflow-y-auto bg-[#f4f6f9] ${ovSelDate ? 'w-[58%]' : 'w-full'}`}>
+              {/* ── Week nav ── */}
+              <div className="flex shrink-0 items-center gap-2 border-b border-gray-200 bg-white px-4 py-2.5">
 
-                {/* Month nav */}
-                <div className="sticky top-0 z-10 flex shrink-0 items-center justify-between border-b border-gray-200 bg-white px-6 py-3">
-                  <button type="button"
-                    onClick={() => { if (ovMonth === 0) { setOvMonth(11); setOvYear(y => y-1) } else setOvMonth(m => m-1) }}
-                    className="rounded-lg p-1.5 text-gray-500 transition hover:bg-gray-100">
-                    <IconChevronLeft size={16} />
-                  </button>
-                  <span className="text-sm font-bold text-gray-800">{MONTH_NAMES[ovMonth]} {ovYear}</span>
-                  <button type="button"
-                    onClick={() => { if (ovMonth === 11) { setOvMonth(0); setOvYear(y => y+1) } else setOvMonth(m => m+1) }}
-                    className="rounded-lg p-1.5 text-gray-500 transition hover:bg-gray-100">
-                    <IconChevronRight size={16} />
-                  </button>
+                <button type="button"
+                  onClick={() => { const d = new Date(weekStart); d.setDate(d.getDate()-7); setWeekStart(d) }}
+                  className="rounded-lg p-1.5 text-gray-500 transition hover:bg-gray-100">
+                  <IconChevronLeft size={16} />
+                </button>
+                <span className="min-w-[220px] text-center text-sm font-bold text-gray-800">{wLabel}</span>
+                <button type="button"
+                  onClick={() => { const d = new Date(weekStart); d.setDate(d.getDate()+7); setWeekStart(d) }}
+                  className="rounded-lg p-1.5 text-gray-500 transition hover:bg-gray-100">
+                  <IconChevronRight size={16} />
+                </button>
+                <button type="button"
+                  onClick={() => {
+                    const d = new Date()
+                    const jsDay = d.getDay()
+                    const diff = jsDay === 0 ? -6 : 1 - jsDay
+                    const mon = new Date(d)
+                    mon.setDate(d.getDate() + diff)
+                    mon.setHours(0,0,0,0)
+                    setWeekStart(mon)
+                  }}
+                  className="ml-1 rounded-lg border border-gray-200 px-3 py-1 text-xs font-semibold text-gray-600 transition hover:bg-gray-100">
+                  Today
+                </button>
+                <button type="button"
+                  onClick={() => openEx(todayIso, [])}
+                  className="ml-auto flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition hover:opacity-90"
+                  style={{ backgroundColor: '#6BA3D6' }}>
+                  <IconPlus size={13} /> Add Exception
+                </button>
+
+              </div>{/* end week nav */}
+
+              {/* ── Timeline ── */}
+              <div className="flex flex-1 min-h-0 overflow-auto">
+                {/* Sticky time-label column */}
+                <div className="sticky left-0 z-20 shrink-0 bg-white border-r border-gray-200" style={{ width: TL_W }}>
+                  <div className="sticky top-0 z-10 border-b border-gray-200 bg-gray-50" style={{ height: 56 }} />
+                  <div className="relative" style={{ height: OV_TOTAL_H }}>
+                    {Array.from({ length: OV_END - OV_START + 1 }, (_, i) => {
+                      const h = OV_START + i
+                      const lbl = h === 12 ? '12pm' : h > 12 ? `${h-12}pm` : `${h}am`
+                      return (
+                        <div key={h} className="absolute right-2 text-[10px] text-gray-400 leading-none"
+                          style={{ top: i * OV_HOUR_PX - 6 }}>
+                          {lbl}
+                        </div>
+                      )
+                    })}
+                  </div>
                 </div>
 
-                {/* Day-of-week headers */}
-                <div className="grid grid-cols-7 border-b border-gray-200 bg-white px-3 py-2">
-                  {['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d => (
-                    <div key={d} className="text-center text-[10px] font-semibold uppercase tracking-wide text-gray-400">{d}</div>
-                  ))}
-                </div>
-
-                {/* Day grid */}
-                <div className="grid grid-cols-7 gap-1.5 p-3">
-                  {cells.map(cell => {
-                    const isToday = cell.iso === todayIso
-                    const isSel = cell.iso === ovSelDate
-                    const open = facOpen(cell.iso)
-                    const hasOv = facilityOverrides.some(o => o.date === cell.iso) || dateOverrides.some(o => o.date === cell.iso)
+                {/* Day columns */}
+                <div className="flex min-w-0 flex-1">
+                  {weekDays.map(({ d, iso, dow, pubHol }) => {
+                    const isToday = iso === todayIso
+                    const fWins = facWins(iso)
                     return (
-                      <button key={cell.iso} type="button" onClick={() => selectDay(cell.iso)}
-                        className={`flex flex-col gap-1 rounded-xl border p-2 text-left transition ${
-                          isSel ? 'border-[#6BA3D6] bg-[#eff6ff] shadow-sm'
-                          : cell.inMonth ? 'border-gray-100 bg-white hover:border-gray-300 hover:shadow-sm'
-                          : 'border-transparent bg-white/50 hover:bg-white/80'
-                        }`}
-                        style={{ minHeight: 72 }}
-                      >
-                        <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-bold leading-none ${
-                          isToday ? 'bg-[#6BA3D6] text-white'
-                          : cell.inMonth ? 'text-gray-700' : 'text-gray-300'
-                        }`}>{cell.d}</span>
-                        {cell.inMonth && (
-                          <>
-                            <div className="flex items-center gap-1">
-                              <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${open ? 'bg-emerald-500' : 'bg-red-300'}`} />
-                              {hasOv && (
-                                <span className="rounded px-0.5 py-px text-[7px] font-bold uppercase leading-tight"
-                                  style={{ backgroundColor: '#fef3c7', color: '#b45309' }}>OV</span>
-                              )}
-                            </div>
-                            {coaches.length > 0 && (
-                              <div className="flex flex-wrap gap-0.5">
-                                {coaches.map(c => (
-                                  <span key={c.id} className="h-1.5 w-1.5 shrink-0 rounded-full"
-                                    style={{ backgroundColor: coachOn(c.id, cell.iso) ? c.color : '#e5e7eb' }} />
-                                ))}
+                      <div key={iso} className="flex min-w-[90px] flex-1 flex-col border-l border-gray-200">
+                        {/* Day header */}
+                        <div className="sticky top-0 z-10 flex shrink-0 flex-col items-center justify-center border-b border-gray-200 px-1 py-1"
+                          style={{ height: 56, backgroundColor: isToday ? '#eff6ff' : pubHol ? '#fef2f2' : '#f9fafb' }}>
+                          <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">{DAYS_LABEL[dow]}</span>
+                          <span className={`mt-0.5 text-sm font-bold leading-none ${isToday ? 'text-[#6BA3D6]' : 'text-gray-700'}`}>{d.getDate()}</span>
+                          {pubHol && (
+                            <span className="mt-0.5 w-full truncate px-0.5 text-center text-[8px] font-bold leading-tight text-red-500" title={pubHol.name}>
+                              {pubHol.name}
+                            </span>
+                          )}
+                        </div>
+                        {/* Entity sub-columns */}
+                        <div className="relative flex flex-1" style={{ height: OV_TOTAL_H }}>
+                          {Array.from({ length: OV_END - OV_START + 1 }, (_, i) => (
+                            <div key={i} className="pointer-events-none absolute inset-x-0 border-t border-gray-100"
+                              style={{ top: i * OV_HOUR_PX }} />
+                          ))}
+                          {pubHol && (
+                            <div className="pointer-events-none absolute inset-0 z-10"
+                              style={{ background: 'repeating-linear-gradient(45deg,rgba(239,68,68,0.08) 0px,rgba(239,68,68,0.08) 3px,transparent 3px,transparent 10px)' }} />
+                          )}
+                          {/* Facility lane */}
+                          <div className="relative flex-1 cursor-pointer border-r border-gray-100 transition-colors hover:bg-amber-50/30"
+                            onClick={() => openEx(iso, ['facility'])}>
+                            {fWins.map((w, wi) => {
+                              const top = minsToTop(w.s)
+                              const h = winH(w.s, w.e)
+                              if (h <= 0) return null
+                              return (
+                                <div key={wi} className="absolute inset-x-0.5 rounded-sm"
+                                  style={{
+                                    top, height: h,
+                                    background: w.block
+                                      ? 'repeating-linear-gradient(45deg,rgba(239,68,68,0.3) 0px,rgba(239,68,68,0.3) 3px,rgba(239,68,68,0.1) 3px,rgba(239,68,68,0.1) 9px)'
+                                      : FAC_COL + '30',
+                                    borderLeft: `2px solid ${w.block ? '#ef4444' : FAC_COL}`,
+                                  }} />
+                              )
+                            })}
+                          </div>
+                          {/* Coach lanes */}
+                          {coaches.map((coach, ci) => {
+                            const cWins = coachWins(coach.id, iso)
+                            return (
+                              <div key={coach.id}
+                                className={`relative flex-1 cursor-pointer transition-colors hover:bg-gray-50/50 ${ci < coaches.length - 1 ? 'border-r border-gray-100' : ''}`}
+                                onClick={() => openEx(iso, [coach.id])}>
+                                {cWins.map((w, wi) => {
+                                  const top = minsToTop(w.s)
+                                  const h = winH(w.s, w.e)
+                                  if (h <= 0) return null
+                                  return (
+                                    <div key={wi} className="absolute inset-x-0.5 rounded-sm"
+                                      style={{
+                                        top, height: h,
+                                        background: w.block
+                                          ? 'repeating-linear-gradient(45deg,rgba(239,68,68,0.3) 0px,rgba(239,68,68,0.3) 3px,rgba(239,68,68,0.1) 3px,rgba(239,68,68,0.1) 9px)'
+                                          : coach.color + '30',
+                                        borderLeft: `2px solid ${w.block ? '#ef4444' : coach.color}`,
+                                      }} />
+                                  )
+                                })}
                               </div>
-                            )}
-                          </>
-                        )}
-                      </button>
+                            )
+                          })}
+                        </div>
+                      </div>
                     )
                   })}
                 </div>
-
-                {/* Legend */}
-                <div className="shrink-0 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-gray-200 bg-white px-4 py-2.5">
-                  <div className="flex items-center gap-1.5">
-                    <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                    <span className="text-[11px] text-gray-500">Facility open</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="h-2 w-2 rounded-full bg-red-300" />
-                    <span className="text-[11px] text-gray-500">Facility closed</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="rounded px-1 py-px text-[7px] font-bold uppercase" style={{ backgroundColor: '#fef3c7', color: '#b45309' }}>OV</span>
-                    <span className="text-[11px] text-gray-500">Override active</span>
-                  </div>
-                  {coaches.map(c => (
-                    <div key={c.id} className="flex items-center gap-1.5">
-                      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: c.color }} />
-                      <span className="text-[11px] text-gray-500">{c.name}</span>
-                    </div>
-                  ))}
-                </div>
               </div>
 
-              {/* ── Day detail panel ── */}
-              {ovSelDate && (() => {
-                const iso = ovSelDate
-                const dt = new Date(iso + 'T12:00:00')
-                const facIsOpen = facOpen(iso)
-                const facBlockOv = facilityOverrides.find(o => o.date === iso && o.type === 'block')
-                const facExtraOvs = facilityOverrides.filter(o => o.date === iso && o.type === 'extra')
+              {/* ── Legend ── */}
+              <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-t border-gray-200 bg-white px-4 py-2">
+                <div className="flex items-center gap-1.5">
+                  <span className="h-2.5 w-3 rounded-sm" style={{ backgroundColor: FAC_COL + '50', borderLeft: `2px solid ${FAC_COL}` }} />
+                  <span className="text-[11px] text-gray-500">Facility</span>
+                </div>
+                {coaches.map(c => (
+                  <div key={c.id} className="flex items-center gap-1.5">
+                    <span className="h-2.5 w-3 rounded-sm" style={{ backgroundColor: c.color + '50', borderLeft: `2px solid ${c.color}` }} />
+                    <span className="text-[11px] text-gray-500">{c.name}</span>
+                  </div>
+                ))}
+                <div className="flex items-center gap-1.5">
+                  <span className="h-2.5 w-3 overflow-hidden rounded-sm"
+                    style={{ background: 'repeating-linear-gradient(45deg,rgba(239,68,68,0.5) 0px,rgba(239,68,68,0.5) 3px,rgba(239,68,68,0.15) 3px,rgba(239,68,68,0.15) 9px)', borderLeft: '2px solid #ef4444' }} />
+                  <span className="text-[11px] text-gray-500">Blocked</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="h-2.5 w-3 overflow-hidden rounded-sm"
+                    style={{ background: 'repeating-linear-gradient(45deg,rgba(239,68,68,0.12) 0px,rgba(239,68,68,0.12) 3px,transparent 3px,transparent 10px)' }} />
+                  <span className="text-[11px] text-gray-500">Public holiday</span>
+                </div>
+                <span className="ml-auto text-[10px] text-gray-400">Click any lane to add an exception</span>
+              </div>
 
-                return (
-                  <div className="flex w-[42%] shrink-0 flex-col border-l border-gray-200 bg-white">
-                    {/* Panel header */}
-                    <div className="flex shrink-0 items-start justify-between border-b border-gray-200 px-5 py-4">
-                      <div>
-                        <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
-                          {dt.toLocaleDateString('en-AU', { weekday: 'long' })}
-                        </p>
-                        <p className="text-base font-bold text-gray-900">
-                          {dt.toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })}
-                        </p>
-                      </div>
-                      <button type="button" onClick={clearPanel}
-                        className="mt-0.5 rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100">
+              {/* ── Exception modal ── */}
+              {exOpen && typeof document !== 'undefined' && createPortal(
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 p-4">
+                  <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+                    <div className="mb-5 flex items-center justify-between">
+                      <h2 className="text-base font-bold text-gray-800">Availability Exception</h2>
+                      <button type="button" onClick={() => setExOpen(false)}
+                        className="rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100">
                         <IconX size={16} />
                       </button>
                     </div>
-
-                    {/* Scrollable body */}
-                    <div className="flex-1 space-y-6 overflow-y-auto px-5 py-4">
-
-                      {/* Facility */}
+                    <div className="space-y-4">
                       <div>
-                        <div className="mb-3 flex items-center gap-2">
-                          <IconBuilding size={14} style={{ color: FACIL_COLOR }} />
-                          <span className="text-[11px] font-bold uppercase tracking-wide text-gray-600">Facility</span>
-                          <span className={`ml-auto rounded-full px-2 py-0.5 text-[10px] font-bold ${facIsOpen ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'}`}>
-                            {facIsOpen ? 'Open' : 'Closed'}
-                          </span>
+                        <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-400">Who</label>
+                        <div className="flex flex-wrap gap-2">
+                          {[
+                            { id: 'all', label: 'All', color: '#6b7280' },
+                            { id: 'facility', label: 'Facility', color: FAC_COL },
+                            ...coaches.map(c => ({ id: c.id, label: c.name, color: c.color })),
+                          ].map(e => {
+                            const sel = exWho.includes(e.id)
+                            return (
+                              <button key={e.id} type="button"
+                                onClick={() => {
+                                  if (e.id === 'all') {
+                                    setExWho(exWho.includes('all') ? [] : ['all'])
+                                  } else {
+                                    setExWho(prev => {
+                                      const next = prev.filter(x => x !== 'all')
+                                      return next.includes(e.id) ? next.filter(x => x !== e.id) : [...next, e.id]
+                                    })
+                                  }
+                                }}
+                                className="flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition"
+                                style={{
+                                  backgroundColor: sel ? e.color + '20' : 'transparent',
+                                  borderColor: sel ? e.color : '#e5e7eb',
+                                  color: sel ? e.color : '#9ca3af',
+                                }}>
+                                {sel && <IconCheck size={10} />}
+                                {e.label}
+                              </button>
+                            )
+                          })}
                         </div>
-
-                        {/* Existing facility overrides */}
-                        {(facBlockOv || facExtraOvs.length > 0) && (
-                          <div className="mb-3 space-y-1.5">
-                            {facBlockOv && (
-                              <div className="flex items-start justify-between gap-2 rounded-lg border border-red-100 bg-red-50 px-3 py-2">
-                                <div>
-                                  <p className="text-xs font-semibold text-red-700">Closed — override</p>
-                                  {facBlockOv.note && <p className="mt-0.5 text-[11px] text-red-400">{facBlockOv.note}</p>}
-                                </div>
-                                <button type="button" onClick={() => deleteFacilityOverride(facBlockOv.id)}
-                                  className="shrink-0 rounded-lg p-1 text-red-300 transition hover:bg-red-100 hover:text-red-500">
-                                  <IconTrash size={13} />
-                                </button>
-                              </div>
-                            )}
-                            {facExtraOvs.map(ov => (
-                              <div key={ov.id} className="flex items-start justify-between gap-2 rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2">
-                                <div>
-                                  <p className="text-xs font-semibold text-emerald-700">
-                                    Extra hours{ov.startMins != null ? ` · ${minsToAvLabel(ov.startMins)} – ${minsToAvLabel(ov.endMins!)}` : ''}
-                                  </p>
-                                  {ov.note && <p className="mt-0.5 text-[11px] text-emerald-500">{ov.note}</p>}
-                                </div>
-                                <button type="button" onClick={() => deleteFacilityOverride(ov.id)}
-                                  className="shrink-0 rounded-lg p-1 text-emerald-300 transition hover:bg-emerald-100 hover:text-emerald-500">
-                                  <IconTrash size={13} />
+                      </div>
+                      <div>
+                        <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-400">Type</label>
+                        <SelectPicker
+                          value={exType}
+                          onChange={v => setExType(v as 'block' | 'extra')}
+                          options={[
+                            { value: 'block', label: 'Block (unavailable)' },
+                            { value: 'extra', label: 'Add extra availability' },
+                          ]}
+                        />
+                      </div>
+                      <div>
+                        <div className="mb-1.5 flex items-center justify-between">
+                          <label className="text-xs font-semibold uppercase tracking-wide text-gray-400">Date</label>
+                          <button type="button" onClick={() => setExDateRange(v => !v)}
+                            className="text-[10px] font-semibold text-[#6BA3D6] hover:underline">
+                            {exDateRange ? 'Single date' : 'Date range'}
+                          </button>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1"><DatePicker value={exDate} onChange={setExDate} accentColor="#6BA3D6" /></div>
+                          {exDateRange && (
+                            <>
+                              <span className="shrink-0 text-xs text-gray-400">to</span>
+                              <div className="flex-1"><DatePicker value={exDateEnd} onChange={setExDateEnd} accentColor="#6BA3D6" /></div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="mb-1.5 flex items-center justify-between">
+                          <label className="text-xs font-semibold uppercase tracking-wide text-gray-400">Time</label>
+                          <label className="flex cursor-pointer items-center gap-1.5 text-[10px] font-semibold text-gray-500">
+                            <input type="checkbox" checked={exAllDay} onChange={e => setExAllDay(e.target.checked)}
+                              className="h-3 w-3 rounded accent-[#6BA3D6]" />
+                            All day
+                          </label>
+                        </div>
+                        {!exAllDay && (
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1"><AvTimeSelect value={exStart} onChange={setExStart} /></div>
+                            <span className="shrink-0 text-xs text-gray-400">–</span>
+                            <div className="flex-1"><AvTimeSelect value={exEnd} onChange={setExEnd} minMins={exStart} /></div>
+                          </div>
+                        )}
+                      </div>
+                      <div>
+                        <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-400">Reason (optional)</label>
+                        <input type="text" value={exReason} onChange={e => setExReason(e.target.value)}
+                          placeholder={exType === 'block' ? 'e.g. Public holiday' : 'e.g. Special training day'}
+                          className="h-10 w-full rounded-lg border border-gray-200 px-3 text-sm text-gray-800 outline-none transition focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/40" />
+                      </div>
+                      {weekDays.some(wd => wd.pubHol) && (
+                        <div className="rounded-xl border border-red-100 bg-red-50 p-3">
+                          <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-red-500">Victoria public holidays this week</p>
+                          <div className="space-y-1.5">
+                            {weekDays.filter(wd => wd.pubHol).map(({ iso, pubHol: ph }) => (
+                              <div key={iso} className="flex items-center justify-between gap-2">
+                                <span className="text-xs text-red-700">
+                                  {ph!.name} — {new Date(iso + 'T12:00:00').toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })}
+                                </span>
+                                <button type="button"
+                                  onClick={() => {
+                                    setExDate(iso); setExDateEnd(iso); setExDateRange(false)
+                                    setExType('block'); setExAllDay(true); setExReason(ph!.name); setExWho(['all'])
+                                  }}
+                                  className="shrink-0 rounded-md border border-red-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-red-600 transition hover:bg-red-100">
+                                  Apply
                                 </button>
                               </div>
                             ))}
                           </div>
-                        )}
-
-                        {/* Add facility override */}
-                        {ovPanelFacType === null ? (
-                          <div className="flex gap-2">
-                            {!facBlockOv && (
-                              <button type="button" onClick={() => { setOvPanelFacType('block'); setOvPanelFacNote('') }}
-                                className="flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-100">
-                                <IconX size={11} /> Block facility
-                              </button>
-                            )}
-                            <button type="button" onClick={() => { setOvPanelFacType('extra'); setOvPanelFacNote(''); setOvPanelFacStart(540); setOvPanelFacEnd(780) }}
-                              className="flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100">
-                              <IconPlus size={11} /> Extra hours
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
-                            <p className="mb-3 text-[10px] font-bold uppercase tracking-wide text-gray-500">
-                              {ovPanelFacType === 'block' ? 'Block facility' : 'Add extra hours'}
-                            </p>
-                            {ovPanelFacType === 'extra' && (
-                              <div className="mb-2.5 flex gap-2">
-                                <div className="flex-1">
-                                  <label className={LABEL_CLS}>Start</label>
-                                  <AvTimeSelect value={ovPanelFacStart} onChange={setOvPanelFacStart} />
-                                </div>
-                                <div className="flex-1">
-                                  <label className={LABEL_CLS}>End</label>
-                                  <AvTimeSelect value={ovPanelFacEnd} onChange={setOvPanelFacEnd} minMins={ovPanelFacStart} />
-                                </div>
-                              </div>
-                            )}
-                            <div className="mb-2.5">
-                              <label className={LABEL_CLS}>Note (optional)</label>
-                              <input type="text" value={ovPanelFacNote} onChange={e => setOvPanelFacNote(e.target.value)}
-                                placeholder={ovPanelFacType === 'block' ? 'e.g. Public holiday' : 'e.g. Early opening'}
-                                className={INPUT_CLS} />
-                            </div>
-                            <div className="flex gap-2">
-                              <button type="button" onClick={() => setOvPanelFacType(null)}
-                                className="flex-1 rounded-lg border border-gray-300 py-2 text-xs font-semibold text-gray-600 transition hover:bg-gray-100">Cancel</button>
-                              <button type="button" onClick={() => {
-                                if (ovPanelFacType === 'extra' && ovPanelFacEnd <= ovPanelFacStart) return
-                                addFacilityOverrideDirect(iso, ovPanelFacType, ovPanelFacNote.trim(),
-                                  ovPanelFacType === 'extra' ? ovPanelFacStart : undefined,
-                                  ovPanelFacType === 'extra' ? ovPanelFacEnd : undefined)
-                                setOvPanelFacType(null); setOvPanelFacNote('')
-                              }}
-                                className="flex-1 rounded-lg py-2 text-xs font-semibold text-white transition hover:opacity-90"
-                                style={{ backgroundColor: FACIL_COLOR }}>Save</button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Per-coach sections */}
-                      {coaches.map(coach => {
-                        const on = coachOn(coach.id, iso)
-                        const blockOv = dateOverrides.find(o => o.coachId === coach.id && o.date === iso && o.type === 'block')
-                        const extraOvs = dateOverrides.filter(o => o.coachId === coach.id && o.date === iso && o.type === 'extra')
-                        const addingHere = ovPanelCchId === coach.id && ovPanelCchType !== null
-                        return (
-                          <div key={coach.id}>
-                            <div className="mb-3 flex items-center gap-2">
-                              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: coach.color }} />
-                              <span className="text-[11px] font-bold uppercase tracking-wide text-gray-600">{coach.name}</span>
-                              <span className="ml-auto rounded-full px-2 py-0.5 text-[10px] font-bold"
-                                style={on ? { backgroundColor: coach.color + '22', color: coach.color } : { backgroundColor: '#f3f4f6', color: '#9ca3af' }}>
-                                {on ? 'Available' : 'Off'}
-                              </span>
-                            </div>
-
-                            {/* Existing coach overrides */}
-                            {(blockOv || extraOvs.length > 0) && (
-                              <div className="mb-3 space-y-1.5">
-                                {blockOv && (
-                                  <div className="flex items-start justify-between gap-2 rounded-lg border border-red-100 bg-red-50 px-3 py-2">
-                                    <div>
-                                      <p className="text-xs font-semibold text-red-700">Blocked — override</p>
-                                      {blockOv.note && <p className="mt-0.5 text-[11px] text-red-400">{blockOv.note}</p>}
-                                    </div>
-                                    <button type="button" onClick={() => deleteOverride(blockOv.id)}
-                                      className="shrink-0 rounded-lg p-1 text-red-300 transition hover:bg-red-100 hover:text-red-500">
-                                      <IconTrash size={13} />
-                                    </button>
-                                  </div>
-                                )}
-                                {extraOvs.map(ov => (
-                                  <div key={ov.id} className="flex items-start justify-between gap-2 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2">
-                                    <div>
-                                      <p className="text-xs font-semibold text-blue-700">
-                                        Extra hours{ov.startMins != null ? ` · ${minsToAvLabel(ov.startMins)} – ${minsToAvLabel(ov.endMins!)}` : ''}
-                                      </p>
-                                      {ov.note && <p className="mt-0.5 text-[11px] text-blue-400">{ov.note}</p>}
-                                    </div>
-                                    <button type="button" onClick={() => deleteOverride(ov.id)}
-                                      className="shrink-0 rounded-lg p-1 text-blue-300 transition hover:bg-blue-100 hover:text-blue-500">
-                                      <IconTrash size={13} />
-                                    </button>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-
-                            {/* Add coach override */}
-                            {!addingHere ? (
-                              <div className="flex gap-2">
-                                {!blockOv && (
-                                  <button type="button" onClick={() => { setOvPanelCchId(coach.id); setOvPanelCchType('block'); setOvPanelCchNote('') }}
-                                    className="flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-100">
-                                    <IconX size={11} /> Block
-                                  </button>
-                                )}
-                                <button type="button" onClick={() => { setOvPanelCchId(coach.id); setOvPanelCchType('extra'); setOvPanelCchNote(''); setOvPanelCchStart(540); setOvPanelCchEnd(780) }}
-                                  className="flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-600 transition hover:bg-blue-100">
-                                  <IconPlus size={11} /> Extra hours
-                                </button>
-                              </div>
-                            ) : (
-                              <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
-                                <p className="mb-3 text-[10px] font-bold uppercase tracking-wide text-gray-500">
-                                  {ovPanelCchType === 'block' ? `Block ${coach.name}` : `Extra hours — ${coach.name}`}
-                                </p>
-                                {ovPanelCchType === 'extra' && (
-                                  <div className="mb-2.5 flex gap-2">
-                                    <div className="flex-1">
-                                      <label className={LABEL_CLS}>Start</label>
-                                      <AvTimeSelect value={ovPanelCchStart} onChange={setOvPanelCchStart} />
-                                    </div>
-                                    <div className="flex-1">
-                                      <label className={LABEL_CLS}>End</label>
-                                      <AvTimeSelect value={ovPanelCchEnd} onChange={setOvPanelCchEnd} minMins={ovPanelCchStart} />
-                                    </div>
-                                  </div>
-                                )}
-                                <div className="mb-2.5">
-                                  <label className={LABEL_CLS}>Note (optional)</label>
-                                  <input type="text" value={ovPanelCchNote} onChange={e => setOvPanelCchNote(e.target.value)}
-                                    placeholder={ovPanelCchType === 'block' ? 'e.g. Sick day' : 'e.g. Evening session'}
-                                    className={INPUT_CLS} />
-                                </div>
-                                <div className="flex gap-2">
-                                  <button type="button" onClick={() => { setOvPanelCchId(null); setOvPanelCchType(null); setOvPanelCchNote('') }}
-                                    className="flex-1 rounded-lg border border-gray-300 py-2 text-xs font-semibold text-gray-600 transition hover:bg-gray-100">Cancel</button>
-                                  <button type="button" onClick={() => {
-                                    if (ovPanelCchType === 'extra' && ovPanelCchEnd <= ovPanelCchStart) return
-                                    addCoachOverrideDirect(coach.id, iso, ovPanelCchType!, ovPanelCchNote.trim(),
-                                      ovPanelCchType === 'extra' ? ovPanelCchStart : undefined,
-                                      ovPanelCchType === 'extra' ? ovPanelCchEnd : undefined)
-                                    setOvPanelCchId(null); setOvPanelCchType(null); setOvPanelCchNote('')
-                                  }}
-                                    className="flex-1 rounded-lg py-2 text-xs font-semibold text-white transition hover:opacity-90"
-                                    style={{ backgroundColor: coach.color }}>Save</button>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )
-                      })}
+                        </div>
+                      )}
+                    </div>
+                    <div className="mt-5 flex gap-2">
+                      <button type="button" onClick={() => setExOpen(false)}
+                        className="flex-1 rounded-lg border border-gray-300 py-2.5 text-sm font-semibold text-gray-600 transition hover:bg-gray-50">
+                        Cancel
+                      </button>
+                      <button type="button" onClick={submitException}
+                        disabled={!exDate || exWho.length === 0}
+                        className="flex-1 rounded-lg py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-40"
+                        style={{ backgroundColor: exType === 'block' ? '#ef4444' : '#059669' }}>
+                        Save Exception
+                      </button>
                     </div>
                   </div>
-                )
-              })()}
+                </div>,
+                document.body
+              )}
+              {/* end new overview content */}
             </div>
           )
         })()}
