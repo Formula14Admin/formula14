@@ -120,7 +120,6 @@ const LABEL = 'mb-1 block text-xs font-semibold uppercase tracking-wide text-gra
 const TABS = [
   { key: 'sessions' as const, label: 'Sessions' },
   { key: 'pricing' as const, label: 'Pricing Config' },
-  { key: 'summary' as const, label: 'Admin Summary' },
 ]
 
 // ─── Sample Data ─────────────────────────────────────────────────────────────
@@ -390,7 +389,7 @@ export default function PricingPage() {
   const [newCardLabel, setNewCardLabel] = useState('')
   const [settings, setSettings] = useState<PricingSettings>(INIT_SETTINGS)
   const [sessions, setSessions] = useState<Session[]>(INIT_SESSIONS)
-  const [tab, setTab] = useState<'sessions' | 'pricing' | 'summary'>('sessions')
+  const [tab, setTab] = useState<'sessions' | 'pricing'>('sessions')
   const [expandedSession, setExpandedSession] = useState<string | null>(null)
   const [sessionFilter, setSessionFilter] = useState<'all' | 'upcoming' | 'locked' | 'completed'>('all')
   const [addingTo, setAddingTo] = useState<string | null>(null)
@@ -1296,41 +1295,6 @@ export default function PricingPage() {
             </button>
           )}
 
-        </div>
-      )}
-
-      {/* ════════════════════════════════════════════════════════════════════
-          TAB: ADMIN SUMMARY
-          ════════════════════════════════════════════════════════════════════ */}
-      {tab === 'summary' && (
-        <div className="space-y-6">
-
-          {/* Settings at a glance */}
-          <div className="grid grid-cols-3 gap-4">
-            <div className="rounded-xl border border-gray-200 bg-white p-4">
-              <p className={LABEL}>Lockout Period</p>
-              <p className="mt-1 text-3xl font-bold text-gray-900">
-                {settings.lockoutMinutes}
-                <span className="ml-1 text-base font-normal text-gray-400">min</span>
-              </p>
-              <p className="mt-1 text-xs text-gray-400">{(settings.lockoutMinutes / 60).toFixed(1)} hours before session start</p>
-            </div>
-            <div className="rounded-xl border p-4" style={{ backgroundColor: settings.chargeNoShow ? '#dcfce7' : '#f9fafb', borderColor: settings.chargeNoShow ? '#86efac' : '#e5e7eb' }}>
-              <p className="mb-1 text-xs font-semibold uppercase tracking-wide" style={{ color: settings.chargeNoShow ? '#15803d' : '#6b7280' }}>No Show Policy</p>
-              <p className="text-xl font-bold" style={{ color: settings.chargeNoShow ? '#15803d' : '#374151' }}>{settings.chargeNoShow ? 'Charged' : 'Not Charged'}</p>
-              <p className="mt-1 text-xs" style={{ color: settings.chargeNoShow ? '#16a34a' : '#9ca3af' }}>
-                {settings.chargeNoShow ? 'Athletes are billed for missed sessions' : 'No-show athletes are not billed'}
-              </p>
-            </div>
-            <div className="rounded-xl border p-4" style={{ backgroundColor: settings.chargeExcusedAbsence ? '#dcfce7' : '#f9fafb', borderColor: settings.chargeExcusedAbsence ? '#86efac' : '#e5e7eb' }}>
-              <p className="mb-1 text-xs font-semibold uppercase tracking-wide" style={{ color: settings.chargeExcusedAbsence ? '#15803d' : '#6b7280' }}>Excused Absence Policy</p>
-              <p className="text-xl font-bold" style={{ color: settings.chargeExcusedAbsence ? '#15803d' : '#374151' }}>{settings.chargeExcusedAbsence ? 'Charged' : 'Not Charged'}</p>
-              <p className="mt-1 text-xs" style={{ color: settings.chargeExcusedAbsence ? '#16a34a' : '#9ca3af' }}>
-                {settings.chargeExcusedAbsence ? 'Excused absences incur full session fee' : 'Excused absences are waived'}
-              </p>
-            </div>
-          </div>
-
           {/* Pricing structure overview table */}
           <div className="rounded-xl border border-gray-200 bg-white p-5">
             <h2 className="mb-4 text-base font-semibold text-gray-800">Pricing Structure — All Session Types</h2>
@@ -1435,6 +1399,7 @@ export default function PricingPage() {
               </div>
             )}
           </div>
+
         </div>
       )}
     </div>
