@@ -4,7 +4,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
-import { type ComponentType, type CSSProperties } from 'react'
+import { useState, useEffect, type ComponentType, type CSSProperties } from 'react'
 import {
   IconLayoutDashboard,
   IconCalendar,
@@ -15,6 +15,7 @@ import {
   IconLayoutKanban,
   IconForms,
   IconFileText,
+  IconClipboardList,
   IconNotebook,
   IconTarget,
   IconBallBasketball,
@@ -22,21 +23,29 @@ import {
   IconChartBar,
   IconFlask,
   IconLogout,
+  IconChevronDown,
 } from '@tabler/icons-react'
 
 // ─── Nav types ────────────────────────────────────────────────────────────────
 
 type IconProps = { size?: number; strokeWidth?: number; style?: CSSProperties }
 
-type NavLeaf = {
+type NavChild = {
   label: string
   href: string
   icon: ComponentType<IconProps>
 }
 
+type NavLeaf = {
+  label: string
+  href: string
+  icon: ComponentType<IconProps>
+  children?: NavChild[]
+}
+
 type NavSection = {
   section: string
-  href?: string   // when set, the section label itself is a nav link (no items)
+  href?: string
   items: NavLeaf[]
 }
 
@@ -54,7 +63,15 @@ const NAV: NavSection[] = [
       { label: 'Pricing & Payments',      href: '/pricing',               icon: IconCreditCard },
       { label: 'Boards',                  href: '/boards',                icon: IconLayoutKanban },
       { label: 'Forms',                   href: '/forms',                 icon: IconForms },
-      { label: 'Policies & Procedures',   href: '/policies-procedures',   icon: IconFileText },
+      {
+        label: 'Policies & Procedures',
+        href: '/policies-procedures',
+        icon: IconFileText,
+        children: [
+          { label: 'Policies',   href: '/policies',   icon: IconFileText },
+          { label: 'Procedures', href: '/procedures', icon: IconClipboardList },
+        ],
+      },
     ],
   },
   {
@@ -86,6 +103,40 @@ export default function Sidebar() {
   const pathname = usePathname()
   const { data: session } = useSession()
 
+  // Track which expandable items are open (keyed by href)
+  const [expanded, setExpanded] = useState<Set<string>>(() => {
+    const initial = new Set<string>()
+    // Auto-open any parent whose child is currently active
+    NAV.forEach(({ items }) =>
+      items.forEach(item => {
+        if (item.children?.some(c => pathname === c.href || pathname.startsWith(c.href + '/'))) {
+          initial.add(item.href)
+        }
+      })
+    )
+    return initial
+  })
+
+  // Keep expanded in sync when pathname changes (e.g. deep-linking)
+  useEffect(() => {
+    NAV.forEach(({ items }) =>
+      items.forEach(item => {
+        if (item.children?.some(c => pathname === c.href || pathname.startsWith(c.href + '/'))) {
+          setExpanded(prev => new Set(prev).add(item.href))
+        }
+      })
+    )
+  }, [pathname])
+
+  function toggleExpanded(href: string) {
+    setExpanded(prev => {
+      const next = new Set(prev)
+      if (next.has(href)) next.delete(href)
+      else next.add(href)
+      return next
+    })
+  }
+
   return (
     <aside
       className="flex h-screen w-64 shrink-0 flex-col overflow-hidden"
@@ -110,7 +161,7 @@ export default function Sidebar() {
       <nav className="flex-1 overflow-y-auto px-3 py-4">
         {NAV.map(({ section, href: sectionHref, items }) => (
           <div key={section} className="mb-6">
-            {/* Section label — clickable if sectionHref is set */}
+            {/* Section label */}
             {sectionHref ? (
               <Link
                 href={sectionHref}
@@ -134,25 +185,84 @@ export default function Sidebar() {
             {items.length > 0 && (
               <ul className="space-y-0.5">
                 {items.map(item => {
-                  const active = pathname === item.href || pathname.startsWith(item.href + '/')
+                  const hasChildren = !!item.children?.length
+                  const childActive = hasChildren && item.children!.some(
+                    c => pathname === c.href || pathname.startsWith(c.href + '/')
+                  )
+                  const active = pathname === item.href || pathname.startsWith(item.href + '/') || childActive
+                  const open = expanded.has(item.href)
+
                   return (
                     <li key={item.href}>
-                      <Link
-                        href={item.href}
-                        className={[
-                          'flex items-center gap-3 rounded-lg border-l-2 px-3 py-2.5 text-sm font-medium transition-all duration-150',
-                          active
-                            ? 'border-[#6BA3D6] bg-[#6BA3D6]/10 text-white'
-                            : 'border-transparent text-gray-400 hover:bg-white/[0.06] hover:text-gray-100',
-                        ].join(' ')}
-                      >
-                        <item.icon
-                          size={18}
-                          strokeWidth={1.75}
-                          style={active ? { color: '#6BA3D6' } : {}}
-                        />
-                        {item.label}
-                      </Link>
+                      {/* Parent row */}
+                      <div className="flex items-stretch">
+                        <Link
+                          href={item.href}
+                          className={[
+                            'flex flex-1 items-center gap-3 rounded-lg border-l-2 px-3 py-2.5 text-sm font-medium transition-all duration-150',
+                            hasChildren ? 'rounded-r-none' : '',
+                            active
+                              ? 'border-[#6BA3D6] bg-[#6BA3D6]/10 text-white'
+                              : 'border-transparent text-gray-400 hover:bg-white/[0.06] hover:text-gray-100',
+                          ].join(' ')}
+                        >
+                          <item.icon
+                            size={18}
+                            strokeWidth={1.75}
+                            style={active ? { color: '#6BA3D6' } : {}}
+                          />
+                          {item.label}
+                        </Link>
+
+                        {/* Chevron toggle (only for items with children) */}
+                        {hasChildren && (
+                          <button
+                            onClick={() => toggleExpanded(item.href)}
+                            className={[
+                              'flex items-center justify-center rounded-r-lg px-2 transition-all duration-150',
+                              active
+                                ? 'bg-[#6BA3D6]/10 text-gray-400 hover:text-gray-200'
+                                : 'text-gray-600 hover:bg-white/[0.06] hover:text-gray-400',
+                            ].join(' ')}
+                            aria-label="Toggle submenu"
+                          >
+                            <IconChevronDown
+                              size={14}
+                              strokeWidth={2}
+                              className={`transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+                            />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Children */}
+                      {hasChildren && open && (
+                        <ul className="mt-0.5 space-y-0.5 pl-4">
+                          {item.children!.map(child => {
+                            const childIsActive = pathname === child.href || pathname.startsWith(child.href + '/')
+                            return (
+                              <li key={child.href}>
+                                <Link
+                                  href={child.href}
+                                  className={[
+                                    'flex items-center gap-3 rounded-lg border-l-2 px-3 py-2 text-sm font-medium transition-all duration-150',
+                                    childIsActive
+                                      ? 'border-[#6BA3D6] bg-[#6BA3D6]/10 text-white'
+                                      : 'border-transparent text-gray-400 hover:bg-white/[0.06] hover:text-gray-100',
+                                  ].join(' ')}
+                                >
+                                  <child.icon
+                                    size={16}
+                                    strokeWidth={1.75}
+                                    style={childIsActive ? { color: '#6BA3D6' } : {}}
+                                  />
+                                  {child.label}
+                                </Link>
+                              </li>
+                            )
+                          })}
+                        </ul>
+                      )}
                     </li>
                   )
                 })}
