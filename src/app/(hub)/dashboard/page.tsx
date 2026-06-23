@@ -142,17 +142,18 @@ export default function DashboardPage() {
   const nowIdx = sessions.findIndex(s => s.status !== 'past')
 
   const QUICK_ACTIONS: { label: string; icon: React.ComponentType<{ size?: number; style?: React.CSSProperties }>; onClick: () => void; badge?: number; disabled?: boolean }[] = [
-    { label: 'New Booking',     icon: IconCalendarPlus,   onClick: () => router.push('/bookings') },
     { label: 'Add Athlete',     icon: IconUserPlus,       onClick: () => router.push('/athletes') },
     { label: 'Add Transaction', icon: IconCurrencyDollar, onClick: () => router.push('/bookkeeping') },
-    { label: 'Send Prompt',     icon: IconBell,           onClick: () => {} },
     { label: 'Join Requests',   icon: IconClipboardList,  onClick: openJoinRequests, badge: pendingJoinCount },
+    { label: 'New Booking',     icon: IconCalendarPlus,   onClick: () => router.push('/bookings') },
     {
       label:    paymentsRan ? 'Payments Ran!' : 'Run Payments',
       icon:     paymentsRan ? IconCheck : IconCreditCard,
       onClick:  runPayments,
       disabled: pendingPaymentCount === 0,
+      badge:    paymentsRan ? undefined : pendingPaymentCount,
     },
+    { label: 'Send Prompt',     icon: IconBell,           onClick: () => {} },
   ]
 
   return (
