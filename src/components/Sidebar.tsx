@@ -24,6 +24,7 @@ import {
   IconFlask,
   IconLogout,
   IconChevronDown,
+  IconSpeakerphone,
 } from '@tabler/icons-react'
 
 // ─── Nav types ────────────────────────────────────────────────────────────────
@@ -61,6 +62,7 @@ const NAV: NavSection[] = [
       { label: 'Bookkeeping',             href: '/bookkeeping',           icon: IconReportMoney },
       { label: 'Memberships',             href: '/memberships',           icon: IconId },
       { label: 'Pricing & Payments',      href: '/pricing',               icon: IconCreditCard },
+      { label: 'Social Media & Advertising', href: '/social-media',       icon: IconSpeakerphone },
       { label: 'Boards',                  href: '/boards',                icon: IconLayoutKanban },
       { label: 'Forms',                   href: '/forms',                 icon: IconForms },
       {
