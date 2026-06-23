@@ -13,6 +13,7 @@ import {
   IconBell,
   IconClipboardList,
   IconChevronRight,
+  IconCreditCard,
 } from '@tabler/icons-react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -125,6 +126,7 @@ export default function DashboardPage() {
     { label: 'Add Transaction', icon: IconCurrencyDollar, onClick: () => router.push('/bookkeeping') },
     { label: 'Send Prompt',     icon: IconBell,          onClick: () => {} },
     { label: 'Join Requests',   icon: IconClipboardList, onClick: openJoinRequests, badge: pendingJoinCount },
+    { label: 'Run Payments',    icon: IconCreditCard,    onClick: () => router.push('/pricing') },
   ]
 
   return (
