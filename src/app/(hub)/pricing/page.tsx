@@ -1080,73 +1080,75 @@ export default function PricingPage() {
             </div>
           </div>
 
-          {/* Pricing Structure — all session types × 1–20 athletes */}
+          {/* Pricing Structure — Small Group Session tiers, read-only, live-synced from cards below */}
           <div className="rounded-xl border border-gray-200 bg-white p-5">
-            <h2 className="mb-4 flex items-center gap-2 text-base font-semibold text-gray-800">
-              <IconChartBar size={17} style={{ color: ACCENT }} /> Pricing Structure
-            </h2>
-            <div className="overflow-x-auto rounded-lg border border-gray-200">
-              <table className="text-sm" style={{ minWidth: 'max-content' }}>
-                <thead>
-                  <tr className="border-b border-gray-200 bg-gray-50">
-                    <th className="sticky left-0 z-10 bg-gray-50 px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wide text-gray-400 whitespace-nowrap">
-                      Session Type
-                    </th>
-                    {Array.from({ length: 20 }, (_, i) => (
-                      <th key={i + 1} className="px-3 py-2 text-center text-[10px] font-semibold uppercase tracking-wide text-gray-400">
-                        {i + 1}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {pricingConfigs.map(config => {
-                    const typeColor = configColor(config)
-                    const isVolume   = config.sessionType === 'volume-shooting'
-                    const isPrograms = config.sessionType === 'development-programs' || config.sessionType === 'social-programs'
-                    const progList   = isPrograms ? PROGRAM_PRICING[config.sessionType as 'development-programs' | 'social-programs'] : null
-                    return (
-                      <tr key={config.sessionType} className="border-b border-gray-100 last:border-0">
-                        <td className="sticky left-0 z-10 bg-white px-4 py-2.5 whitespace-nowrap">
-                          <span className="rounded-full px-2 py-0.5 text-xs font-semibold"
-                            style={{ backgroundColor: typeColor.bg, color: typeColor.color }}>
-                            {configLabel(config)}
-                          </span>
-                        </td>
-                        {isVolume ? (
-                          <td colSpan={20} className="px-3 py-2.5 text-xs text-gray-400 whitespace-nowrap">
-                            Duration-based flat fee — 30 min $30 · 45 min $40 · 60 min $50
-                          </td>
-                        ) : isPrograms && progList ? (
-                          <td colSpan={20} className="px-3 py-2.5 text-xs text-gray-400 whitespace-nowrap">
-                            {progList.map(p => `${p.name} $${p.price}`).join(' · ')} — max {progList[0].max} per session
-                          </td>
-                        ) : (
-                          Array.from({ length: 20 }, (_, i) => {
-                            const count = i + 1
-                            const price = getPriceForCount(config.tiers, count)
-                            return (
-                              <td key={count} className="px-3 py-2.5 text-center">
-                                {price != null
-                                  ? <span className="font-semibold text-gray-900">${price.toFixed(0)}</span>
-                                  : <span className="text-gray-300">—</span>}
-                              </td>
-                            )
-                          })
-                        )}
-                      </tr>
-                    )
-                  })}
-                </tbody>
-                <tfoot>
-                  <tr>
-                    <td colSpan={21} className="px-4 pt-2.5 pb-1 text-xs text-gray-400">
-                      Values show price per athlete. Column numbers are athlete counts 1–20.
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
+            <div className="mb-1 flex items-center justify-between gap-2">
+              <h2 className="flex items-center gap-2 text-base font-semibold text-gray-800">
+                <IconChartBar size={17} style={{ color: ACCENT }} /> Pricing Structure
+                <span className="rounded-full px-2.5 py-0.5 text-xs font-semibold" style={{ backgroundColor: '#dbeafe', color: '#1d4ed8' }}>
+                  Small Group Session
+                </span>
+              </h2>
+              {editingPricing === 'small-group' && (
+                <span className="flex items-center gap-1.5 text-xs font-medium" style={{ color: ACCENT }}>
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full" style={{ backgroundColor: ACCENT }} />
+                  Live preview
+                </span>
+              )}
             </div>
+            <p className="mb-4 text-xs text-gray-400">
+              Edit pricing in the session cards below — this table updates automatically.
+            </p>
+            {(() => {
+              const displayTiers = editingPricing === 'small-group'
+                ? editTiers
+                : (pricingConfigs.find(c => c.sessionType === 'small-group')?.tiers ?? [])
+              if (displayTiers.length === 0) {
+                return (
+                  <p className="rounded-lg border border-dashed border-gray-200 py-6 text-center text-xs text-gray-400">
+                    No tiers configured — add tiers in the Small Group Session card below.
+                  </p>
+                )
+              }
+              return (
+                <div className="overflow-hidden rounded-lg border border-gray-200">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-200 bg-gray-50">
+                        <th className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wide text-gray-400">Athletes</th>
+                        <th className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wide text-gray-400">Price / Athlete</th>
+                        <th className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wide text-gray-400">Session Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {displayTiers.map((tier, i) => {
+                        const athleteLabel = tier.max === null
+                          ? `${tier.min}+ athletes`
+                          : tier.min === tier.max
+                          ? `${tier.min} athlete${tier.min !== 1 ? 's' : ''}`
+                          : `${tier.min}–${tier.max} athletes`
+                        const minTotal = tier.pricePerAthlete * tier.min
+                        const maxTotal = tier.max !== null ? tier.pricePerAthlete * tier.max : null
+                        const totalLabel = tier.pricePerAthlete === 0
+                          ? '—'
+                          : maxTotal !== null && tier.min !== tier.max
+                          ? `$${minTotal}–$${maxTotal}`
+                          : `$${minTotal}`
+                        return (
+                          <tr key={tier.id} className={`border-b border-gray-100 last:border-0 ${i % 2 !== 0 ? 'bg-gray-50/50' : ''}`}>
+                            <td className="px-4 py-2.5 text-gray-700">{athleteLabel}</td>
+                            <td className="px-4 py-2.5 font-semibold text-gray-900">
+                              {tier.pricePerAthlete > 0 ? `$${tier.pricePerAthlete.toFixed(0)}` : <span className="text-gray-400">$0</span>}
+                            </td>
+                            <td className="px-4 py-2.5 text-gray-500">{totalLabel}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )
+            })()}
           </div>
 
           {/* Per-type pricing cards */}
