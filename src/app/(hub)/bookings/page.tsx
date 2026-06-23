@@ -277,6 +277,11 @@ const COACH_SESSION_TYPES = [
 
 // Self-serve facility session types
 const FACILITY_SESSION_TYPES = ['Casual Shooting', 'Shooting Machine Session', 'Weight Room Session']
+const FACILITY_SESSION_SHORT: Record<string, string> = {
+  'Casual Shooting':          'Casual Shooting',
+  'Shooting Machine Session': 'Shooting Machine',
+  'Weight Room Session':      'Weight Room',
+}
 
 const DAYS_LABEL: Record<DayOfWeek, string> = {
   0: 'Mon', 1: 'Tue', 2: 'Wed', 3: 'Thu', 4: 'Fri', 5: 'Sat', 6: 'Sun',
@@ -343,12 +348,12 @@ const INIT_DATE_OVERRIDES: DateOverride[] = [
 const INIT_FACILITY_DATE_OVERRIDES: FacilityDateOverride[] = []
 
 const INIT_FACILITY_SCHEDULE: FacilitySchedule = {
-  0: { available: true,  windows: [{ id: 'f0a', startMins: 360, endMins: 1320, sessionTypes: ['Casual Shooting', 'Shooting Machine Session', 'Weight Room Session'] }] },
-  1: { available: true,  windows: [{ id: 'f1a', startMins: 360, endMins: 1320, sessionTypes: ['Casual Shooting', 'Shooting Machine Session', 'Weight Room Session'] }] },
-  2: { available: true,  windows: [{ id: 'f2a', startMins: 360, endMins: 1320, sessionTypes: ['Casual Shooting', 'Shooting Machine Session', 'Weight Room Session'] }] },
-  3: { available: true,  windows: [{ id: 'f3a', startMins: 360, endMins: 1320, sessionTypes: ['Casual Shooting', 'Shooting Machine Session', 'Weight Room Session'] }] },
-  4: { available: true,  windows: [{ id: 'f4a', startMins: 360, endMins: 1320, sessionTypes: ['Casual Shooting', 'Shooting Machine Session', 'Weight Room Session'] }] },
-  5: { available: true,  windows: [{ id: 'f5a', startMins: 480, endMins: 1200, sessionTypes: ['Casual Shooting', 'Shooting Machine Session'] }] },
+  0: { available: true,  windows: [{ id: 'f0a', startMins: 360, endMins: 1320, sessionTypes: [] }] },
+  1: { available: true,  windows: [{ id: 'f1a', startMins: 360, endMins: 1320, sessionTypes: [] }] },
+  2: { available: true,  windows: [{ id: 'f2a', startMins: 360, endMins: 1320, sessionTypes: [] }] },
+  3: { available: true,  windows: [{ id: 'f3a', startMins: 360, endMins: 1320, sessionTypes: [] }] },
+  4: { available: true,  windows: [{ id: 'f4a', startMins: 360, endMins: 1320, sessionTypes: [] }] },
+  5: { available: true,  windows: [{ id: 'f5a', startMins: 480, endMins: 1200, sessionTypes: ['Weight Room Session'] }] },
   6: { available: false, windows: [{ id: 'f6a', startMins: 540, endMins: 780,  sessionTypes: [] }] },
 }
 
@@ -824,7 +829,7 @@ export default function BookingsPage() {
       const last = day.windows[day.windows.length - 1]
       const start = last ? Math.min(last.endMins, 1290) : 540
       const end = Math.min(start + 60, 1320)
-      const win: FacilityWindow = { id: uid(), startMins: start, endMins: end, sessionTypes: [...FACILITY_SESSION_TYPES] }
+      const win: FacilityWindow = { id: uid(), startMins: start, endMins: end, sessionTypes: [] }
       return { ...prev, [dow]: { ...day, windows: [...day.windows, win] } }
     })
   }
@@ -959,10 +964,10 @@ export default function BookingsPage() {
         }
         const extraWindows = facilityOverrides
           .filter(o => o.date === bookDate && o.type === 'extra' && o.startMins !== undefined && o.endMins !== undefined)
-          .map(o => ({ startMins: o.startMins!, endMins: o.endMins!, sessionTypes: FACILITY_SESSION_TYPES }))
+          .map(o => ({ startMins: o.startMins!, endMins: o.endMins!, sessionTypes: [] as string[] }))
         const allFacilWindows = [...facilDay.windows, ...extraWindows]
         const facilityAllows = allFacilWindows.some(win =>
-          win.sessionTypes.includes(data.sessionType) &&
+          !win.sessionTypes.includes(data.sessionType) &&
           win.startMins <= data.startMins &&
           win.endMins >= dataEnd
         )
@@ -3592,6 +3597,82 @@ function SessionMultiSelect({ types, selected, onChange, color }: { types: strin
   )
 }
 
+// Facility block selector — checked = session is BLOCKED (red X), unchecked = available
+function FacilityBlockSelect({ blocked, onChange }: { blocked: string[]; onChange: (v: string[]) => void }) {
+  const [open, setOpen] = useState(false)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState({ top: 0, left: 0, width: 0 })
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (!triggerRef.current?.contains(e.target as Node) && !panelRef.current?.contains(e.target as Node)) setOpen(false)
+    }
+    if (open) document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  function handleOpen() {
+    if (triggerRef.current) {
+      const r = triggerRef.current.getBoundingClientRect()
+      setPos({ top: r.bottom + 4, left: r.left, width: Math.max(r.width, 180) })
+    }
+    setOpen(o => !o)
+  }
+
+  function toggle(st: string) {
+    onChange(blocked.includes(st) ? blocked.filter(s => s !== st) : [...blocked, st])
+  }
+
+  const label = blocked.length === 0
+    ? 'All available'
+    : blocked.length === FACILITY_SESSION_TYPES.length
+    ? 'All blocked'
+    : blocked.map(s => FACILITY_SESSION_SHORT[s] ?? s).join(', ') + ' blocked'
+
+  return (
+    <div className="relative w-full">
+      <button ref={triggerRef} type="button" onClick={handleOpen}
+        className={[
+          'flex h-9 w-full items-center justify-between rounded-lg border px-3 text-xs outline-none transition',
+          blocked.length > 0
+            ? 'border-red-200 bg-red-50 text-red-700'
+            : 'border-gray-200 bg-white text-gray-500',
+        ].join(' ')}
+      >
+        <span className="truncate font-medium">{label}</span>
+        <IconChevronDown size={12} className="shrink-0 ml-1 text-gray-400" />
+      </button>
+      {open && createPortal(
+        <div ref={panelRef} className="rounded-lg border border-gray-200 bg-white shadow-lg overflow-hidden"
+          style={{ position: 'fixed', top: pos.top, left: pos.left, width: pos.width, zIndex: 9999 }}>
+          <div className="border-b border-gray-100 px-3 py-2 bg-gray-50">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Tick to block</p>
+            <p className="text-[10px] text-gray-400">All available by default</p>
+          </div>
+          {FACILITY_SESSION_TYPES.map(st => {
+            const isBlocked = blocked.includes(st)
+            return (
+              <label key={st} className={`flex cursor-pointer items-center gap-2.5 px-3 py-2.5 transition hover:bg-gray-50 ${isBlocked ? 'bg-red-50' : ''}`}>
+                <div className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition ${
+                  isBlocked ? 'border-red-400 bg-red-100' : 'border-gray-300 bg-white'
+                }`}>
+                  {isBlocked && <IconX size={10} strokeWidth={2.5} className="text-red-500" />}
+                </div>
+                <input type="checkbox" checked={isBlocked} onChange={() => toggle(st)} className="sr-only" />
+                <span className={`whitespace-nowrap text-sm ${isBlocked ? 'text-red-700 line-through' : 'text-gray-700'}`}>
+                  {FACILITY_SESSION_SHORT[st] ?? st}
+                </span>
+              </label>
+            )
+          })}
+        </div>,
+        document.body
+      )}
+    </div>
+  )
+}
+
 function AvTimeSelect({ value, onChange, minMins }: { value: number; onChange: (v: number) => void; minMins?: number }) {
   const opts = (minMins != null ? AV_TIME_OPTIONS.filter(o => o.mins > minMins) : AV_TIME_OPTIONS).map(o => o.mins)
   return <TimePicker value={value} onChange={onChange} options={opts} />
@@ -4080,12 +4161,11 @@ function AvailabilityTab({
                                   </button>
                                 )}
                               </div>
-                              <div className="mt-1">
-                                <SessionMultiSelect
-                                  types={FACILITY_SESSION_TYPES}
-                                  selected={win.sessionTypes}
+                              <div className="mt-1.5">
+                                <p className="mb-1 text-[9px] font-semibold uppercase tracking-wide text-gray-400">Block sessions</p>
+                                <FacilityBlockSelect
+                                  blocked={win.sessionTypes}
                                   onChange={v => updateFacilityWindow(dow, win.id, { sessionTypes: v })}
-                                  color={FACIL_COLOR}
                                 />
                               </div>
                             </div>
