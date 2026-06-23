@@ -197,6 +197,7 @@ type Booking = {
   capacity?: number       // for Small Group Session
   joinRequests?: JoinRequest[]
   joinCode?: string       // shareable join link code for Small Group / Team Training
+  notes?: string
 }
 
 // ── Join Requests ──────────────────────────────────────────────────────────────
@@ -2307,6 +2308,7 @@ function BookingModal({
   const [machineRentalDuration, setMachineRentalDuration] = useState<30 | 45 | 60>(60)
   const [adminOverride, setAdminOverride] = useState(src?.adminOverride ?? false)
   const [capacity, setCapacity] = useState<number>(src?.capacity ?? 15)
+  const [notes, setNotes] = useState(src?.notes ?? '')
   const accentColor  = bookingType === 'casual' ? '#6BAD6B' : bookingType === 'unavailable' ? '#ef4444' : bookingType === 'program' ? '#D4A520' : '#6BA3D6'
   const isIndividual = bookingType === 'member' && sessionType === 'Individual Work Out'
   const isMachineRental = sessionType === 'Shooting Machine Rental'
@@ -2345,6 +2347,7 @@ function BookingModal({
     setCustomAthlete('')
     setMemberTier('')
     setMachineRentalDuration(60)
+    setNotes('')
   }
 
   function handleSpaceChange(id: SpaceId) {
@@ -2360,16 +2363,18 @@ function BookingModal({
   function handleSave() {
     const duration = Math.max(15, finishMins - startMins)
 
+    const trimmedNotes = notes.trim() || undefined
     if (bookingType === 'unavailable') {
       const spaces = (modal.kind === 'add' && unavailableSpaces.length > 0) ? unavailableSpaces : [spaceId]
       if (editSeriesFuture) {
-        onSaveFrom(src!.date, src!.seriesId!, { spaceId, startMins, duration, sessionType, athletes: [], coach, bookingType: 'unavailable' as const })
+        onSaveFrom(src!.date, src!.seriesId!, { spaceId, startMins, duration, sessionType, athletes: [], coach, bookingType: 'unavailable' as const, notes: trimmedNotes })
       } else if (repeat === 'none' || !repeatUntil) {
         onSave(spaces.map((sid, i) => ({
           spaceId: sid, startMins, duration, sessionType, athletes: [], coach,
           bookingType: 'unavailable' as const, date,
           id: i === 0 && modal.kind === 'edit' ? src?.id : undefined,
           seriesId: modal.kind === 'edit' ? src?.seriesId : undefined,
+          notes: trimmedNotes,
         })))
       } else {
         const newSeriesId = uid()
@@ -2378,6 +2383,7 @@ function BookingModal({
           dates.map(d => ({
             spaceId: sid, startMins, duration, sessionType, athletes: [], coach,
             bookingType: 'unavailable' as const, date: d, seriesId: newSeriesId,
+            notes: trimmedNotes,
           }))
         ))
       }
@@ -2390,7 +2396,7 @@ function BookingModal({
     const effectiveAthletes = isIndividual
       ? (singleAthlete === 'other' ? (customAthlete.trim() ? [customAthlete.trim()] : []) : singleAthlete ? [singleAthlete] : [])
       : [...athletes, ...memberCasualNames]
-    const base = { spaceId, startMins, duration, sessionType, athletes: effectiveAthletes, coach, bookingType, memberTier: memberTier || undefined, adminOverride: adminOverride || undefined, capacity: bookingType === 'program' ? capacity : undefined }
+    const base = { spaceId, startMins, duration, sessionType, athletes: effectiveAthletes, coach, bookingType, memberTier: memberTier || undefined, adminOverride: adminOverride || undefined, capacity: bookingType === 'program' ? capacity : undefined, notes: trimmedNotes }
     if (editSeriesFuture) {
       onSaveFrom(src!.date, src!.seriesId!, base)
     } else if (repeat === 'none' || !repeatUntil) {
@@ -2558,6 +2564,12 @@ function BookingModal({
                   </p>
                 </div>
               </div>
+              {src!.notes && (
+                <div className="rounded-lg border border-gray-100 bg-gray-50 px-4 py-3">
+                  <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">Notes</p>
+                  <p className="whitespace-pre-wrap text-sm text-gray-700">{src!.notes}</p>
+                </div>
+              )}
             </div>
             )
           ) : (
@@ -3551,6 +3563,20 @@ function BookingModal({
                     )}
                   </div>
                 </label>
+              </div>
+
+              {/* Notes */}
+              <div>
+                <label className={LABEL}>Notes</label>
+                <textarea
+                  value={notes}
+                  onChange={e => setNotes(e.target.value)}
+                  rows={3}
+                  placeholder={bookingType === 'unavailable'
+                    ? 'Add a reason or note for this unavailability... (optional)'
+                    : 'Add any notes about this session or booking... (optional)'}
+                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 outline-none transition resize-none focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/40"
+                />
               </div>
 
               {/* Actions */}
