@@ -20,6 +20,8 @@ import {
   IconBuilding,
   IconClipboardList,
   IconChevronDown,
+  IconLink,
+  IconCopy,
 } from '@tabler/icons-react'
 
 // ── Grid constants ─────────────────────────────────────────────────────────────
@@ -194,6 +196,7 @@ type Booking = {
   adminOverride?: boolean
   capacity?: number       // for Small Group Session
   joinRequests?: JoinRequest[]
+  joinCode?: string       // shareable join link code for Small Group / Team Training
 }
 
 // ── Join Requests ──────────────────────────────────────────────────────────────
@@ -277,6 +280,9 @@ const COACH_SESSION_TYPES = [
 
 // Self-serve facility session types
 const FACILITY_SESSION_TYPES = ['Casual Shooting', 'Shooting Machine Session', 'Weight Room Session']
+const JOIN_LINK_TYPES = new Set(['Small Group Session', 'Team Training'])
+function generateJoinCode() { return Math.random().toString(36).slice(2, 10) }
+
 const FACILITY_SESSION_SHORT: Record<string, string> = {
   'Casual Shooting':          'Casual Shooting',
   'Shooting Machine Session': 'Shooting Machine',
@@ -504,7 +510,7 @@ function makeSamples(today: string): Booking[] {
       ] },
     { id:'b3',  date:today, spaceId:'secondary', startMins:9*60,     duration:120, sessionType:'Team Training',       athletes:['Liam Carter','Jordan Williams','Marcus Davies','Priya Mehta','Tyler Ross'], coach:'jade', bookingType:'member' },
     { id:'b4',  date:today, spaceId:'primary',   startMins:11*60,    duration:60,  sessionType:'Domestic Academy',    athletes:[],                                                           coach:'matt', bookingType:'program' },
-    { id:'b5',  date:today, spaceId:'secondary', startMins:14*60,    duration:90,  sessionType:'Small Group Session', athletes:['Aisha Thompson','Kai Okafor','Sam Liu'],                     coach:'jade', bookingType:'member', capacity: 4, joinRequests: [] },
+    { id:'b5',  date:today, spaceId:'secondary', startMins:14*60,    duration:90,  sessionType:'Small Group Session', athletes:['Aisha Thompson','Kai Okafor','Sam Liu'],                     coach:'jade', bookingType:'member', capacity: 4, joinRequests: [], joinCode: 'demo0001' },
     { id:'b6',  date:today, spaceId:'shooting',  startMins:16*60+30, duration:60,  sessionType:'Volume Shooting',     athletes:['Devon Knox'],                                               coach:'matt', bookingType:'member' },
     { id:'b7',  date:today, spaceId:'meeting',   startMins:17*60,    duration:60,  sessionType:'Coach Meeting',       athletes:[],                                                           coach:'matt', bookingType:'member' },
     { id:'b8',  date:today, spaceId:'primary',   startMins:18*60,    duration:90,  sessionType:'Team Training',       athletes:['Liam Carter','Jordan Williams','Aisha Thompson','Tyler Ross','Zara Obi'], coach:'matt', bookingType:'member' },
@@ -512,7 +518,7 @@ function makeSamples(today: string): Booking[] {
     { id:'b10', date:yd,   spaceId:'meeting',   startMins:15*60,    duration:60,  sessionType:'Film Review',         athletes:['Jordan Williams','Marcus Davies'],                          coach:'matt', bookingType:'member' },
     { id:'b11', date:d2,   spaceId:'secondary', startMins:10*60,    duration:90,  sessionType:'Snipers Club',        athletes:[],                                                           coach:'matt', bookingType:'program' },
     { id:'b12', date:d2,   spaceId:'shooting',  startMins:14*60,    duration:60,  sessionType:'Volume Shooting',     athletes:['Kai Okafor'],                                              coach:'jade', bookingType:'member' },
-    { id:'b13', date:tm,   spaceId:'primary',   startMins:8*60,     duration:90,  sessionType:'Small Group Session', athletes:['Liam Carter','Jordan Williams','Aisha Thompson'],           coach:'matt', bookingType:'member', capacity: 5, joinRequests: [
+    { id:'b13', date:tm,   spaceId:'primary',   startMins:8*60,     duration:90,  sessionType:'Small Group Session', athletes:['Liam Carter','Jordan Williams','Aisha Thompson'],           coach:'matt', bookingType:'member', capacity: 5, joinCode: 'demo0002', joinRequests: [
       { id: 'jr3', bookingId: 'b13', athleteName: 'Tyler Ross', requestedAt: today, status: 'pending' },
     ] },
     { id:'b14', date:tm,   spaceId:'meeting',   startMins:13*60,    duration:60,  sessionType:'Goal Setting',        athletes:['Devon Knox'],                                               coach:'jade', bookingType:'member' },
@@ -588,6 +594,8 @@ export default function BookingsPage() {
   const [fovError, setFovError] = useState('')
   const [editingFovId, setEditingFovId] = useState<string | null>(null)
 
+  const [joinLinkModal, setJoinLinkModal] = useState<{ code: string; sessionType: string; date: string } | null>(null)
+
   const gridRef = useRef<HTMLDivElement>(null)
 
   // Tick NOW line every minute
@@ -595,6 +603,51 @@ export default function BookingsPage() {
     const id = setInterval(() => setNowY(toY(nowMins())), 60_000)
     return () => clearInterval(id)
   }, [])
+
+  // Sync join-link registry to localStorage whenever bookings change
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const registry: Record<string, object> = {}
+    bookings.forEach(b => {
+      if (!b.joinCode || !JOIN_LINK_TYPES.has(b.sessionType)) return
+      const space = SPACES.find(s => s.id === b.spaceId)
+      registry[b.joinCode] = {
+        code: b.joinCode,
+        bookingId: b.id,
+        sessionType: b.sessionType,
+        date: b.date,
+        startMins: b.startMins,
+        duration: b.duration,
+        coachLabel: b.coach === 'matt' ? 'Matt' : b.coach === 'jade' ? 'Jade' : b.coach === 'other' ? 'Other' : 'TBD',
+        spaceLabel: space?.label ?? b.spaceId,
+        athletes: b.athletes,
+        capacity: b.capacity ?? 0,
+      }
+    })
+    localStorage.setItem('f14_joinLinks', JSON.stringify(registry))
+  }, [bookings])
+
+  // On mount: import any join requests submitted via the public join page
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const raw = localStorage.getItem('f14_joinRequests')
+    if (!raw) return
+    try {
+      const incoming: Array<{ id: string; bookingId: string; name: string; requestedAt: string }> = JSON.parse(raw)
+      if (!incoming.length) return
+      setBookings(prev => prev.map(b => {
+        const newReqs = incoming.filter(r => r.bookingId === b.id && !(b.joinRequests ?? []).some(jr => jr.id === r.id))
+        if (!newReqs.length) return b
+        return {
+          ...b,
+          joinRequests: [
+            ...(b.joinRequests ?? []),
+            ...newReqs.map(r => ({ id: r.id, bookingId: r.bookingId, athleteName: r.name, requestedAt: r.requestedAt, status: 'pending' as const })),
+          ],
+        }
+      }))
+    } catch {}
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Scroll to current time on mount
   useEffect(() => {
@@ -1035,10 +1088,26 @@ export default function BookingsPage() {
       }
     }
 
+    // Assign join codes to new join-link-eligible bookings
+    const firstNewJoinLink: { code: string; sessionType: string; date: string } | null = (() => {
+      for (const data of items) {
+        if (!data.id && JOIN_LINK_TYPES.has(data.sessionType) && !data.joinCode) {
+          return { code: generateJoinCode(), sessionType: data.sessionType, date: data.date }
+        }
+      }
+      return null
+    })()
+    const itemsWithCodes = items.map((data, i) => {
+      if (!data.id && JOIN_LINK_TYPES.has(data.sessionType) && !data.joinCode) {
+        return { ...data, joinCode: i === 0 && firstNewJoinLink ? firstNewJoinLink.code : generateJoinCode() }
+      }
+      return data
+    })
+
     let bumpMsg: string | null = null
     setBookings(prev => {
       let next = [...prev]
-      for (const data of items) {
+      for (const data of itemsWithCodes) {
         // Bump logic for new Casual Shooting bookings
         if (data.sessionType === 'Casual Shooting' && !data.id) {
           const existing = next.filter(b =>
@@ -1080,10 +1149,11 @@ export default function BookingsPage() {
     })
     setModal(null)
     if (bumpMsg) showToast(bumpMsg)
+    if (firstNewJoinLink) setJoinLinkModal(firstNewJoinLink)
 
     // Track credit usage for new member bookings
     const wk = getMondayKey(new Date())
-    items.forEach(item => {
+    itemsWithCodes.forEach(item => {
       if (item.id) return  // skip edits
       if (item.bookingType !== 'member') return
       const creditType = SESSION_TO_CREDIT[item.sessionType]
@@ -1557,6 +1627,16 @@ export default function BookingsPage() {
           onEdit={b => setModal({ kind: 'edit', booking: b })}
           onEditSeries={b => setModal({ kind: 'editSeries', booking: b })}
           creditUsage={creditUsage}
+        />
+      )}
+
+      {/* ── Join link created modal ── */}
+      {joinLinkModal && (
+        <JoinLinkCreatedModal
+          code={joinLinkModal.code}
+          sessionType={joinLinkModal.sessionType}
+          date={joinLinkModal.date}
+          onClose={() => setJoinLinkModal(null)}
         />
       )}
 
@@ -2453,6 +2533,9 @@ function BookingModal({
                   </div>
                 )}
               </div>
+              {src!.joinCode && (
+                <JoinLinkRow code={src!.joinCode} />
+              )}
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <p className="text-xs text-gray-400">Time</p>
@@ -3542,6 +3625,108 @@ function Toggle({ on, onChange, color = '#6BA3D6' }: { on: boolean; onChange: (v
         style={{ transform: on ? 'translateX(1.375rem)' : 'translateX(0.25rem)' }}
       />
     </button>
+  )
+}
+
+// ── Join link helpers ──────────────────────────────────────────────────────────
+
+function joinLinkUrl(code: string) {
+  if (typeof window !== 'undefined') return `${window.location.origin}/join/${code}`
+  return `/join/${code}`
+}
+
+function JoinLinkRow({ code }: { code: string }) {
+  const [copied, setCopied] = useState(false)
+  const url = joinLinkUrl(code)
+  async function copy() {
+    await navigator.clipboard.writeText(url)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+  return (
+    <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
+      <div className="mb-1.5 flex items-center gap-1.5">
+        <IconLink size={13} style={{ color: '#6BA3D6' }} />
+        <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: '#6BA3D6' }}>Shareable Join Link</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <span className="flex-1 truncate rounded-md border border-blue-100 bg-white px-2.5 py-1.5 font-mono text-xs text-gray-600">
+          {url}
+        </span>
+        <button
+          type="button"
+          onClick={copy}
+          className="flex shrink-0 items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-semibold text-white transition hover:opacity-90"
+          style={{ backgroundColor: copied ? '#059669' : '#6BA3D6' }}
+        >
+          {copied ? <><IconCheck size={12} /> Copied!</> : <><IconCopy size={12} /> Copy</>}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function JoinLinkCreatedModal({ code, sessionType, date, onClose }: { code: string; sessionType: string; date: string; onClose: () => void }) {
+  const [copied, setCopied] = useState(false)
+  const url = joinLinkUrl(code)
+  async function copy() {
+    await navigator.clipboard.writeText(url)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+  const dateLabel = new Date(date + 'T00:00:00').toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full" style={{ backgroundColor: '#6BA3D6' + '20' }}>
+              <IconLink size={16} style={{ color: '#6BA3D6' }} />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-gray-900">Booking Created</h2>
+              <p className="text-xs text-gray-400">{sessionType} · {dateLabel}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100">
+            <IconX size={18} />
+          </button>
+        </div>
+        <div className="px-6 py-5 space-y-4">
+          <div className="rounded-xl border border-green-100 bg-green-50 px-4 py-3 flex items-center gap-2">
+            <IconCheck size={16} className="text-green-600 shrink-0" />
+            <p className="text-sm font-semibold text-green-800">Booking saved successfully</p>
+          </div>
+          <div>
+            <p className="mb-2 text-sm font-semibold text-gray-800">Shareable Join Link</p>
+            <p className="mb-3 text-xs text-gray-500">Share this link with athletes to let them request to join this session. Requests will appear in the Join Requests tab for your approval.</p>
+            <div className="flex items-center gap-2">
+              <span className="flex-1 truncate rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 font-mono text-xs text-gray-700">
+                {url}
+              </span>
+              <button
+                type="button"
+                onClick={copy}
+                className="flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
+                style={{ backgroundColor: copied ? '#059669' : '#6BA3D6' }}
+              >
+                {copied ? <><IconCheck size={14} /> Copied!</> : <><IconCopy size={14} /> Copy Link</>}
+              </button>
+            </div>
+          </div>
+        </div>
+        <div className="flex justify-end border-t border-gray-100 px-6 py-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+            style={{ backgroundColor: '#6BA3D6' }}
+          >
+            Done
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }
 

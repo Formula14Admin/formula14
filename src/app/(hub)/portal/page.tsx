@@ -447,6 +447,7 @@ export default function PortalPage() {
   const [waitlistPrograms, setWaitlistPrograms] = useState<Set<string>>(new Set())
   const [enrolModal,      setEnrolModal]      = useState<PortalProgram | null>(null)
   const [enrolName,       setEnrolName]       = useState('')
+  const [shareModal,      setShareModal]      = useState<{ url: string; sessionType: string } | null>(null)
 
   const weekDates = useMemo(() => {
     return Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
@@ -464,8 +465,27 @@ export default function PortalPage() {
 
   function confirmBooking() {
     if (!bookingSlot) return
-    setBookedIds((prev) => new Set([...prev, bookingSlot.id]))
+    const slot = bookingSlot
+    setBookedIds((prev) => new Set([...prev, slot.id]))
     setBookingSlot(null)
+
+    // For Small Group / Team Training: look up the join link from the admin hub registry
+    const JOIN_TYPES = ['Small Group Session', 'Team Training']
+    if (JOIN_TYPES.includes(slot.sessionType)) {
+      try {
+        const registry: Record<string, { code: string; sessionType: string; date: string; startMins: number }> =
+          JSON.parse(localStorage.getItem('f14_joinLinks') || '{}')
+        const entry = Object.values(registry).find(
+          e => e.sessionType === slot.sessionType && e.date === slot.date && e.startMins === slot.startMins
+        )
+        if (entry) {
+          const url = `${window.location.origin}/join/${entry.code}`
+          setShareModal({ url, sessionType: slot.sessionType })
+          return // skip generic toast; share modal takes over
+        }
+      } catch {}
+    }
+
     setToastMsg('Booking confirmed!')
     setTimeout(() => setToastMsg(''), 3000)
   }
@@ -977,6 +997,72 @@ export default function PortalPage() {
         </div>
       )}
 
+      {/* ── Share link modal (after booking a Small Group / Team Training) ───── */}
+      {shareModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+              <div>
+                <h2 className="text-base font-bold text-gray-900">Booking Confirmed!</h2>
+                <p className="mt-0.5 text-sm text-gray-500">{shareModal.sessionType}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShareModal(null)}
+                className="rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100"
+              >
+                <IconX size={18} />
+              </button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <div className="flex items-center gap-2.5 rounded-xl border border-green-100 bg-green-50 px-4 py-3">
+                <IconCheck size={16} className="text-green-600 shrink-0" />
+                <p className="text-sm font-semibold text-green-800">Your spot has been requested.</p>
+              </div>
+              <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 space-y-2">
+                <p className="text-sm font-semibold text-gray-800">Know someone who'd like to join?</p>
+                <p className="text-xs text-gray-500">Share this link so they can request a spot in the same session.</p>
+                <div className="flex items-center gap-2 mt-2">
+                  <span className="flex-1 truncate rounded-lg border border-gray-200 bg-white px-3 py-2 font-mono text-xs text-gray-700">
+                    {shareModal.url}
+                  </span>
+                  <PortalCopyButton url={shareModal.url} />
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end border-t border-gray-100 px-6 py-4">
+              <button
+                type="button"
+                onClick={() => setShareModal(null)}
+                className="rounded-xl px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+                style={{ backgroundColor: '#6BA3D6' }}
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
+  )
+}
+
+function PortalCopyButton({ url }: { url: string }) {
+  const [copied, setCopied] = useState(false)
+  async function copy() {
+    await navigator.clipboard.writeText(url)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      className="flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold text-white transition hover:opacity-90"
+      style={{ backgroundColor: copied ? '#059669' : '#6BA3D6' }}
+    >
+      {copied ? <><IconCheck size={12} /> Copied!</> : 'Copy'}
+    </button>
   )
 }
