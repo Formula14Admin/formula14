@@ -4,7 +4,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
-import { useState, useEffect, type ComponentType, type CSSProperties } from 'react'
+import { useState, useEffect, useCallback, type ComponentType, type CSSProperties } from 'react'
 import {
   IconLayoutDashboard,
   IconCalendar,
@@ -105,6 +105,25 @@ export default function Sidebar() {
   const pathname = usePathname()
   const { data: session } = useSession()
 
+  // Notification badge counts keyed by nav href
+  const [badges, setBadges] = useState<Record<string, number>>({})
+
+  const refreshBadges = useCallback(() => {
+    const joinCount = parseInt(localStorage.getItem('f14_pendingJoinCount') ?? '0', 10) || 0
+    setBadges({ '/dashboard': joinCount })
+  }, [])
+
+  useEffect(() => {
+    refreshBadges()
+    window.addEventListener('storage', refreshBadges)
+    // Also poll so badges update when changed by the same tab
+    const id = setInterval(refreshBadges, 2000)
+    return () => {
+      window.removeEventListener('storage', refreshBadges)
+      clearInterval(id)
+    }
+  }, [refreshBadges])
+
   // Track which expandable items are open (keyed by href)
   const [expanded, setExpanded] = useState<Set<string>>(() => {
     const initial = new Set<string>()
@@ -194,6 +213,8 @@ export default function Sidebar() {
                   const active = pathname === item.href || pathname.startsWith(item.href + '/') || childActive
                   const open = expanded.has(item.href)
 
+                  const badgeCount = badges[item.href] ?? 0
+
                   return (
                     <li key={item.href}>
                       {/* Parent row */}
@@ -213,7 +234,12 @@ export default function Sidebar() {
                             strokeWidth={1.75}
                             style={active ? { color: '#6BA3D6' } : {}}
                           />
-                          {item.label}
+                          <span className="flex-1">{item.label}</span>
+                          {badgeCount > 0 && (
+                            <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                              {badgeCount}
+                            </span>
+                          )}
                         </Link>
 
                         {/* Chevron toggle (only for items with children) */}
