@@ -650,6 +650,16 @@ export default function BookingsPage() {
     } catch {}
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // On mount: honour navigation signal from dashboard "Join Requests" button
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const target = localStorage.getItem('f14_openTab')
+    if (target === 'join-requests') {
+      setPageTab('join-requests')
+      localStorage.removeItem('f14_openTab')
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Scroll to current time on mount
   useEffect(() => {
     if (gridRef.current) gridRef.current.scrollTop = Math.max(0, nowY - 200)
@@ -992,6 +1002,12 @@ export default function BookingsPage() {
   const pendingJoinRequestCount = bookings.reduce((sum, b) =>
     sum + (b.joinRequests?.filter(jr => jr.status === 'pending').length ?? 0), 0
   )
+
+  // Sync pending count to localStorage so the Dashboard can display it
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    localStorage.setItem('f14_pendingJoinCount', String(pendingJoinRequestCount))
+  }, [pendingJoinRequestCount])
 
   function handleSave(items: (Omit<Booking, 'id'> & { id?: string })[]) {
     // ── Check 1 & 2: Facility + Coach availability (admin override bypasses) ──────

@@ -1,5 +1,7 @@
 'use client'
 
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   IconUsers,
   IconCalendar,
@@ -9,6 +11,8 @@ import {
   IconUserPlus,
   IconLock,
   IconBell,
+  IconClipboardList,
+  IconChevronRight,
 } from '@tabler/icons-react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -50,13 +54,6 @@ const CHECKINS = [
   { name: 'Kai Okafor',      emoji: '',   mood: '',                              private: true  },
 ]
 
-const QUICK_ACTIONS = [
-  { label: 'New Booking',      icon: IconCalendarPlus   },
-  { label: 'Add Athlete',      icon: IconUserPlus       },
-  { label: 'Add Transaction',  icon: IconCurrencyDollar },
-  { label: 'Send Prompt',      icon: IconBell           },
-]
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function toMins(t: string) {
   const [h, m] = t.split(':').map(Number)
@@ -86,11 +83,30 @@ const BADGE: Record<Engagement, string> = {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function DashboardPage() {
+  const router = useRouter()
   const now = new Date()
   const nowMins = now.getHours() * 60 + now.getMinutes()
   const dateStr = now.toLocaleDateString('en-AU', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
   })
+
+  // Read pending join request count from localStorage (written by bookings page)
+  const [pendingJoinCount, setPendingJoinCount] = useState(0)
+  useEffect(() => {
+    const stored = localStorage.getItem('f14_pendingJoinCount')
+    if (stored !== null) {
+      setPendingJoinCount(parseInt(stored, 10) || 0)
+    } else {
+      // Bookings page hasn't been visited this session yet — count from seed data
+      // b2 has 2 pending, b13 has 1 pending = 3 total
+      setPendingJoinCount(3)
+    }
+  }, [])
+
+  function openJoinRequests() {
+    localStorage.setItem('f14_openTab', 'join-requests')
+    router.push('/bookings')
+  }
 
   const sessions = SCHEDULE.map(s => ({
     ...s,
@@ -101,17 +117,45 @@ export default function DashboardPage() {
     ) as SessionStatus,
   }))
 
-  // Index before which the NOW indicator is inserted (-1 = after all)
   const nowIdx = sessions.findIndex(s => s.status !== 'past')
+
+  const QUICK_ACTIONS = [
+    { label: 'New Booking',     icon: IconCalendarPlus,  onClick: () => router.push('/bookings') },
+    { label: 'Add Athlete',     icon: IconUserPlus,      onClick: () => router.push('/athletes') },
+    { label: 'Add Transaction', icon: IconCurrencyDollar, onClick: () => router.push('/bookkeeping') },
+    { label: 'Send Prompt',     icon: IconBell,          onClick: () => {} },
+    { label: 'Join Requests',   icon: IconClipboardList, onClick: openJoinRequests, badge: pendingJoinCount },
+  ]
 
   return (
     <div className="min-h-screen p-8" style={{ backgroundColor: '#f4f6f9' }}>
 
       {/* ── Header ── */}
-      <div className="mb-8">
+      <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
         <p className="mt-0.5 text-sm text-gray-500">{dateStr}</p>
       </div>
+
+      {/* ── Join Requests notification banner ── */}
+      {pendingJoinCount > 0 && (
+        <button
+          onClick={openJoinRequests}
+          className="mb-6 flex w-full items-center gap-3 rounded-xl border border-red-200 bg-red-50 px-5 py-3.5 text-left transition hover:border-red-300 hover:bg-red-100"
+        >
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-red-100">
+            <IconClipboardList size={16} className="text-red-600" />
+          </span>
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-red-800">
+              {pendingJoinCount} athlete{pendingJoinCount !== 1 ? 's have' : ' has'} requested to join a session
+            </p>
+            <p className="text-xs text-red-600">Review and approve or decline in the Join Requests tab</p>
+          </div>
+          <span className="flex items-center gap-1 text-xs font-semibold text-red-600">
+            Review requests <IconChevronRight size={14} />
+          </span>
+        </button>
+      )}
 
       {/* ── Stat Cards ── */}
       <div className="mb-6 grid grid-cols-4 gap-5">
@@ -165,14 +209,11 @@ export default function DashboardPage() {
 
                   {/* Session row */}
                   <div className={`flex gap-3 py-2.5 ${isPast ? 'opacity-40' : ''}`}>
-                    {/* Time */}
                     <span className={`w-16 shrink-0 pt-0.5 text-right text-xs font-medium ${
                       isCurrent ? 'text-[#6BA3D6]' : 'text-gray-400'
                     }`}>
                       {fmt12(s.time)}
                     </span>
-
-                    {/* Timeline dot + connector */}
                     <div className="flex flex-col items-center pt-1">
                       <span
                         className="h-2.5 w-2.5 shrink-0 rounded-full border-2"
@@ -185,8 +226,6 @@ export default function DashboardPage() {
                         <span className="mt-1 w-px flex-1 bg-gray-200" style={{ minHeight: 36 }} />
                       )}
                     </div>
-
-                    {/* Content */}
                     <div className="flex-1 pb-3">
                       <div className="flex items-start justify-between gap-2">
                         <div>
@@ -218,7 +257,6 @@ export default function DashboardPage() {
               )
             })}
 
-            {/* NOW after all sessions if all are past */}
             {nowIdx === -1 && (
               <div className="mt-1 flex items-center gap-3">
                 <span className="w-16 shrink-0 text-right text-[10px] font-bold tracking-widest text-red-500">NOW</span>
@@ -236,11 +274,18 @@ export default function DashboardPage() {
         <div className="col-span-2 rounded-xl bg-white p-6 shadow-sm">
           <h2 className="mb-5 text-base font-semibold text-gray-900">Quick Actions</h2>
           <div className="grid grid-cols-2 gap-3">
-            {QUICK_ACTIONS.map(({ label, icon: Icon }) => (
+            {QUICK_ACTIONS.map(({ label, icon: Icon, onClick, badge }) => (
               <button
                 key={label}
-                className="flex flex-col items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 px-3 py-6 transition-colors hover:border-[#6BA3D6]/40 hover:bg-[#6BA3D6]/5"
+                onClick={onClick}
+                className="relative flex flex-col items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 px-3 py-6 transition-colors hover:border-[#6BA3D6]/40 hover:bg-[#6BA3D6]/5"
               >
+                {/* Red badge */}
+                {badge != null && badge > 0 && (
+                  <span className="absolute right-2.5 top-2.5 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                    {badge}
+                  </span>
+                )}
                 <span
                   className="flex h-10 w-10 items-center justify-center rounded-full"
                   style={{ backgroundColor: '#6BA3D6' + '1a' }}
