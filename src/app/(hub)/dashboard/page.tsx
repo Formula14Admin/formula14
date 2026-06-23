@@ -14,6 +14,7 @@ import {
   IconClipboardList,
   IconChevronRight,
   IconCreditCard,
+  IconCheck,
 } from '@tabler/icons-react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -98,15 +99,35 @@ export default function DashboardPage() {
     if (stored !== null) {
       setPendingJoinCount(parseInt(stored, 10) || 0)
     } else {
-      // Bookings page hasn't been visited this session yet — count from seed data
-      // b2 has 2 pending, b13 has 1 pending = 3 total
+      // Bookings page hasn't been visited yet — use seed data total (b2×2 + b13×1)
       setPendingJoinCount(3)
+    }
+  }, [])
+
+  // Read pending payment count from localStorage (written by pricing page)
+  const [pendingPaymentCount, setPendingPaymentCount] = useState(0)
+  const [paymentsRan, setPaymentsRan] = useState(false)
+  useEffect(() => {
+    const stored = localStorage.getItem('f14_pendingPaymentCount')
+    if (stored !== null) {
+      setPendingPaymentCount(parseInt(stored, 10) || 0)
+    } else {
+      // Pricing page hasn't been visited yet — seed data has 2 payment-required
+      setPendingPaymentCount(2)
     }
   }, [])
 
   function openJoinRequests() {
     localStorage.setItem('f14_openTab', 'join-requests')
     router.push('/bookings')
+  }
+
+  function runPayments() {
+    localStorage.setItem('f14_runPayments', 'true')
+    localStorage.setItem('f14_pendingPaymentCount', '0')
+    setPendingPaymentCount(0)
+    setPaymentsRan(true)
+    setTimeout(() => setPaymentsRan(false), 2500)
   }
 
   const sessions = SCHEDULE.map(s => ({
@@ -120,13 +141,18 @@ export default function DashboardPage() {
 
   const nowIdx = sessions.findIndex(s => s.status !== 'past')
 
-  const QUICK_ACTIONS = [
-    { label: 'New Booking',     icon: IconCalendarPlus,  onClick: () => router.push('/bookings') },
-    { label: 'Add Athlete',     icon: IconUserPlus,      onClick: () => router.push('/athletes') },
+  const QUICK_ACTIONS: { label: string; icon: React.ComponentType<{ size?: number; style?: React.CSSProperties }>; onClick: () => void; badge?: number; disabled?: boolean }[] = [
+    { label: 'New Booking',     icon: IconCalendarPlus,   onClick: () => router.push('/bookings') },
+    { label: 'Add Athlete',     icon: IconUserPlus,       onClick: () => router.push('/athletes') },
     { label: 'Add Transaction', icon: IconCurrencyDollar, onClick: () => router.push('/bookkeeping') },
-    { label: 'Send Prompt',     icon: IconBell,          onClick: () => {} },
-    { label: 'Join Requests',   icon: IconClipboardList, onClick: openJoinRequests, badge: pendingJoinCount },
-    { label: 'Run Payments',    icon: IconCreditCard,    onClick: () => router.push('/pricing') },
+    { label: 'Send Prompt',     icon: IconBell,           onClick: () => {} },
+    { label: 'Join Requests',   icon: IconClipboardList,  onClick: openJoinRequests, badge: pendingJoinCount },
+    {
+      label:    paymentsRan ? 'Payments Ran!' : 'Run Payments',
+      icon:     paymentsRan ? IconCheck : IconCreditCard,
+      onClick:  runPayments,
+      disabled: pendingPaymentCount === 0,
+    },
   ]
 
   return (
@@ -276,11 +302,17 @@ export default function DashboardPage() {
         <div className="col-span-2 rounded-xl bg-white p-6 shadow-sm">
           <h2 className="mb-5 text-base font-semibold text-gray-900">Quick Actions</h2>
           <div className="grid grid-cols-2 gap-3">
-            {QUICK_ACTIONS.map(({ label, icon: Icon, onClick, badge }) => (
+            {QUICK_ACTIONS.map(({ label, icon: Icon, onClick, badge, disabled }) => (
               <button
                 key={label}
-                onClick={onClick}
-                className="relative flex flex-col items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 px-3 py-6 transition-colors hover:border-[#6BA3D6]/40 hover:bg-[#6BA3D6]/5"
+                onClick={disabled ? undefined : onClick}
+                disabled={disabled}
+                title={disabled && label === 'Run Payments' ? 'No outstanding payments' : undefined}
+                className={`relative flex flex-col items-center gap-3 rounded-xl border px-3 py-6 transition-colors ${
+                  disabled
+                    ? 'cursor-not-allowed border-gray-100 bg-gray-50 opacity-40'
+                    : 'border-gray-100 bg-gray-50 hover:border-[#6BA3D6]/40 hover:bg-[#6BA3D6]/5'
+                }`}
               >
                 {/* Red badge */}
                 {badge != null && badge > 0 && (

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import {
   IconLock,
   IconLockOpen,
@@ -410,6 +410,28 @@ export default function PricingPage() {
     if (sessionFilter === 'all') return computed
     return computed.filter(s => s.computedState === sessionFilter)
   }, [computed, sessionFilter])
+
+  const totalPendingPayments = useMemo(() =>
+    sessions
+      .filter(s => s.status === 'completed')
+      .flatMap(s => s.athletes)
+      .filter(sa => sa.paymentStatus === 'payment-required').length
+  , [sessions])
+
+  // Sync pending payment count to localStorage so Dashboard can read it
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    localStorage.setItem('f14_pendingPaymentCount', String(totalPendingPayments))
+  }, [totalPendingPayments])
+
+  // On mount: honour "Run Payments" signal from Dashboard quick action
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (localStorage.getItem('f14_runPayments') === 'true') {
+      localStorage.removeItem('f14_runPayments')
+      runAllPayments()
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Handlers ────────────────────────────────────────────────────────────────
 
