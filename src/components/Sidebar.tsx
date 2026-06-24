@@ -117,8 +117,42 @@ export default function Sidebar() {
   const [badges, setBadges] = useState<Record<string, number>>({})
 
   const refreshBadges = useCallback(() => {
+    const today = new Date().toISOString().split('T')[0]
+    const b: Record<string, number> = {}
+
+    // Join requests → Dashboard + Bookings & Availability
     const joinCount = parseInt(localStorage.getItem('f14_pendingJoinCount') ?? '0', 10) || 0
-    setBadges({ '/dashboard': joinCount })
+    if (joinCount > 0) { b['/dashboard'] = joinCount; b['/bookings'] = joinCount }
+
+    // Pending payments → Pricing & Payments
+    const payCount = parseInt(localStorage.getItem('f14_pendingPaymentCount') ?? '0', 10) || 0
+    if (payCount > 0) b['/pricing'] = payCount
+
+    // Pending pay runs → Team
+    try {
+      const runs = JSON.parse(localStorage.getItem('f14_team_pay_runs') ?? '[]') as { status: string }[]
+      const n = runs.filter(r => r.status === 'pending').length
+      if (n > 0) b['/team'] = n
+    } catch { /* ignore parse errors */ }
+
+    // Overdue + due-today incomplete tasks → To Do
+    try {
+      const tasks = JSON.parse(localStorage.getItem('f14_todo_tasks') ?? '[]') as { completed: boolean; dueDate: string | null }[]
+      const n = tasks.filter(t => !t.completed && t.dueDate !== null && t.dueDate <= today).length
+      if (n > 0) b['/todo'] = n
+    } catch { /* ignore parse errors */ }
+
+    // Overdue goals → Goals
+    try {
+      const goals = JSON.parse(localStorage.getItem('f14_goals') ?? '[]') as { targetDate: string; milestones: { completed: boolean }[] }[]
+      const n = goals.filter(g => {
+        const allDone = g.milestones.length > 0 && g.milestones.every(m => m.completed)
+        return !allDone && g.targetDate < today
+      }).length
+      if (n > 0) b['/goals'] = n
+    } catch { /* ignore parse errors */ }
+
+    setBadges(b)
   }, [])
 
   useEffect(() => {
