@@ -28,6 +28,7 @@ import {
   IconSettings,
   IconChecklist,
   IconUsersGroup,
+  IconTrophy,
 } from '@tabler/icons-react'
 
 // ─── Nav types ────────────────────────────────────────────────────────────────
@@ -86,6 +87,7 @@ const NAV: NavSection[] = [
     section: 'ATHLETES',
     items: [
       { label: 'Book a Session',                href: '/portal',        icon: IconCalendar },
+      { label: 'Goal Setting',                  href: '/goals',         icon: IconTrophy  },
       { label: 'Journal',                       href: '/journal',       icon: IconNotebook },
       { label: 'Shooting Test & Leaderboards',  href: '/shooting-test', icon: IconTarget },
     ],
