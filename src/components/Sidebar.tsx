@@ -60,18 +60,13 @@ const NAV: NavSection[] = [
   {
     section: 'MAIN',
     items: [
-      { label: 'Dashboard',               href: '/dashboard',             icon: IconLayoutDashboard },
-      { label: 'Athletes',                href: '/athletes',              icon: IconUsers },
-      { label: 'Bookings & Availability', href: '/bookings',              icon: IconCalendar },
-      { label: 'Memberships',             href: '/memberships',           icon: IconId },
-      { label: 'Pricing & Payments',      href: '/pricing',               icon: IconCreditCard },
-      { label: 'Settings',                  href: '/settings',              icon: IconSettings },
-      { label: 'To Do',                     href: '/todo',                  icon: IconChecklist },
-      { label: 'Social Media & Advertising', href: '/social-media',       icon: IconSpeakerphone },
-      { label: 'Team',                      href: '/team',                icon: IconUsersGroup },
-      { label: 'Boards',                  href: '/boards',                icon: IconLayoutKanban },
-      { label: 'Finances',                 href: '/finances',              icon: IconCash },
-      { label: 'Forms',                   href: '/forms',                 icon: IconForms },
+      { label: 'Dashboard',                   href: '/dashboard',           icon: IconLayoutDashboard },
+      { label: 'Athletes',                    href: '/athletes',            icon: IconUsers },
+      { label: 'Boards',                      href: '/boards',              icon: IconLayoutKanban },
+      { label: 'Bookings & Availability',     href: '/bookings',            icon: IconCalendar },
+      { label: 'Finances',                    href: '/finances',            icon: IconCash },
+      { label: 'Forms',                       href: '/forms',               icon: IconForms },
+      { label: 'Memberships',                 href: '/memberships',         icon: IconId },
       {
         label: 'Policies & Procedures',
         href: '/policies-procedures',
@@ -81,6 +76,11 @@ const NAV: NavSection[] = [
           { label: 'Procedures', href: '/procedures', icon: IconClipboardList },
         ],
       },
+      { label: 'Pricing & Payments',          href: '/pricing',             icon: IconCreditCard },
+      { label: 'Settings',                    href: '/settings',            icon: IconSettings },
+      { label: 'Social Media & Advertising',  href: '/social-media',        icon: IconSpeakerphone },
+      { label: 'Team',                        href: '/team',                icon: IconUsersGroup },
+      { label: 'To Do',                       href: '/todo',                icon: IconChecklist },
     ],
   },
   {
@@ -96,8 +96,8 @@ const NAV: NavSection[] = [
     section: 'COACHING TOOLS',
     items: [
       { label: 'FormulaDraw', href: '/formula-draw', icon: IconBallBasketball },
+      { label: 'FormulaStat', href: '/formula-stat', icon: IconChartBar },
       { label: 'FormulaSub',  href: '/formula-sub',  icon: IconArrowsExchange },
-      { label: 'FormulaStat', href: '/formula-stat',  icon: IconChartBar },
     ],
   },
   {
