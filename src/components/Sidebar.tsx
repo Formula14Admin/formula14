@@ -27,6 +27,7 @@ import {
   IconCash,
   IconSettings,
   IconChecklist,
+  IconUsersGroup,
 } from '@tabler/icons-react'
 
 // ─── Nav types ────────────────────────────────────────────────────────────────
@@ -66,6 +67,7 @@ const NAV: NavSection[] = [
       { label: 'Settings',                  href: '/settings',              icon: IconSettings },
       { label: 'To Do',                     href: '/todo',                  icon: IconChecklist },
       { label: 'Social Media & Advertising', href: '/social-media',       icon: IconSpeakerphone },
+      { label: 'Team',                      href: '/team',                icon: IconUsersGroup },
       { label: 'Boards',                  href: '/boards',                icon: IconLayoutKanban },
       { label: 'Finances',                 href: '/finances',              icon: IconCash },
       { label: 'Forms',                   href: '/forms',                 icon: IconForms },
