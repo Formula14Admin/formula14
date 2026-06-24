@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import {
   BarChart, Bar, PieChart, Pie, Cell, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -8,9 +8,11 @@ import {
 import {
   IconTrendingUp, IconTrendingDown, IconCurrencyDollar, IconReceipt,
   IconCalendar, IconUsers, IconAlertTriangle, IconPlus, IconX,
-  IconInfoCircle, IconTarget, IconChartPie, IconBriefcase, IconUser,
-  IconArrowUpRight, IconArrowDownLeft, IconCheck,
+  IconTarget, IconChartPie, IconBriefcase, IconUser,
+  IconArrowUpRight, IconArrowDownLeft, IconCheck, IconSend, IconMail,
+  IconChevronDown,
 } from '@tabler/icons-react'
+import { loadRecipients, type Recipient } from '@/lib/finances-recipients'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -685,6 +687,272 @@ function PersonalTab() {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
+// ─── Toast ────────────────────────────────────────────────────────────────────
+
+function Toast({ message, onClose }: { message: string; onClose: () => void }) {
+  useEffect(() => {
+    const id = setTimeout(onClose, 6000)
+    return () => clearTimeout(id)
+  }, [onClose])
+
+  return (
+    <div className="fixed bottom-6 right-6 z-[60] flex max-w-sm items-start gap-3 rounded-xl bg-gray-900 px-4 py-3.5 text-white shadow-2xl">
+      <IconCheck size={18} className="mt-0.5 shrink-0 text-green-400" />
+      <p className="flex-1 text-sm leading-relaxed">{message}</p>
+      <button onClick={onClose} className="ml-1 shrink-0 text-gray-400 transition hover:text-white">
+        <IconX size={16} />
+      </button>
+    </div>
+  )
+}
+
+// ─── Send Summary Modal ────────────────────────────────────────────────────────
+
+type SummaryPeriod = 'this-month' | 'last-month' | 'this-fy' | 'last-fy' | 'custom'
+
+const PERIOD_OPTIONS: { id: SummaryPeriod; label: string }[] = [
+  { id: 'this-month', label: 'This Month'            },
+  { id: 'last-month', label: 'Last Month'            },
+  { id: 'this-fy',    label: 'This Financial Year'   },
+  { id: 'last-fy',    label: 'Last Financial Year'   },
+  { id: 'custom',     label: 'Custom Date Range'     },
+]
+
+const INCLUDE_OPTIONS = [
+  { id: 'revenue',      label: 'Revenue breakdown'          },
+  { id: 'expenses',     label: 'Expense breakdown'           },
+  { id: 'net',          label: 'Net profit / loss'           },
+  { id: 'transactions', label: 'Transaction list'            },
+  { id: 'membership',   label: 'Membership revenue summary'  },
+  { id: 'invoices',     label: 'Outstanding invoices'        },
+  { id: 'pnl',          label: 'Monthly P&L table'           },
+]
+
+function periodLabel(p: SummaryPeriod, from: string, to: string): string {
+  if (p === 'this-month') return 'June 2026'
+  if (p === 'last-month') return 'May 2026'
+  if (p === 'this-fy')    return 'FY 2025–26'
+  if (p === 'last-fy')    return 'FY 2024–25'
+  if (from && to)         return `${from} to ${to}`
+  return 'Custom Range'
+}
+
+function SendSummaryModal({ onClose, onSend }: {
+  onClose: () => void
+  onSend: (names: string[]) => void
+}) {
+  const [recipients, setRecipients]   = useState<Recipient[]>([])
+  const [selected, setSelected]       = useState<Set<string>>(new Set())
+  const [customEmail, setCustomEmail] = useState('')
+  const [period, setPeriod]           = useState<SummaryPeriod>('this-month')
+  const [customFrom, setCustomFrom]   = useState('')
+  const [customTo, setCustomTo]       = useState('')
+  const [includes, setIncludes]       = useState(() => new Set(INCLUDE_OPTIONS.map(o => o.id)))
+  const [notes, setNotes]             = useState('')
+
+  useEffect(() => { setRecipients(loadRecipients()) }, [])
+
+  function toggleRecipient(id: string) {
+    setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
+  }
+  function toggleInclude(id: string) {
+    setIncludes(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
+  }
+
+  const subject = `Formula14 Financial Summary — ${periodLabel(period, customFrom, customTo)}`
+
+  const selectedNames = [
+    ...recipients.filter(r => selected.has(r.id)).map(r => r.name),
+    ...(customEmail.trim() ? [customEmail.trim()] : []),
+  ]
+  const canSend = selectedNames.length > 0
+
+  function handleSend() {
+    if (!canSend) return
+    onSend(selectedNames)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+          <div className="flex items-center gap-2">
+            <span className="flex h-8 w-8 items-center justify-center rounded-full" style={{ backgroundColor: ACCENT + '1a' }}>
+              <IconSend size={16} style={{ color: ACCENT }} />
+            </span>
+            <div>
+              <h2 className="font-bold text-gray-900">Send Financial Summary</h2>
+              <p className="text-xs text-gray-400">Business Finances tab</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
+            <IconX size={18} />
+          </button>
+        </div>
+
+        {/* Scrollable body */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+
+          {/* Recipients */}
+          <div>
+            <label className={LABEL + ' mb-2'}>Send To</label>
+            <div className="grid grid-cols-2 gap-2">
+              {recipients.map(r => {
+                const isSelected = selected.has(r.id)
+                return (
+                  <button
+                    key={r.id}
+                    type="button"
+                    onClick={() => toggleRecipient(r.id)}
+                    className={`flex items-start gap-2.5 rounded-xl border-2 p-3 text-left transition-all ${
+                      isSelected ? 'border-[#6BA3D6] bg-[#6BA3D6]/5' : 'border-gray-200 hover:border-gray-300 bg-white'
+                    }`}
+                  >
+                    <span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border-2 transition-all ${
+                      isSelected ? 'border-[#6BA3D6] bg-[#6BA3D6]' : 'border-gray-300'
+                    }`}>
+                      {isSelected && <IconCheck size={10} style={{ color: 'white' }} />}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-gray-900">{r.name}</p>
+                      <p className="truncate text-[11px] text-gray-400">{r.email}</p>
+                      <span className="mt-1 inline-block rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-500">{r.role}</span>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Custom email */}
+            <div className="mt-3">
+              <label className="mb-1 block text-xs text-gray-500">Custom email address</label>
+              <div className="relative">
+                <IconMail size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="email"
+                  placeholder="other@example.com"
+                  value={customEmail}
+                  onChange={e => setCustomEmail(e.target.value)}
+                  className={INPUT + ' pl-9'}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Period */}
+          <div>
+            <label className={LABEL + ' mb-2'}>Summary Period</label>
+            <div className="flex flex-wrap gap-1.5">
+              {PERIOD_OPTIONS.map(p => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => setPeriod(p.id)}
+                  className="rounded-full px-3 py-1.5 text-xs font-semibold transition-all"
+                  style={period === p.id
+                    ? { backgroundColor: '#1f2937', color: 'white' }
+                    : { backgroundColor: 'white', color: '#6b7280', border: '1px solid #e5e7eb' }
+                  }
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+            {period === 'custom' && (
+              <div className="mt-3 flex gap-3">
+                <div className="flex-1">
+                  <label className="mb-1 block text-xs text-gray-500">From</label>
+                  <input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)} className={INPUT} />
+                </div>
+                <div className="flex-1">
+                  <label className="mb-1 block text-xs text-gray-500">To</label>
+                  <input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)} className={INPUT} />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Include */}
+          <div>
+            <label className={LABEL + ' mb-2'}>Include in Summary</label>
+            <div className="grid grid-cols-2 gap-2">
+              {INCLUDE_OPTIONS.map(o => {
+                const checked = includes.has(o.id)
+                return (
+                  <label key={o.id} className="flex cursor-pointer items-center gap-2.5 rounded-lg border border-gray-100 px-3 py-2.5 transition hover:bg-gray-50">
+                    <span
+                      className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border-2 transition-all ${
+                        checked ? 'border-[#6BA3D6] bg-[#6BA3D6]' : 'border-gray-300'
+                      }`}
+                      onClick={() => toggleInclude(o.id)}
+                    >
+                      {checked && <IconCheck size={10} style={{ color: 'white' }} />}
+                    </span>
+                    <span className="text-xs font-medium text-gray-700">{o.label}</span>
+                  </label>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Notes */}
+          <div>
+            <label className={LABEL}>Notes <span className="normal-case font-normal text-gray-400">(optional)</span></label>
+            <textarea
+              rows={3}
+              placeholder="Any additional message to include in the email…"
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+              className={INPUT + ' resize-none'}
+            />
+          </div>
+
+          {/* Subject preview */}
+          <div>
+            <label className={LABEL + ' mb-1'}>Email Subject Preview</label>
+            <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5">
+              <IconMail size={14} className="shrink-0 text-gray-400" />
+              <span className="text-sm font-medium text-gray-700">{subject}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between border-t border-gray-100 px-6 py-4">
+          <p className="text-xs text-gray-400">
+            {canSend
+              ? `Sending to ${selectedNames.length} recipient${selectedNames.length !== 1 ? 's' : ''}`
+              : 'Select at least one recipient'}
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleSend}
+              disabled={!canSend}
+              className="flex items-center gap-2 rounded-xl px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-40"
+              style={{ backgroundColor: ACCENT }}
+            >
+              <IconSend size={15} />
+              Send Summary
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Tab types ─────────────────────────────────────────────────────────────────
+
 type TabId = 'business' | 'personal'
 
 const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
@@ -693,7 +961,20 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
 ]
 
 export default function FinancesPage() {
-  const [tab, setTab] = useState<TabId>('business')
+  const [tab, setTab]             = useState<TabId>('business')
+  const [showSendModal, setShowSendModal] = useState(false)
+  const [toast, setToast]         = useState<string | null>(null)
+
+  function triggerToast(msg: string) {
+    setToast(msg)
+  }
+
+  function handleSend(names: string[]) {
+    setShowSendModal(false)
+    triggerToast(
+      `Summary sent to ${names.join(', ')} — email notification queued (requires Resend integration to deliver)`
+    )
+  }
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: BG }}>
@@ -705,19 +986,31 @@ export default function FinancesPage() {
             <h1 className="text-xl font-bold text-gray-900">Finances</h1>
             <p className="text-sm text-gray-500">Business and personal financial overview</p>
           </div>
-          <div className="flex items-center gap-1 rounded-xl border border-gray-200 bg-gray-50 p-1">
-            {TABS.map(t => (
+          <div className="flex items-center gap-3">
+            {tab === 'business' && (
               <button
-                key={t.id}
-                onClick={() => setTab(t.id)}
-                className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-all ${
-                  tab === t.id ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                }`}
+                onClick={() => setShowSendModal(true)}
+                className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+                style={{ backgroundColor: ACCENT }}
               >
-                {t.icon}
-                {t.label}
+                <IconSend size={15} />
+                Send Summary
               </button>
-            ))}
+            )}
+            <div className="flex items-center gap-1 rounded-xl border border-gray-200 bg-gray-50 p-1">
+              {TABS.map(t => (
+                <button
+                  key={t.id}
+                  onClick={() => setTab(t.id)}
+                  className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-all ${
+                    tab === t.id ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  {t.icon}
+                  {t.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -725,6 +1018,15 @@ export default function FinancesPage() {
       <div className="p-6">
         {tab === 'business' ? <BusinessTab /> : <PersonalTab />}
       </div>
+
+      {showSendModal && (
+        <SendSummaryModal
+          onClose={() => setShowSendModal(false)}
+          onSend={handleSend}
+        />
+      )}
+
+      {toast && <Toast message={toast} onClose={() => setToast(null)} />}
     </div>
   )
 }
