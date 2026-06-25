@@ -2,8 +2,9 @@ import type { NextAuthOptions } from 'next-auth'
 import CredentialsProvider from 'next-auth/providers/credentials'
 
 const USERS = [
-  { id: '1', name: 'Matt', email: 'matt@formula14.com.au', password: 'Formula14Matt!' },
-  { id: '2', name: 'Jade', email: 'jade@formula14.com.au', password: 'Formula14Jade!' },
+  { id: '1', name: 'Matt',   email: 'matt@formula14.com.au',   password: 'Formula14Matt!', role: 'admin'   },
+  { id: '2', name: 'Jade',   email: 'jade@formula14.com.au',   password: 'Formula14Jade!', role: 'admin'   },
+  { id: '3', name: 'Jordan', email: 'jordan@formula14.com.au', password: 'Athlete123!',     role: 'athlete' },
 ]
 
 // Use secure cookies whenever we're in production, regardless of NEXTAUTH_URL.
@@ -85,12 +86,14 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.id   = user.id
         token.name = user.name
+        token.role = user.role
       }
       return token
     },
     async session({ session, token }) {
       if (session.user) {
         session.user.name = token.name as string
+        session.user.role = token.role
       }
       return session
     },

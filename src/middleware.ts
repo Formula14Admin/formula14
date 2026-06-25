@@ -27,6 +27,14 @@ export default async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl)
   }
 
+  const role = token.role as string | undefined
+  const isAthleteRoute = pathname.startsWith('/athlete')
+
+  // Athletes attempting to access admin/hub routes → redirect to athlete dashboard
+  if (role === 'athlete' && !isAthleteRoute) {
+    return NextResponse.redirect(new URL('/athlete/dashboard', request.url))
+  }
+
   return NextResponse.next()
 }
 
