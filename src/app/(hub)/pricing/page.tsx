@@ -417,7 +417,7 @@ export default function PricingPage() {
   const [sessions, setSessions] = useState<Session[]>(INIT_SESSIONS)
   const [tab, setTab] = useState<'sessions' | 'pricing'>('sessions')
   const [expandedSession, setExpandedSession] = useState<string | null>(null)
-  const [sessionFilter, setSessionFilter] = useState<'all' | 'upcoming' | 'locked' | 'completed'>('all')
+  const [sessionFilter, setSessionFilter] = useState<'all' | 'upcoming' | 'locked' | 'completed'>('upcoming')
   const [addingTo, setAddingTo] = useState<string | null>(null)
   const [editingSession, setEditingSession] = useState<string | null>(null)
   const [editAttendance, setEditAttendance] = useState<Record<string, AttendanceStatus>>({})
@@ -719,7 +719,7 @@ export default function PricingPage() {
         <div>
           {/* Filter pills */}
           <div className="mb-4 flex gap-2">
-            {(['all', 'upcoming', 'locked', 'completed'] as const).map(f => (
+            {(['upcoming', 'locked', 'completed', 'all'] as const).map(f => (
               <button
                 key={f}
                 onClick={() => setSessionFilter(f)}
