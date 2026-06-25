@@ -42,6 +42,28 @@ const SPACES = [
 
 type SpaceId = typeof SPACES[number]['id']
 
+// ── Programme Catalogue type (mirrors pricing/page.tsx) ───────────────────────
+interface ProgramCatalogueItem {
+  id: string
+  name: string
+  category: 'development' | 'social'
+  pricePerSession: number
+  maxCapacity: number
+  enrolmentType: 'instant' | 'approval'
+  description: string
+  colourTag: string
+}
+
+const INIT_CATALOGUE_FALLBACK: ProgramCatalogueItem[] = [
+  { id:'cat-perf-lab',      name:'Performance Lab',       category:'development', pricePerSession:20, maxCapacity:15, enrolmentType:'approval', description:'', colourTag:'#6BA3D6' },
+  { id:'cat-dom-academy',   name:'Domestic Academy',      category:'development', pricePerSession:20, maxCapacity:15, enrolmentType:'approval', description:'', colourTag:'#A06BD6' },
+  { id:'cat-snipers',       name:'Snipers Club',          category:'development', pricePerSession:20, maxCapacity:15, enrolmentType:'approval', description:'', colourTag:'#D4A520' },
+  { id:'cat-shooters-lab',  name:'Shooters Lab',          category:'development', pricePerSession:20, maxCapacity:15, enrolmentType:'approval', description:'', colourTag:'#0EA5E9' },
+  { id:'cat-walking-bball', name:'Walking Basketball',    category:'social',      pricePerSession:15, maxCapacity:20, enrolmentType:'instant',  description:'', colourTag:'#6BAD6B' },
+  { id:'cat-midday-ladies', name:'Mid Day Ladies Comp',   category:'social',      pricePerSession:15, maxCapacity:20, enrolmentType:'instant',  description:'', colourTag:'#E57373' },
+  { id:'cat-adult-beginner',name:'Adult Beginner School', category:'social',      pricePerSession:15, maxCapacity:20, enrolmentType:'instant',  description:'', colourTag:'#4DB6AC' },
+]
+
 // ── Program groups ─────────────────────────────────────────────────────────────
 const PROGRAM_GROUPS: Record<string, string[]> = {
   'Development Programs': [
@@ -624,6 +646,14 @@ export default function BookingsPage() {
 
   const [joinLinkModal, setJoinLinkModal] = useState<{ code: string; sessionType: string; date: string } | null>(null)
 
+  // Programme Catalogue — read from localStorage (written by pricing/page.tsx)
+  const [catalogue, setCatalogue] = useState<ProgramCatalogueItem[]>(INIT_CATALOGUE_FALLBACK)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const raw = localStorage.getItem('f14_program_catalogue')
+    if (raw) { try { const p = JSON.parse(raw); if (p.length) setCatalogue(p) } catch {} }
+  }, [])
+
   const gridRef = useRef<HTMLDivElement>(null)
 
   // Tick NOW line every minute
@@ -1055,6 +1085,25 @@ export default function BookingsPage() {
       }))
     } catch {}
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Sync program schedules to localStorage so the athlete portal can read them
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const programBookings = bookings.filter(b => b.bookingType === 'program')
+    const schedules = programBookings.map(b => ({
+      id: b.id,
+      name: b.sessionType,
+      date: b.date,
+      startMins: b.startMins,
+      duration: b.duration,
+      capacity: b.capacity ?? 20,
+      enrolled: (b.enrolments ?? []).filter(e => e.status === 'approved' || e.status === 'paid').length,
+      enrolmentType: b.enrolmentType ?? 'instant',
+      pricePerSession: b.pricePerSession ?? 0,
+      termLength: b.termLength ?? 1,
+    }))
+    localStorage.setItem('f14_program_schedules', JSON.stringify(schedules))
+  }, [bookings])
 
   // ── Program enrolment actions ─────────────────────────────────────────────────
   function approveEnrolment(bookingId: string, enrolmentId: string) {
@@ -1737,6 +1786,7 @@ export default function BookingsPage() {
           onApproveEnrolment={approveEnrolment}
           onDeclineEnrolment={declineEnrolment}
           onMarkPaid={markEnrolmentPaid}
+          catalogue={catalogue}
         />
       )}
 
@@ -2378,7 +2428,7 @@ function SelectPicker({ value, onChange, options, accentColor = '#6BA3D6', getPa
 // ── Booking Modal ──────────────────────────────────────────────────────────────
 function BookingModal({
   modal, today, onClose, onSave, onDelete, onDeleteFrom, onSaveFrom, onEdit, onEditSeries, creditUsage,
-  onApproveEnrolment, onDeclineEnrolment, onMarkPaid,
+  onApproveEnrolment, onDeclineEnrolment, onMarkPaid, catalogue,
 }: {
   modal: NonNullable<Modal>
   today: string
@@ -2393,6 +2443,7 @@ function BookingModal({
   onApproveEnrolment?: (bookingId: string, enrolmentId: string) => void
   onDeclineEnrolment?: (bookingId: string, enrolmentId: string) => void
   onMarkPaid?: (bookingId: string, enrolmentId: string) => void
+  catalogue: ProgramCatalogueItem[]
 }) {
   const isView          = modal.kind === 'view'
   const editSeriesFuture = modal.kind === 'editSeries'
@@ -2852,26 +2903,57 @@ function BookingModal({
                 </>
               ) : bookingType === 'program' ? (
                 <>
-                  {/* Row 1: Program | Date */}
+                  {/* Programme selection card grid */}
+                  <div>
+                    <label className={LABEL}>Program</label>
+                    {(['development', 'social'] as const).map(cat => {
+                      const items = catalogue.filter(p => p.category === cat)
+                      if (!items.length) return null
+                      return (
+                        <div key={cat} className="mb-3">
+                          <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-gray-400">
+                            {cat === 'development' ? 'Development Programs' : 'Social Programs'}
+                          </p>
+                          <div className="grid grid-cols-2 gap-2">
+                            {items.map(prog => {
+                              const sel = sessionType === prog.name
+                              return (
+                                <button
+                                  key={prog.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setSessionType(prog.name)
+                                    setCapacity(prog.maxCapacity)
+                                    setEnrolmentType(prog.enrolmentType)
+                                    setPricePerSession(prog.pricePerSession)
+                                  }}
+                                  className={`flex items-start gap-2.5 rounded-xl border p-3 text-left transition ${sel ? 'border-[#D4A520] shadow-sm' : 'border-gray-200 hover:border-gray-300'}`}
+                                  style={sel ? { backgroundColor: '#fdf5e0' } : { backgroundColor: 'white' }}
+                                >
+                                  <span className="mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: prog.colourTag }} />
+                                  <div className="min-w-0">
+                                    <p className="text-xs font-semibold text-gray-900 leading-tight">{prog.name}</p>
+                                    <p className="text-[10px] text-gray-400 mt-0.5">${prog.pricePerSession}/session · max {prog.maxCapacity}</p>
+                                  </div>
+                                  {sel && <IconCheck size={12} className="ml-auto shrink-0 mt-0.5" style={{ color: '#D4A520' }} />}
+                                </button>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  {/* Row 1: Space | Date */}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className={LABEL}>Program</label>
+                      <label className={LABEL}>Space</label>
                       <SelectPicker
-                        value={sessionType}
-                        onChange={v => {
-                          setSessionType(v)
-                          if (PROGRAM_GROUPS['Development Programs'].includes(v)) setCapacity(15)
-                          else if (PROGRAM_GROUPS['Social Programs'].includes(v)) setCapacity(20)
-                        }}
+                        value={spaceId}
+                        onChange={v => setSpaceId(v as SpaceId)}
                         accentColor={accentColor}
-                        panelMaxHeight={260}
-                        options={[
-                          { value: '', label: 'Select A Program', muted: true },
-                          { value: '_dev', label: 'Development Programs', header: true },
-                          ...PROGRAM_GROUPS['Development Programs'].map(p => ({ value: p, label: p })),
-                          { value: '_soc', label: 'Social Programs', header: true },
-                          ...PROGRAM_GROUPS['Social Programs'].map(p => ({ value: p, label: p })),
-                        ]}
+                        options={SPACES.map(s => ({ value: s.id, label: s.label }))}
                       />
                     </div>
                     <div>

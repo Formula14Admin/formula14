@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import {
   IconChevronLeft,
   IconChevronRight,
@@ -149,6 +149,20 @@ interface PortalProgram {
   enrolmentType: 'instant' | 'approval'
   termLength: number
   termFee: number
+  description?: string
+  colourTag?: string
+}
+
+// Raw shapes from localStorage
+interface CatalogueEntry {
+  id: string; name: string; category: 'development' | 'social'
+  pricePerSession: number; maxCapacity: number; enrolmentType: 'instant' | 'approval'
+  description: string; colourTag: string
+}
+interface ScheduleEntry {
+  id: string; name: string; date: string; startMins: number; duration: number
+  capacity: number; enrolled: number; enrolmentType: 'instant' | 'approval'
+  pricePerSession: number; termLength: number
 }
 
 const PORTAL_PROGRAMS: PortalProgram[] = [
@@ -459,6 +473,42 @@ function getCoachesForDate(dateStr: string): CoachId[] {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
+function buildPortalPrograms(catalogue: CatalogueEntry[], schedules: ScheduleEntry[]): PortalProgram[] {
+  if (!schedules.length) return PORTAL_PROGRAMS
+  const result: PortalProgram[] = []
+  // Group schedules by program name, pick first occurrence for date info
+  const byName = new Map<string, ScheduleEntry>()
+  schedules.forEach(s => { if (!byName.has(s.name)) byName.set(s.name, s) })
+  byName.forEach((sch, name) => {
+    const cat = catalogue.find(c => c.name === name)
+    const dateObj = new Date(sch.date + 'T00:00:00')
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+    const category: ProgramCategory = (cat?.category === 'social') ? 'Social Program' : 'Development Program'
+    result.push({
+      id: sch.id,
+      name,
+      category,
+      coach: 'matt',
+      dayOfWeek: dayNames[dateObj.getDay()],
+      startMins: sch.startMins,
+      endMins: sch.startMins + sch.duration,
+      space: 'Primary Station',
+      costPerSession: sch.pricePerSession,
+      capacity: sch.capacity,
+      enrolled: sch.enrolled,
+      seriesStart: sch.date,
+      seriesEnd: sch.date,
+      repeat: 'Weekly',
+      enrolmentType: sch.enrolmentType,
+      termLength: sch.termLength,
+      termFee: sch.pricePerSession * sch.termLength,
+      description: cat?.description,
+      colourTag: cat?.colourTag,
+    })
+  })
+  return result
+}
+
 export default function PortalPage() {
   // Start on the week of 2026-06-23 (Monday after demo date)
   const [weekStart, setWeekStart] = useState<string>(getMondayOf('2026-06-23'))
@@ -472,6 +522,18 @@ export default function PortalPage() {
   const [pendingPrograms,    setPendingPrograms]    = useState<Set<string>>(new Set())
   const [enrolStep,          setEnrolStep]          = useState<'confirm' | 'payment' | null>(null)
   const [enrolModal,         setEnrolModal]         = useState<PortalProgram | null>(null)
+
+  // Live programme data from localStorage (written by pricing + bookings pages)
+  const [portalPrograms, setPortalPrograms] = useState<PortalProgram[]>(PORTAL_PROGRAMS)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      const cat: CatalogueEntry[] = JSON.parse(localStorage.getItem('f14_program_catalogue') ?? '[]')
+      const sch: ScheduleEntry[]  = JSON.parse(localStorage.getItem('f14_program_schedules') ?? '[]')
+      const built = buildPortalPrograms(cat, sch)
+      if (built.length) setPortalPrograms(built)
+    } catch {}
+  }, [])
   const [enrolName,          setEnrolName]          = useState('')
   const [shareModal,         setShareModal]         = useState<{ url: string; sessionType: string } | null>(null)
 
@@ -759,7 +821,7 @@ export default function PortalPage() {
         {portalTab === 'programs' && (
           <div className="space-y-6">
             {(['Development Program', 'Social Program'] as ProgramCategory[]).map(cat => {
-              const catPrograms = PORTAL_PROGRAMS.filter(p => p.category === cat)
+              const catPrograms = portalPrograms.filter(p => p.category === cat)
               return (
                 <div key={cat}>
                   <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-gray-500">{cat}s</h2>
@@ -805,6 +867,11 @@ export default function PortalPage() {
                               </span>
                             )}
                           </div>
+
+                          {/* Description */}
+                          {prog.description && (
+                            <p className="mb-3 text-xs leading-relaxed text-gray-500">{prog.description}</p>
+                          )}
 
                           {/* Details */}
                           <div className="space-y-1.5 text-sm">
@@ -916,7 +983,7 @@ export default function PortalPage() {
                 <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-gray-500">My Programs</h2>
                 <div className="rounded-2xl border border-green-200 bg-green-50 p-5">
                   <div className="space-y-2">
-                    {PORTAL_PROGRAMS.filter(p => enrolledPrograms.has(p.id)).map(prog => (
+                    {portalPrograms.filter(p => enrolledPrograms.has(p.id)).map(prog => (
                       <div key={prog.id} className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
                           <IconCheck size={14} strokeWidth={2.5} className="text-green-600" />

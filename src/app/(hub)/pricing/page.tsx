@@ -75,6 +75,31 @@ interface Session {
   lockedPricePerAthlete: number | null
 }
 
+// ─── Programme Catalogue ──────────────────────────────────────────────────────
+
+export interface ProgramCatalogueItem {
+  id: string
+  name: string
+  category: 'development' | 'social'
+  pricePerSession: number
+  maxCapacity: number
+  enrolmentType: 'instant' | 'approval'
+  description: string
+  colourTag: string
+}
+
+const CATALOGUE_COLOURS = ['#6BA3D6','#6BAD6B','#D4A520','#A06BD6','#E57373','#4DB6AC','#F97316','#0EA5E9']
+
+const INIT_CATALOGUE: ProgramCatalogueItem[] = [
+  { id:'cat-perf-lab',      name:'Performance Lab',       category:'development', pricePerSession:20, maxCapacity:15, enrolmentType:'approval', description:'Elite performance training focused on skill development, conditioning, and game IQ.', colourTag:'#6BA3D6' },
+  { id:'cat-dom-academy',   name:'Domestic Academy',      category:'development', pricePerSession:20, maxCapacity:15, enrolmentType:'approval', description:'Structured academy program for athletes chasing domestic competition pathways.', colourTag:'#A06BD6' },
+  { id:'cat-snipers',       name:'Snipers Club',          category:'development', pricePerSession:20, maxCapacity:15, enrolmentType:'approval', description:'Shooting-specific program to level up range and accuracy from all areas.', colourTag:'#D4A520' },
+  { id:'cat-shooters-lab',  name:'Shooters Lab',          category:'development', pricePerSession:20, maxCapacity:15, enrolmentType:'approval', description:'Volume shooting and form correction for developing consistent shooters.', colourTag:'#0EA5E9' },
+  { id:'cat-walking-bball', name:'Walking Basketball',    category:'social',      pricePerSession:15, maxCapacity:20, enrolmentType:'instant',  description:'Low-impact basketball for all ages and abilities. Great social activity for the community.', colourTag:'#6BAD6B' },
+  { id:'cat-midday-ladies', name:'Mid Day Ladies Comp',   category:'social',      pricePerSession:15, maxCapacity:20, enrolmentType:'instant',  description:'Midday competition for women of all abilities. Inclusive, welcoming, and fun.', colourTag:'#E57373' },
+  { id:'cat-adult-beginner',name:'Adult Beginner School', category:'social',      pricePerSession:15, maxCapacity:20, enrolmentType:'instant',  description:'Introduction to basketball for adults new to the game. Relaxed and welcoming environment.', colourTag:'#4DB6AC' },
+]
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const ACCENT = '#6BA3D6'
@@ -397,6 +422,19 @@ export default function PricingPage() {
   const [editingSession, setEditingSession] = useState<string | null>(null)
   const [editAttendance, setEditAttendance] = useState<Record<string, AttendanceStatus>>({})
 
+  // Programme Catalogue state
+  const [catalogue, setCatalogue] = useState<ProgramCatalogueItem[]>(() => {
+    try {
+      const raw = typeof window !== 'undefined' ? localStorage.getItem('f14_program_catalogue') : null
+      if (raw) { const parsed = JSON.parse(raw); if (parsed.length > 0) return parsed }
+    } catch {}
+    return INIT_CATALOGUE
+  })
+  const [progModalOpen, setProgModalOpen] = useState(false)
+  const [editingProg,   setEditingProg]   = useState<ProgramCatalogueItem | null>(null)
+  const [devCatOpen,    setDevCatOpen]    = useState(true)
+  const [socialCatOpen, setSocialCatOpen] = useState(true)
+
   const now = DEMO_NOW
 
   // Derive live computed state per session
@@ -595,6 +633,45 @@ export default function PricingPage() {
     setAddCardOpen(false)
     setEditTiers([])
     setEditingPricing(id)
+  }
+
+  // ── Programme Catalogue ──────────────────────────────────────────────────
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    localStorage.setItem('f14_program_catalogue', JSON.stringify(catalogue))
+  }, [catalogue])
+
+  function saveProg(item: ProgramCatalogueItem) {
+    setCatalogue(prev => {
+      const exists = prev.some(p => p.id === item.id)
+      return exists ? prev.map(p => p.id === item.id ? item : p) : [...prev, item]
+    })
+    setProgModalOpen(false)
+    setEditingProg(null)
+  }
+
+  function deleteProg(id: string) {
+    setCatalogue(prev => prev.filter(p => p.id !== id))
+  }
+
+  function openAddProg(category: 'development' | 'social') {
+    setEditingProg({
+      id: 'cat-' + uid(),
+      name: '',
+      category,
+      pricePerSession: category === 'development' ? 20 : 15,
+      maxCapacity: category === 'development' ? 15 : 20,
+      enrolmentType: category === 'development' ? 'approval' : 'instant',
+      description: '',
+      colourTag: CATALOGUE_COLOURS[0],
+    })
+    setProgModalOpen(true)
+  }
+
+  function openEditProg(item: ProgramCatalogueItem) {
+    setEditingProg({ ...item })
+    setProgModalOpen(true)
   }
 
   // ── Render ───────────────────────────────────────────────────────────────
@@ -1136,12 +1213,17 @@ export default function PricingPage() {
                   {pricingConfigs.map(config => {
                     const typeColor = configColor(config)
                     const isVolume   = config.sessionType === 'volume-shooting'
-                    const isPrograms = config.sessionType === 'development-programs' || config.sessionType === 'social-programs'
-                    const progList   = isPrograms ? PROGRAM_PRICING[config.sessionType as 'development-programs' | 'social-programs'] : null
+                    const isDevProg  = config.sessionType === 'development-programs'
+                    const isSocProg  = config.sessionType === 'social-programs'
                     // Use live editTiers for small-group while editing, otherwise saved tiers
                     const tiers = config.sessionType === 'small-group' && editingPricing === 'small-group'
                       ? editTiers
                       : config.tiers
+                    const catalogueSummary = isDevProg
+                      ? catalogue.filter(p => p.category === 'development')
+                      : isSocProg
+                      ? catalogue.filter(p => p.category === 'social')
+                      : null
                     return (
                       <tr key={config.sessionType} className="border-b border-gray-100 last:border-0">
                         <td className="sticky left-0 z-10 bg-white px-4 py-2.5 whitespace-nowrap">
@@ -1154,9 +1236,11 @@ export default function PricingPage() {
                           <td colSpan={20} className="px-3 py-2.5 text-xs text-gray-400 whitespace-nowrap">
                             Duration-based flat fee — 30 min $30 · 45 min $40 · 60 min $50
                           </td>
-                        ) : isPrograms && progList ? (
+                        ) : catalogueSummary ? (
                           <td colSpan={20} className="px-3 py-2.5 text-xs text-gray-400 whitespace-nowrap">
-                            {progList.map(p => `${p.name} $${p.price}`).join(' · ')} — max {progList[0].max} per session
+                            {catalogueSummary.length > 0
+                              ? catalogueSummary.map(p => `${p.name} $${p.pricePerSession}`).join(' · ') + ` — max ${catalogueSummary[0].maxCapacity} per session`
+                              : 'No programs configured — add via Programme Catalogue below'}
                           </td>
                         ) : (
                           Array.from({ length: 20 }, (_, i) => {
@@ -1188,11 +1272,11 @@ export default function PricingPage() {
 
           {/* Per-type pricing cards */}
           <div className="grid grid-cols-2 gap-4">
-            {pricingConfigs.map(config => {
+            {pricingConfigs.filter(c => c.sessionType !== 'development-programs' && c.sessionType !== 'social-programs').map(config => {
               const label = configLabel(config)
               const color = configColor(config)
               const isEditing = editingPricing === config.sessionType
-              const isSpecial = config.sessionType === 'volume-shooting' || config.sessionType === 'development-programs' || config.sessionType === 'social-programs'
+              const isSpecial = config.sessionType === 'volume-shooting'
 
               return (
                 <div key={config.sessionType}
@@ -1236,7 +1320,7 @@ export default function PricingPage() {
                   {isEditing ? (
                     isSpecial ? (
                       <p className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2.5 text-xs text-amber-700">
-                        This session type uses custom pricing logic (duration-based or program-based). Tier editing is not applicable.
+                        This session type uses duration-based pricing. Tier editing is not applicable.
                       </p>
                     ) : (
                       <div className="space-y-2">
@@ -1316,25 +1400,6 @@ export default function PricingPage() {
                           <tr><td colSpan={2} className="pt-2 text-xs text-gray-400">Flat booking fee — not per athlete</td></tr>
                         </tfoot>
                       </table>
-                    ) : (config.sessionType === 'development-programs' || config.sessionType === 'social-programs') ? (
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b border-gray-100">
-                            <th className="pb-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Program</th>
-                            <th className="pb-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Price</th>
-                            <th className="pb-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Max Athletes</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {PROGRAM_PRICING[config.sessionType as 'development-programs' | 'social-programs'].map(prog => (
-                            <tr key={prog.name} className="border-b border-gray-100">
-                              <td className="py-2 font-medium text-gray-900">{prog.name}</td>
-                              <td className="py-2 font-semibold text-gray-900">${prog.price} / each</td>
-                              <td className="py-2 text-gray-600">{prog.max}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
                     ) : (
                       <table className="w-full text-sm">
                         <thead>
@@ -1402,6 +1467,214 @@ export default function PricingPage() {
             </button>
           )}
 
+
+          {/* ── Programme Catalogue ─────────────────────────────────────────── */}
+          <div className="rounded-xl border border-gray-200 bg-white p-5">
+            <div className="mb-5 flex items-center justify-between gap-2">
+              <div>
+                <h2 className="flex items-center gap-2 text-base font-semibold text-gray-800">
+                  <IconUsers size={17} style={{ color: '#D4A520' }} /> Programme Catalogue
+                </h2>
+                <p className="mt-0.5 text-xs text-gray-400">Programs defined here are the source of truth for bookings and the athlete portal.</p>
+              </div>
+            </div>
+
+            {(['development', 'social'] as const).map(cat => {
+              const items = catalogue.filter(p => p.category === cat)
+              const isOpen = cat === 'development' ? devCatOpen : socialCatOpen
+              const toggle = cat === 'development' ? () => setDevCatOpen(v => !v) : () => setSocialCatOpen(v => !v)
+              const catLabel = cat === 'development' ? 'Development Programs' : 'Social Programs'
+              const catColor = cat === 'development' ? '#6BA3D6' : '#6BAD6B'
+              const catBg    = cat === 'development' ? '#eff6ff' : '#f0fdf4'
+
+              return (
+                <div key={cat} className="mb-4 last:mb-0 rounded-xl border border-gray-100 overflow-hidden">
+                  {/* Category header */}
+                  <div
+                    className="flex cursor-pointer items-center justify-between px-4 py-3"
+                    style={{ backgroundColor: catBg }}
+                    onClick={toggle}
+                  >
+                    <div className="flex items-center gap-2">
+                      {isOpen ? <IconChevronUp size={15} style={{ color: catColor }} /> : <IconChevronDown size={15} style={{ color: catColor }} />}
+                      <span className="text-sm font-bold" style={{ color: catColor }}>{catLabel}</span>
+                      <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ backgroundColor: catColor + '22', color: catColor }}>
+                        {items.length}
+                      </span>
+                    </div>
+                    <button
+                      onClick={e => { e.stopPropagation(); openAddProg(cat) }}
+                      className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition hover:opacity-90"
+                      style={{ backgroundColor: catColor }}
+                    >
+                      <IconPlus size={12} /> Add Program
+                    </button>
+                  </div>
+
+                  {/* Programme cards */}
+                  {isOpen && (
+                    <div className="divide-y divide-gray-100">
+                      {items.length === 0 && (
+                        <p className="px-4 py-6 text-center text-xs text-gray-400">No programs yet — click Add Program to create one.</p>
+                      )}
+                      {items.map(prog => (
+                        <div key={prog.id} className="flex items-start gap-4 px-4 py-4">
+                          <div className="mt-1 h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: prog.colourTag }} />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm font-semibold text-gray-900">{prog.name}</span>
+                              <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                                style={{ backgroundColor: prog.enrolmentType === 'approval' ? '#fef3c7' : '#dcfce7', color: prog.enrolmentType === 'approval' ? '#92400e' : '#15803d' }}>
+                                {prog.enrolmentType === 'approval' ? 'Approval Required' : 'Instant Enrolment'}
+                              </span>
+                            </div>
+                            <p className="mt-0.5 text-xs text-gray-500 leading-relaxed">{prog.description}</p>
+                            <div className="mt-1.5 flex items-center gap-4 text-xs text-gray-400">
+                              <span>${prog.pricePerSession}/session</span>
+                              <span>Max {prog.maxCapacity} athletes</span>
+                            </div>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-0.5">
+                            <button
+                              onClick={() => openEditProg(prog)}
+                              className="rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
+                              title="Edit"
+                            >
+                              <IconPencil size={13} />
+                            </button>
+                            <button
+                              onClick={() => deleteProg(prog.id)}
+                              className="rounded-lg p-1.5 text-gray-400 transition hover:bg-red-50 hover:text-red-500"
+                              title="Delete"
+                            >
+                              <IconTrash size={13} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Programme Form Modal */}
+          {progModalOpen && editingProg && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+              <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl">
+                <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+                  <h3 className="text-base font-bold text-gray-900">
+                    {catalogue.some(p => p.id === editingProg.id) ? 'Edit Program' : 'Add Program'}
+                  </h3>
+                  <button onClick={() => { setProgModalOpen(false); setEditingProg(null) }} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
+                    <IconX size={16} />
+                  </button>
+                </div>
+                <div className="space-y-4 px-6 py-5">
+                  <div>
+                    <label className={LABEL}>Program Name</label>
+                    <input
+                      className={INPUT}
+                      value={editingProg.name}
+                      onChange={e => setEditingProg(p => p && ({ ...p, name: e.target.value }))}
+                      placeholder="e.g. Performance Lab"
+                    />
+                  </div>
+                  <div>
+                    <label className={LABEL}>Description</label>
+                    <textarea
+                      className={INPUT + ' resize-none'}
+                      rows={2}
+                      value={editingProg.description}
+                      onChange={e => setEditingProg(p => p && ({ ...p, description: e.target.value }))}
+                      placeholder="Brief description shown in athlete portal…"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className={LABEL}>Price per Session</label>
+                      <div className="flex items-center gap-1">
+                        <span className="text-sm text-gray-400">$</span>
+                        <input
+                          type="number" min={0} step={1}
+                          className={INPUT}
+                          value={editingProg.pricePerSession}
+                          onChange={e => setEditingProg(p => p && ({ ...p, pricePerSession: parseFloat(e.target.value) || 0 }))}
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className={LABEL}>Max Capacity</label>
+                      <input
+                        type="number" min={1}
+                        className={INPUT}
+                        value={editingProg.maxCapacity}
+                        onChange={e => setEditingProg(p => p && ({ ...p, maxCapacity: parseInt(e.target.value) || 1 }))}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className={LABEL}>Enrolment Type</label>
+                    <div className="flex gap-2">
+                      {(['instant', 'approval'] as const).map(et => (
+                        <button
+                          key={et}
+                          onClick={() => setEditingProg(p => p && ({ ...p, enrolmentType: et }))}
+                          className={`flex-1 rounded-lg border py-2 text-xs font-semibold transition ${editingProg.enrolmentType === et ? 'border-[#6BA3D6] bg-[#6BA3D6] text-white' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'}`}
+                        >
+                          {et === 'instant' ? 'Instant Enrolment' : 'Approval Required'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className={LABEL}>Colour Tag</label>
+                    <div className="flex flex-wrap gap-2 mt-1">
+                      {CATALOGUE_COLOURS.map(c => (
+                        <button
+                          key={c}
+                          onClick={() => setEditingProg(p => p && ({ ...p, colourTag: c }))}
+                          className="h-7 w-7 rounded-full transition-transform hover:scale-110"
+                          style={{ backgroundColor: c, outline: editingProg.colourTag === c ? `3px solid ${c}` : 'none', outlineOffset: 2 }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className={LABEL}>Category</label>
+                    <div className="flex gap-2">
+                      {(['development', 'social'] as const).map(cat => (
+                        <button
+                          key={cat}
+                          onClick={() => setEditingProg(p => p && ({ ...p, category: cat }))}
+                          className={`flex-1 rounded-lg border py-2 text-xs font-semibold capitalize transition ${editingProg.category === cat ? 'border-[#6BA3D6] bg-[#6BA3D6] text-white' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'}`}
+                        >
+                          {cat}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center justify-end gap-3 border-t border-gray-100 px-6 py-4">
+                  <button
+                    onClick={() => { setProgModalOpen(false); setEditingProg(null) }}
+                    className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => editingProg.name.trim() && saveProg(editingProg)}
+                    disabled={!editingProg.name.trim()}
+                    className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-40"
+                    style={{ backgroundColor: ACCENT }}
+                  >
+                    <IconCheck size={14} /> Save Program
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Recent completed sessions */}
           <div className="rounded-xl border border-gray-200 bg-white p-5">
