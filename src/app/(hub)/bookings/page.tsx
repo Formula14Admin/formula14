@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import {
   IconChevronLeft,
@@ -1339,7 +1339,7 @@ export default function BookingsPage() {
   const hours = Array.from({ length: END_H - START_H }, (_, i) => START_H + i)
 
   const TABS: { id: 'calendar' | 'availability' | 'join-requests'; label: string; badge?: number }[] = [
-    { id: 'calendar',      label: 'Calendar' },
+    { id: 'calendar',      label: 'Bookings' },
     { id: 'availability',  label: 'Availability' },
     { id: 'join-requests', label: 'Join Requests', badge: totalPendingCount },
   ]
@@ -1394,6 +1394,7 @@ export default function BookingsPage() {
           resetFovForm={resetFovForm} startEditFacilityOverride={startEditFacilityOverride}
           addFacilityOverride={addFacilityOverride} deleteFacilityOverride={deleteFacilityOverride}
           addFacilityOverrideDirect={addFacilityOverrideDirect} addCoachOverrideDirect={addCoachOverrideDirect}
+          bookings={bookings}
         />
       )}
 
@@ -4177,7 +4178,7 @@ function AvailabilityTab({
   fovDate, setFovDate, fovType, setFovType, fovStart, setFovStart, fovEnd, setFovEnd,
   fovNote, setFovNote, fovError, editingFovId,
   resetFovForm, startEditFacilityOverride, addFacilityOverride, deleteFacilityOverride,
-  addFacilityOverrideDirect, addCoachOverrideDirect,
+  addFacilityOverrideDirect, addCoachOverrideDirect, bookings,
 }: {
   coaches: Coach[]
   addCoach: (name: string) => void
@@ -4219,8 +4220,9 @@ function AvailabilityTab({
   deleteFacilityOverride: (id: string) => void
   addFacilityOverrideDirect: (date: string, type: 'block' | 'extra', note: string, startMins?: number, endMins?: number) => void
   addCoachOverrideDirect: (coachId: string, date: string, type: 'block' | 'extra', note: string, startMins?: number, endMins?: number) => void
+  bookings: Booking[]
 }) {
-  const [avSubTab, setAvSubTab] = useState<'overview' | 'facility' | 'coach'>('overview')
+  const [avSubTab, setAvSubTab] = useState<'calendar' | 'facility' | 'coach'>('calendar')
   const [addCoachOpen, setAddCoachOpen] = useState(false)
   const [newCoachName, setNewCoachName] = useState('')
 
@@ -4256,7 +4258,7 @@ function AvailabilityTab({
     <div className="flex flex-1 min-h-0 flex-col overflow-hidden bg-[#f4f6f9]">
       {/* Sub-tab bar */}
       <div className="flex shrink-0 items-center gap-1 border-b border-gray-200 bg-white px-6">
-        {([{ id: 'overview', label: 'Overview' }, { id: 'facility', label: 'Facility' }, { id: 'coach', label: 'Coach' }] as const).map(t => (
+        {([{ id: 'calendar', label: 'Calendar' }, { id: 'facility', label: 'Facility' }, { id: 'coach', label: 'Coach' }] as const).map(t => (
           <button
             key={t.id}
             onClick={() => setAvSubTab(t.id)}
@@ -4269,332 +4271,21 @@ function AvailabilityTab({
         ))}
       </div>
 
-      <div className={avSubTab === 'overview' ? 'flex flex-col min-h-0 flex-1 overflow-hidden' : 'flex-1 overflow-y-auto min-h-0'}>
+      <div className={avSubTab === 'calendar' ? 'flex flex-col min-h-0 flex-1 overflow-hidden' : 'flex-1 overflow-y-auto min-h-0'}>
 
-        {/* ── OVERVIEW SUB-TAB ── */}
-        {avSubTab === 'overview' && (() => {
-          const VIC_PH: { date: string; name: string }[] = [
-            { date: '2026-01-01', name: "New Year's Day" },
-            { date: '2026-01-26', name: "Australia Day" },
-            { date: '2026-03-09', name: "Labour Day" },
-            { date: '2026-04-03', name: "Good Friday" },
-            { date: '2026-04-04', name: "Easter Saturday" },
-            { date: '2026-04-05', name: "Easter Sunday" },
-            { date: '2026-04-06', name: "Easter Monday" },
-            { date: '2026-04-27', name: "ANZAC Day (observed)" },
-            { date: '2026-06-08', name: "King's Birthday" },
-            { date: '2026-11-03', name: "Melbourne Cup" },
-            { date: '2026-12-25', name: "Christmas Day" },
-            { date: '2026-12-26', name: "Boxing Day" },
-            { date: '2026-12-28', name: "Boxing Day (sub.)" },
-          ]
-
-          const _td = new Date()
-          const todayIso = [_td.getFullYear(), String(_td.getMonth()+1).padStart(2,'0'), String(_td.getDate()).padStart(2,'0')].join('-')
-
-          const FAC_COL = '#D97706'
-          const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December']
-
-          const firstDay = new Date(ovYear, ovMonth, 1)
-          const daysInMonth = new Date(ovYear, ovMonth + 1, 0).getDate()
-          const firstDow = jsDayToOurs(firstDay.getDay())
-          const totalCells = Math.ceil((firstDow + daysInMonth) / 7) * 7
-
-          const monthPubHols = VIC_PH.filter(h => {
-            const d = new Date(h.date + 'T12:00:00')
-            return d.getFullYear() === ovYear && d.getMonth() === ovMonth
-          })
-
-          function fmtIso(d: Date) {
-            return [d.getFullYear(), String(d.getMonth()+1).padStart(2,'0'), String(d.getDate()).padStart(2,'0')].join('-')
-          }
-
-          function isDayOpen(iso: string): boolean {
-            const dow = jsDayToOurs(new Date(iso + 'T12:00:00').getDay()) as DayOfWeek
-            const day = facilitySchedule[dow]
-            if (!day.available) return false
-            const fullBlock = facilityOverrides.find(o => o.date === iso && o.type === 'block' && o.startMins == null)
-            return !fullBlock
-          }
-
-          function submitException() {
-            const allIds = ['facility', ...coaches.map(c => c.id)]
-            const targets = exWho.includes('all') ? allIds : exWho
-            const dates: string[] = []
-            if (exDateRange && exDateEnd && exDateEnd >= exDate) {
-              const cur = new Date(exDate + 'T12:00:00')
-              const last = new Date(exDateEnd + 'T12:00:00')
-              while (cur <= last) {
-                dates.push(fmtIso(cur))
-                cur.setDate(cur.getDate() + 1)
-              }
-            } else if (exDate) {
-              dates.push(exDate)
-            }
-            for (const iso of dates) {
-              for (const t of targets) {
-                const s = exAllDay ? undefined : exStart
-                const e = exAllDay ? undefined : exEnd
-                if (t === 'facility') addFacilityOverrideDirect(iso, exType, exReason.trim(), s, e)
-                else addCoachOverrideDirect(t, iso, exType, exReason.trim(), s, e)
-              }
-            }
-            setExOpen(false); setExWho([]); setExType('block')
-            setExDate(''); setExDateEnd(''); setExDateRange(false)
-            setExAllDay(true); setExStart(540); setExEnd(1020); setExReason('')
-          }
-
-          function openEx(iso: string, who: string[]) {
-            setExDate(iso); setExDateEnd(iso); setExWho(who)
-            setExType('block'); setExAllDay(true); setExReason(''); setExDateRange(false)
-            setExOpen(true)
-          }
-
-          return (
-            <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
-
-              {/* ── Month nav ── */}
-              <div className="flex shrink-0 items-center gap-2 border-b border-gray-200 bg-white px-4 py-2.5">
-                <button type="button"
-                  onClick={() => { if (ovMonth === 0) { setOvMonth(11); setOvYear(y => y - 1) } else setOvMonth(m => m - 1) }}
-                  className="rounded-lg p-1.5 text-gray-500 transition hover:bg-gray-100">
-                  <IconChevronLeft size={16} />
-                </button>
-                <span className="min-w-[180px] text-center text-sm font-bold text-gray-800">
-                  {MONTH_NAMES[ovMonth]} {ovYear}
-                </span>
-                <button type="button"
-                  onClick={() => { if (ovMonth === 11) { setOvMonth(0); setOvYear(y => y + 1) } else setOvMonth(m => m + 1) }}
-                  className="rounded-lg p-1.5 text-gray-500 transition hover:bg-gray-100">
-                  <IconChevronRight size={16} />
-                </button>
-                <button type="button"
-                  onClick={() => { setOvYear(_td.getFullYear()); setOvMonth(_td.getMonth()) }}
-                  className="ml-1 rounded-lg border border-gray-200 px-3 py-1 text-xs font-semibold text-gray-600 transition hover:bg-gray-100">
-                  Today
-                </button>
-                <button type="button"
-                  onClick={() => openEx(todayIso, [])}
-                  className="ml-auto flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition hover:opacity-90"
-                  style={{ backgroundColor: '#6BA3D6' }}>
-                  <IconPlus size={13} /> Add Exception
-                </button>
-              </div>
-
-              {/* ── Calendar grid ── */}
-              <div className="flex-1 overflow-y-auto p-4">
-                {/* Day-of-week headers */}
-                <div className="mb-2 grid grid-cols-7">
-                  {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => (
-                    <div key={d} className="py-1.5 text-center text-xs font-semibold uppercase tracking-wide text-gray-400">{d}</div>
-                  ))}
-                </div>
-                {/* Day cells */}
-                <div className="grid grid-cols-7 gap-1.5">
-                  {Array.from({ length: totalCells }, (_, idx) => {
-                    const cellDay = idx - firstDow + 1
-                    const inMonth = cellDay >= 1 && cellDay <= daysInMonth
-                    if (!inMonth) {
-                      return <div key={idx} className="rounded-xl" style={{ minHeight: 72 }} />
-                    }
-                    const d = new Date(ovYear, ovMonth, cellDay)
-                    const iso = fmtIso(d)
-                    const pubHol = VIC_PH.find(h => h.date === iso) ?? null
-                    const open = isDayOpen(iso)
-                    const isToday = iso === todayIso
-                    return (
-                      <div
-                        key={iso}
-                        onClick={() => openEx(iso, ['facility'])}
-                        className="cursor-pointer rounded-xl p-2.5 transition hover:brightness-95"
-                        style={{
-                          minHeight: 72,
-                          backgroundColor: open ? '#dbeafe' : '#fee2e2',
-                          outline: isToday ? '2px solid #6BA3D6' : 'none',
-                          outlineOffset: '-2px',
-                        }}
-                      >
-                        <div className="flex items-start justify-between gap-1">
-                          <span
-                            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold"
-                            style={{
-                              backgroundColor: isToday ? '#6BA3D6' : 'transparent',
-                              color: isToday ? 'white' : open ? '#1d4ed8' : '#dc2626',
-                            }}
-                          >
-                            {cellDay}
-                          </span>
-                          <span className={`mt-0.5 text-[9px] font-bold uppercase tracking-wide ${open ? 'text-blue-600' : 'text-red-500'}`}>
-                            {open ? 'Open' : 'Closed'}
-                          </span>
-                        </div>
-                        {pubHol && (
-                          <p className="mt-1 truncate text-[10px] font-medium text-red-600">{pubHol.name}</p>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-
-              {/* ── Legend ── */}
-              <div className="flex shrink-0 flex-wrap items-center gap-4 border-t border-gray-200 bg-white px-4 py-2.5">
-                <div className="flex items-center gap-1.5">
-                  <span className="h-3 w-3 rounded-sm" style={{ backgroundColor: '#dbeafe' }} />
-                  <span className="text-xs text-gray-500">Open</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="h-3 w-3 rounded-sm" style={{ backgroundColor: '#fee2e2' }} />
-                  <span className="text-xs text-gray-500">Closed</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="inline-flex h-4 w-4 items-center justify-center rounded-full text-[8px] font-bold text-white" style={{ backgroundColor: '#6BA3D6' }}>1</span>
-                  <span className="text-xs text-gray-500">Today</span>
-                </div>
-                <span className="ml-auto text-[10px] text-gray-400">Click any day to add an exception</span>
-              </div>
-
-              {/* ── Exception modal ── */}
-              {exOpen && typeof document !== 'undefined' && createPortal(
-                <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 p-4">
-                  <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
-                    <div className="mb-5 flex items-center justify-between">
-                      <h2 className="text-base font-bold text-gray-800">Availability Exception</h2>
-                      <button type="button" onClick={() => setExOpen(false)}
-                        className="rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100">
-                        <IconX size={16} />
-                      </button>
-                    </div>
-                    <div className="space-y-4">
-                      <div>
-                        <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-400">Who</label>
-                        <div className="flex flex-wrap gap-2">
-                          {[
-                            { id: 'all', label: 'All', color: '#6b7280' },
-                            { id: 'facility', label: 'Facility', color: FAC_COL },
-                            ...coaches.map(c => ({ id: c.id, label: c.name, color: c.color })),
-                          ].map(e => {
-                            const sel = exWho.includes(e.id)
-                            return (
-                              <button key={e.id} type="button"
-                                onClick={() => {
-                                  if (e.id === 'all') {
-                                    setExWho(exWho.includes('all') ? [] : ['all'])
-                                  } else {
-                                    setExWho(prev => {
-                                      const next = prev.filter(x => x !== 'all')
-                                      return next.includes(e.id) ? next.filter(x => x !== e.id) : [...next, e.id]
-                                    })
-                                  }
-                                }}
-                                className="flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition"
-                                style={{
-                                  backgroundColor: sel ? e.color + '20' : 'transparent',
-                                  borderColor: sel ? e.color : '#e5e7eb',
-                                  color: sel ? e.color : '#9ca3af',
-                                }}>
-                                {sel && <IconCheck size={10} />}
-                                {e.label}
-                              </button>
-                            )
-                          })}
-                        </div>
-                      </div>
-                      <div>
-                        <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-400">Type</label>
-                        <SelectPicker
-                          value={exType}
-                          onChange={v => setExType(v as 'block' | 'extra')}
-                          options={[
-                            { value: 'block', label: 'Block (unavailable)' },
-                            { value: 'extra', label: 'Add extra availability' },
-                          ]}
-                        />
-                      </div>
-                      <div>
-                        <div className="mb-1.5 flex items-center justify-between">
-                          <label className="text-xs font-semibold uppercase tracking-wide text-gray-400">Date</label>
-                          <button type="button" onClick={() => setExDateRange(v => !v)}
-                            className="text-[10px] font-semibold text-[#6BA3D6] hover:underline">
-                            {exDateRange ? 'Single date' : 'Date range'}
-                          </button>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div className="flex-1"><DatePicker value={exDate} onChange={setExDate} accentColor="#6BA3D6" /></div>
-                          {exDateRange && (
-                            <>
-                              <span className="shrink-0 text-xs text-gray-400">to</span>
-                              <div className="flex-1"><DatePicker value={exDateEnd} onChange={setExDateEnd} accentColor="#6BA3D6" /></div>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="mb-1.5 flex items-center justify-between">
-                          <label className="text-xs font-semibold uppercase tracking-wide text-gray-400">Time</label>
-                          <label className="flex cursor-pointer items-center gap-1.5 text-[10px] font-semibold text-gray-500">
-                            <input type="checkbox" checked={exAllDay} onChange={e => setExAllDay(e.target.checked)}
-                              className="h-3 w-3 rounded accent-[#6BA3D6]" />
-                            All day
-                          </label>
-                        </div>
-                        {!exAllDay && (
-                          <div className="flex items-center gap-2">
-                            <div className="flex-1"><AvTimeSelect value={exStart} onChange={setExStart} /></div>
-                            <span className="shrink-0 text-xs text-gray-400">–</span>
-                            <div className="flex-1"><AvTimeSelect value={exEnd} onChange={setExEnd} minMins={exStart} /></div>
-                          </div>
-                        )}
-                      </div>
-                      <div>
-                        <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-400">Reason (optional)</label>
-                        <input type="text" value={exReason} onChange={e => setExReason(e.target.value)}
-                          placeholder={exType === 'block' ? 'e.g. Public holiday' : 'e.g. Special training day'}
-                          className="h-10 w-full rounded-lg border border-gray-200 px-3 text-sm text-gray-800 outline-none transition focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/40" />
-                      </div>
-                      {monthPubHols.length > 0 && (
-                        <div className="rounded-xl border border-red-100 bg-red-50 p-3">
-                          <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-red-500">Victoria public holidays this month</p>
-                          <div className="space-y-1.5">
-                            {monthPubHols.map(ph => (
-                              <div key={ph.date} className="flex items-center justify-between gap-2">
-                                <span className="text-xs text-red-700">
-                                  {ph.name} — {new Date(ph.date + 'T12:00:00').toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })}
-                                </span>
-                                <button type="button"
-                                  onClick={() => {
-                                    setExDate(ph.date); setExDateEnd(ph.date); setExDateRange(false)
-                                    setExType('block'); setExAllDay(true); setExReason(ph.name); setExWho(['all'])
-                                  }}
-                                  className="shrink-0 rounded-md border border-red-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-red-600 transition hover:bg-red-100">
-                                  Apply
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                    <div className="mt-5 flex gap-2">
-                      <button type="button" onClick={() => setExOpen(false)}
-                        className="flex-1 rounded-lg border border-gray-300 py-2.5 text-sm font-semibold text-gray-600 transition hover:bg-gray-50">
-                        Cancel
-                      </button>
-                      <button type="button" onClick={submitException}
-                        disabled={!exDate || exWho.length === 0}
-                        className="flex-1 rounded-lg py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-40"
-                        style={{ backgroundColor: exType === 'block' ? '#ef4444' : '#059669' }}>
-                        Save Exception
-                      </button>
-                    </div>
-                  </div>
-                </div>,
-                document.body
-              )}
-              {/* end overview */}
-            </div>
-          )
-        })()}
+        {/* ── CALENDAR SUB-TAB ── */}
+        {avSubTab === 'calendar' && (
+          <AvailabilityCalendar
+            coaches={coaches}
+            coachSchedules={coachSchedules}
+            dateOverrides={dateOverrides}
+            facilitySchedule={facilitySchedule}
+            facilityOverrides={facilityOverrides}
+            bookings={bookings}
+            addFacilityOverrideDirect={addFacilityOverrideDirect}
+            addCoachOverrideDirect={addCoachOverrideDirect}
+          />
+        )}
 
         {/* ── FACILITY SUB-TAB ── */}
         {avSubTab === 'facility' && (
@@ -5298,6 +4989,564 @@ function JoinRequestsTab({
           </>
         )}
       </div>
+    </div>
+  )
+}
+
+// ── Availability Calendar (Apple Calendar-style) ──────────────────────────────
+function AvailabilityCalendar({
+  coaches, coachSchedules, dateOverrides, facilitySchedule, facilityOverrides, bookings,
+  addFacilityOverrideDirect, addCoachOverrideDirect,
+}: {
+  coaches: Coach[]
+  coachSchedules: Record<string, CoachSchedule>
+  dateOverrides: DateOverride[]
+  facilitySchedule: FacilitySchedule
+  facilityOverrides: FacilityDateOverride[]
+  bookings: Booking[]
+  addFacilityOverrideDirect: (date: string, type: 'block' | 'extra', note: string, s?: number, e?: number) => void
+  addCoachOverrideDirect: (coachId: string, date: string, type: 'block' | 'extra', note: string, s?: number, e?: number) => void
+}) {
+  const HOUR_H   = 60
+  const CAL_H    = 6
+  const CAL_E    = 22
+  const HOURS    = CAL_E - CAL_H
+  const TOTAL_H  = HOURS * HOUR_H
+  const TIME_W   = 56
+
+  const TODAY    = new Date()
+  const todayIso = isoOf(TODAY)
+
+  const [calView, setCalView] = useState<'day' | 'week' | 'month' | 'year'>('month')
+  const [anchor,  setAnchor]  = useState<Date>(() => new Date())
+  const [nowMin,  setNowMin]  = useState(() => TODAY.getHours() * 60 + TODAY.getMinutes())
+
+  // Exception modal
+  const [exOpen,   setExOpen]   = useState(false)
+  const [exDate,   setExDate]   = useState('')
+  const [exWho,    setExWho]    = useState<string[]>([])
+  const [exType,   setExType]   = useState<'block' | 'extra'>('block')
+  const [exAllDay, setExAllDay] = useState(true)
+  const [exStart,  setExStart]  = useState(540)
+  const [exEnd,    setExEnd]    = useState(1020)
+  const [exReason, setExReason] = useState('')
+
+  useEffect(() => {
+    const id = setInterval(() => setNowMin(new Date().getHours() * 60 + new Date().getMinutes()), 60_000)
+    return () => clearInterval(id)
+  }, [])
+
+  // ── Pure helpers ─────────────────────────────────────────────────────────────
+  function isoOf(d: Date): string {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  }
+  function minsToY(m: number): number { return (m - CAL_H * 60) / 60 * HOUR_H }
+  function weekMon(d: Date): Date { const r = new Date(d); r.setDate(d.getDate() - (d.getDay() + 6) % 7); return r }
+  function addD(d: Date, n: number): Date { const r = new Date(d); r.setDate(r.getDate() + n); return r }
+  function hrLabel(h: number): string {
+    if (h === 0 || h === 24) return '12am'
+    if (h === 12) return '12pm'
+    return h < 12 ? `${h}am` : `${h - 12}pm`
+  }
+
+  const VIC_PH: { date: string; name: string }[] = [
+    { date: '2026-01-01', name: "New Year's Day" }, { date: '2026-01-26', name: "Australia Day" },
+    { date: '2026-03-09', name: "Labour Day" },     { date: '2026-04-03', name: "Good Friday" },
+    { date: '2026-04-04', name: "Easter Saturday" },{ date: '2026-04-05', name: "Easter Sunday" },
+    { date: '2026-04-06', name: "Easter Monday" },  { date: '2026-04-27', name: "ANZAC Day (observed)" },
+    { date: '2026-06-08', name: "King's Birthday" },{ date: '2026-11-03', name: "Melbourne Cup" },
+    { date: '2026-12-25', name: "Christmas Day" },  { date: '2026-12-26', name: "Boxing Day" },
+    { date: '2026-12-28', name: "Boxing Day (sub.)" },
+  ]
+  function pubHol(iso: string): string | null { return VIC_PH.find(h => h.date === iso)?.name ?? null }
+
+  function coachWins(coachId: string, d: Date): Array<{ s: number; e: number; extra: boolean }> {
+    const iso = isoOf(d)
+    const dow = jsDayToOurs(d.getDay()) as DayOfWeek
+    const daySch = coachSchedules[coachId]?.days[dow]
+    if (dateOverrides.some(o => o.coachId === coachId && o.date === iso && o.type === 'block' && !o.startMins)) return []
+    const result: Array<{ s: number; e: number; extra: boolean }> = []
+    if (daySch?.available) daySch.windows.forEach(w => result.push({ s: w.startMins, e: w.endMins, extra: false }))
+    dateOverrides.filter(o => o.coachId === coachId && o.date === iso && o.type === 'extra' && o.startMins != null)
+      .forEach(o => result.push({ s: o.startMins!, e: o.endMins!, extra: true }))
+    return result
+  }
+
+  function bksForDate(iso: string): Booking[] { return bookings.filter(b => b.date === iso && b.bookingType !== 'unavailable') }
+
+  function spCol(spaceId: string): { c: string; l: string } {
+    const s = SPACES.find(x => x.id === spaceId)
+    return s ? { c: s.color, l: s.light } : { c: '#6b7280', l: '#f3f4f6' }
+  }
+
+  // ── Navigation ───────────────────────────────────────────────────────────────
+  function nav(dir: 1 | -1) {
+    setAnchor(d => {
+      const n = new Date(d)
+      if (calView === 'day')   n.setDate(n.getDate() + dir)
+      else if (calView === 'week')  n.setDate(n.getDate() + dir * 7)
+      else if (calView === 'month') n.setMonth(n.getMonth() + dir)
+      else n.setFullYear(n.getFullYear() + dir)
+      return n
+    })
+  }
+
+  const navTitle = useMemo(() => {
+    if (calView === 'day')
+      return anchor.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+    if (calView === 'week') {
+      const mon = weekMon(anchor)
+      const sun = addD(mon, 6)
+      const mStr = mon.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
+      const sStr = sun.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })
+      return `${mStr} – ${sStr}`
+    }
+    if (calView === 'month')
+      return anchor.toLocaleDateString('en-AU', { month: 'long', year: 'numeric' })
+    return String(anchor.getFullYear())
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [calView, anchor])
+
+  // ── Exception modal ──────────────────────────────────────────────────────────
+  const FAC_COL = '#D97706'
+
+  function openEx(iso: string, who: string[]) {
+    setExDate(iso); setExWho(who); setExType('block'); setExAllDay(true); setExReason(''); setExOpen(true)
+  }
+
+  function submitEx() {
+    if (!exDate || !exWho.length) return
+    const allIds = ['facility', ...coaches.map(c => c.id)]
+    const targets = exWho.includes('all') ? allIds : exWho
+    for (const t of targets) {
+      const s = exAllDay ? undefined : exStart
+      const e = exAllDay ? undefined : exEnd
+      if (t === 'facility') addFacilityOverrideDirect(exDate, exType, exReason.trim(), s, e)
+      else addCoachOverrideDirect(t, exDate, exType, exReason.trim(), s, e)
+    }
+    setExOpen(false); setExWho([]); setExType('block'); setExDate(''); setExAllDay(true); setExReason('')
+  }
+
+  // ── Timeline column ───────────────────────────────────────────────────────────
+  function DayCol({ d }: { d: Date }) {
+    const iso     = isoOf(d)
+    const isToday = iso === todayIso
+    const dayBks  = bksForDate(iso)
+
+    return (
+      <div className="relative flex-1 border-l border-gray-100 min-w-0" style={{ height: TOTAL_H }}>
+        {isToday && <div className="pointer-events-none absolute inset-0 bg-blue-50/25" />}
+        {Array.from({ length: HOURS + 1 }, (_, i) => (
+          <div key={i} className="absolute left-0 right-0 border-t border-gray-100" style={{ top: i * HOUR_H }} />
+        ))}
+        {/* half-hour ticks */}
+        {Array.from({ length: HOURS }, (_, i) => (
+          <div key={`h${i}`} className="absolute left-0 right-0 border-t border-gray-50" style={{ top: i * HOUR_H + HOUR_H / 2 }} />
+        ))}
+        {/* Coach availability blocks */}
+        {coaches.map(coach =>
+          coachWins(coach.id, d).map((w, wi) => {
+            const top = Math.max(0, minsToY(w.s))
+            const ht  = Math.min(TOTAL_H - top, minsToY(w.e) - top)
+            if (ht <= 0) return null
+            return (
+              <div key={`${coach.id}-${wi}`} className="pointer-events-none absolute left-0 right-0"
+                style={{ top, height: ht, backgroundColor: coach.color + (w.extra ? '30' : '1a'), borderLeft: `3px solid ${coach.color}55` }} />
+            )
+          })
+        )}
+        {/* Booking events — simple stagger for overlaps */}
+        {dayBks.map((b, bi) => {
+          const top = Math.max(0, minsToY(b.startMins))
+          const ht  = Math.max(18, Math.min(TOTAL_H - top, b.duration / 60 * HOUR_H) - 2)
+          const { c, l } = spCol(b.spaceId)
+          const offset = bi % 3
+          return (
+            <div key={b.id}
+              className="absolute overflow-hidden rounded-md cursor-pointer transition hover:brightness-95 shadow-sm"
+              style={{ top: top + 1, left: 4 + offset * 4, right: 4 - offset * 2, height: ht, backgroundColor: l, borderLeft: `3px solid ${c}`, zIndex: 10 + bi }}
+            >
+              <p className="truncate px-1.5 pt-0.5 text-[10px] font-bold leading-tight" style={{ color: c }}>{b.sessionType}</p>
+              {ht > 28 && <p className="truncate px-1.5 text-[9px] leading-tight text-gray-500">{fmtTime(b.startMins)}</p>}
+            </div>
+          )
+        })}
+        {/* NOW line */}
+        {isToday && minsToY(nowMin) >= 0 && minsToY(nowMin) <= TOTAL_H && (
+          <div className="pointer-events-none absolute left-0 right-0 z-20 flex items-center" style={{ top: minsToY(nowMin) }}>
+            <div className="h-2.5 w-2.5 shrink-0 rounded-full bg-red-500" style={{ marginLeft: -5 }} />
+            <div className="h-px flex-1 bg-red-500" />
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // ── Time labels column ────────────────────────────────────────────────────────
+  function TimeCol() {
+    return (
+      <div className="relative shrink-0 border-r border-gray-100 bg-white" style={{ width: TIME_W, height: TOTAL_H }}>
+        {Array.from({ length: HOURS }, (_, i) => (
+          <div key={i} className="absolute right-2 text-right leading-none text-[10px] text-gray-400"
+            style={{ top: i * HOUR_H - 7, width: TIME_W - 8 }}>
+            {hrLabel(CAL_H + i)}
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  // ── Day View ─────────────────────────────────────────────────────────────────
+  function DayView() {
+    const iso = isoOf(anchor)
+    const ph  = pubHol(iso)
+    return (
+      <div className="flex min-h-0 flex-1 flex-col">
+        {ph && <div className="shrink-0 border-b border-gray-200 bg-red-50 px-4 py-1.5 text-xs font-medium text-red-600">🎉 {ph}</div>}
+        <div className="flex min-h-0 flex-1 overflow-y-auto">
+          <TimeCol />
+          <DayCol d={anchor} />
+        </div>
+      </div>
+    )
+  }
+
+  // ── Week View ─────────────────────────────────────────────────────────────────
+  function WeekView() {
+    const mon  = weekMon(anchor)
+    const days = Array.from({ length: 7 }, (_, i) => addD(mon, i))
+    const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+
+    // all-day public holidays
+    const phs = days.map(d => ({ d, ph: pubHol(isoOf(d)) })).filter(x => x.ph)
+
+    return (
+      <div className="flex min-h-0 flex-1 flex-col">
+        {/* Day headers */}
+        <div className="flex shrink-0 border-b border-gray-200 bg-white">
+          <div style={{ width: TIME_W }} className="shrink-0" />
+          {days.map((d, i) => {
+            const iso     = isoOf(d)
+            const isToday = iso === todayIso
+            const isWknd  = i >= 5
+            return (
+              <div key={iso} className={`flex flex-1 cursor-pointer flex-col items-center justify-center border-l border-gray-100 py-2 ${isWknd ? 'bg-gray-50/60' : ''}`}
+                onClick={() => { setAnchor(d); setCalView('day') }}>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">{DAY_LABELS[i]}</p>
+                <span className="mt-0.5 flex h-7 w-7 items-center justify-center rounded-full text-sm font-bold"
+                  style={isToday ? { backgroundColor: '#6BA3D6', color: 'white' } : { color: isWknd ? '#9ca3af' : '#111827' }}>
+                  {d.getDate()}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+        {/* All-day strip for public holidays */}
+        {phs.length > 0 && (
+          <div className="flex shrink-0 border-b border-gray-200 bg-red-50">
+            <div style={{ width: TIME_W }} className="shrink-0 flex items-center justify-end pr-2 text-[9px] text-gray-400">PH</div>
+            {days.map(d => {
+              const ph = pubHol(isoOf(d))
+              return (
+                <div key={isoOf(d)} className="flex-1 border-l border-gray-100 px-1 py-1">
+                  {ph && <span className="block truncate text-[9px] font-medium text-red-600">{ph}</span>}
+                </div>
+              )
+            })}
+          </div>
+        )}
+        {/* Timeline */}
+        <div className="flex min-h-0 flex-1 overflow-y-auto">
+          <TimeCol />
+          {days.map(d => <DayCol key={isoOf(d)} d={d} />)}
+        </div>
+      </div>
+    )
+  }
+
+  // ── Month View ────────────────────────────────────────────────────────────────
+  function MonthView() {
+    const year      = anchor.getFullYear()
+    const month     = anchor.getMonth()
+    const firstDay  = new Date(year, month, 1)
+    const daysInMon = new Date(year, month + 1, 0).getDate()
+    const firstDow  = jsDayToOurs(firstDay.getDay())
+    const cells     = Math.ceil((firstDow + daysInMon) / 7) * 7
+    const DAY_HDR   = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+
+    return (
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+        {/* Day-of-week headers */}
+        <div className="grid shrink-0 grid-cols-7 border-b border-gray-200 bg-white">
+          {DAY_HDR.map((d, i) => (
+            <div key={d} className={`border-l border-gray-100 py-2 text-center text-[10px] font-semibold uppercase tracking-wide first:border-l-0 ${i >= 5 ? 'text-gray-400' : 'text-gray-400'}`}>{d}</div>
+          ))}
+        </div>
+        {/* Cells */}
+        <div className="grid flex-1 grid-cols-7" style={{ gridAutoRows: 'minmax(88px, auto)' }}>
+          {Array.from({ length: cells }, (_, idx) => {
+            const cellDay = idx - firstDow + 1
+            const inMon   = cellDay >= 1 && cellDay <= daysInMon
+            if (!inMon) return <div key={idx} className="border-b border-r border-gray-100 bg-gray-50/40" />
+            const d       = new Date(year, month, cellDay)
+            const iso     = isoOf(d)
+            const isToday = iso === todayIso
+            const isWknd  = idx % 7 >= 5
+            const ph      = pubHol(iso)
+            const dayBks  = bksForDate(iso)
+            const hasCoach = coaches.some(c => coachWins(c.id, d).length > 0)
+
+            return (
+              <div key={iso}
+                onClick={() => { setAnchor(d); setCalView('day') }}
+                className={`cursor-pointer border-b border-r border-gray-100 p-1.5 transition hover:bg-blue-50/30 ${isWknd ? 'bg-gray-50/30' : 'bg-white'}`}
+              >
+                <div className="mb-1 flex items-start justify-between gap-1">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold"
+                    style={isToday ? { backgroundColor: '#6BA3D6', color: 'white' } : { color: isWknd ? '#9ca3af' : '#111827' }}>
+                    {cellDay}
+                  </span>
+                  {ph && <span className="mt-0.5 truncate text-[8px] font-medium text-red-500">{ph}</span>}
+                </div>
+                {/* Coach availability bars */}
+                {hasCoach && (
+                  <div className="mb-1 flex gap-0.5">
+                    {coaches.map(coach => coachWins(coach.id, d).length > 0 && (
+                      <div key={coach.id} className="h-1 w-5 rounded-full" style={{ backgroundColor: coach.color + 'aa' }} />
+                    ))}
+                  </div>
+                )}
+                {/* Booking pills */}
+                {dayBks.slice(0, 3).map(b => {
+                  const { c } = spCol(b.spaceId)
+                  return (
+                    <div key={b.id} className="mb-0.5 truncate rounded px-1 py-0.5 text-[9px] font-semibold"
+                      style={{ backgroundColor: c + '22', color: c }}>
+                      {fmtTime(b.startMins).replace(' AM', 'a').replace(' PM', 'p')} {b.sessionType}
+                    </div>
+                  )
+                })}
+                {dayBks.length > 3 && <p className="text-[9px] text-gray-400">+{dayBks.length - 3} more</p>}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    )
+  }
+
+  // ── Year View ──────────────────────────────────────────────────────────────────
+  function YearView() {
+    const year = anchor.getFullYear()
+    const MON_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December']
+    const MON_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+
+    return (
+      <div className="flex-1 overflow-y-auto p-4">
+        <div className="grid grid-cols-3 gap-4 lg:grid-cols-4">
+          {Array.from({ length: 12 }, (_, m) => {
+            const firstDay  = new Date(year, m, 1)
+            const daysInMon = new Date(year, m + 1, 0).getDate()
+            const firstDow  = jsDayToOurs(firstDay.getDay())
+            const cells     = Math.ceil((firstDow + daysInMon) / 7) * 7
+            const isThisMon = anchor.getMonth() === m
+
+            return (
+              <div key={m}
+                onClick={() => { setAnchor(new Date(year, m, 1)); setCalView('month') }}
+                className={`cursor-pointer rounded-xl border bg-white p-3 transition hover:border-[#6BA3D6]/60 hover:shadow-sm ${isThisMon ? 'border-[#6BA3D6]/40' : 'border-gray-100'}`}
+              >
+                <p className="mb-2 text-xs font-bold" style={{ color: isThisMon ? '#6BA3D6' : '#374151' }}>{MON_SHORT[m]}</p>
+                <div className="grid grid-cols-7 gap-px">
+                  {['M','T','W','T','F','S','S'].map((l, i) => (
+                    <div key={i} className="text-center text-[7px] font-semibold text-gray-300">{l}</div>
+                  ))}
+                  {Array.from({ length: cells }, (_, idx) => {
+                    const cellDay = idx - firstDow + 1
+                    if (cellDay < 1 || cellDay > daysInMon) return <div key={idx} />
+                    const d       = new Date(year, m, cellDay)
+                    const iso     = isoOf(d)
+                    const isToday = iso === todayIso
+                    const hasBk   = bookings.some(b => b.date === iso)
+                    const isWknd  = idx % 7 >= 5
+                    return (
+                      <div key={iso} className="flex items-center justify-center">
+                        <span className="flex h-4 w-4 items-center justify-center rounded-full text-[8px] leading-none"
+                          style={isToday
+                            ? { backgroundColor: '#6BA3D6', color: 'white', fontWeight: 700 }
+                            : hasBk
+                            ? { color: '#6BA3D6', fontWeight: 600 }
+                            : isWknd ? { color: '#d1d5db' } : { color: '#6b7280' }}>
+                          {cellDay}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    )
+  }
+
+  // ── Legend ─────────────────────────────────────────────────────────────────────
+  function Legend() {
+    return (
+      <div className="flex shrink-0 flex-wrap items-center gap-4 border-t border-gray-200 bg-white px-4 py-2">
+        {coaches.map(c => (
+          <div key={c.id} className="flex items-center gap-1.5">
+            <div className="h-3 w-3 rounded-sm opacity-60" style={{ backgroundColor: c.color }} />
+            <span className="text-xs text-gray-500">{c.name} available</span>
+          </div>
+        ))}
+        <div className="flex items-center gap-1.5">
+          <div className="h-px w-5 bg-red-500" />
+          <span className="text-xs text-gray-500">Now</span>
+        </div>
+        <button type="button" onClick={() => openEx(isoOf(anchor), [])}
+          className="ml-auto flex items-center gap-1 text-xs font-semibold text-[#6BA3D6] transition hover:underline">
+          <IconPlus size={11} /> Add exception
+        </button>
+      </div>
+    )
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────────────
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      {/* Toolbar */}
+      <div className="flex shrink-0 items-center gap-2 border-b border-gray-200 bg-white px-4 py-2.5">
+        <button onClick={() => setAnchor(new Date())}
+          className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 transition hover:bg-gray-50">
+          Today
+        </button>
+        <button onClick={() => nav(-1)} className="rounded-lg p-1.5 text-gray-500 transition hover:bg-gray-100">
+          <IconChevronLeft size={15} />
+        </button>
+        <button onClick={() => nav(1)} className="rounded-lg p-1.5 text-gray-500 transition hover:bg-gray-100">
+          <IconChevronRight size={15} />
+        </button>
+        <span className="min-w-0 flex-1 truncate text-sm font-bold text-gray-800">{navTitle}</span>
+        {/* View toggles — Apple Calendar style */}
+        <div className="flex items-center gap-px rounded-lg border border-gray-200 bg-gray-50 p-0.5">
+          {(['day', 'week', 'month', 'year'] as const).map(v => (
+            <button key={v} onClick={() => setCalView(v)}
+              className="rounded-md px-3 py-1 text-xs font-semibold capitalize transition"
+              style={calView === v ? { backgroundColor: '#6BA3D6', color: 'white' } : { color: '#6b7280' }}>
+              {v}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Body */}
+      {calView === 'day'   && <DayView />}
+      {calView === 'week'  && <WeekView />}
+      {calView === 'month' && <MonthView />}
+      {calView === 'year'  && <YearView />}
+
+      {/* Legend (shown on day/week views) */}
+      {(calView === 'day' || calView === 'week') && <Legend />}
+
+      {/* Exception modal */}
+      {exOpen && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+            <div className="mb-5 flex items-center justify-between">
+              <h2 className="text-base font-bold text-gray-800">Availability Exception</h2>
+              <button onClick={() => setExOpen(false)} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100"><IconX size={16} /></button>
+            </div>
+            <div className="space-y-4">
+              {/* Who */}
+              <div>
+                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-400">Who</label>
+                <div className="flex flex-wrap gap-2">
+                  {[{ id: 'all', label: 'All', color: '#6b7280' }, { id: 'facility', label: 'Facility', color: FAC_COL }, ...coaches.map(c => ({ id: c.id, label: c.name, color: c.color }))].map(e => {
+                    const sel = exWho.includes(e.id)
+                    return (
+                      <button key={e.id} type="button"
+                        onClick={() => {
+                          if (e.id === 'all') { setExWho(exWho.includes('all') ? [] : ['all']) }
+                          else { setExWho(prev => { const w = prev.filter(x => x !== 'all' && x !== e.id); return sel ? w : [...w, e.id] }) }
+                        }}
+                        className="rounded-full px-3 py-1 text-xs font-semibold transition"
+                        style={sel ? { backgroundColor: e.color, color: 'white' } : { backgroundColor: '#f3f4f6', color: '#374151' }}>
+                        {e.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+              {/* Type */}
+              <div>
+                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-400">Type</label>
+                <div className="flex gap-2">
+                  {(['block', 'extra'] as const).map(t => (
+                    <button key={t} type="button" onClick={() => setExType(t)}
+                      className="flex-1 rounded-lg border py-2 text-xs font-semibold capitalize transition"
+                      style={exType === t ? { backgroundColor: t === 'block' ? '#ef4444' : '#6BA3D6', color: 'white', borderColor: 'transparent' } : { borderColor: '#e5e7eb', color: '#374151', backgroundColor: 'white' }}>
+                      {t === 'block' ? '🚫 Block / Cancel' : '➕ Extra Availability'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {/* Date */}
+              <div>
+                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-400">Date</label>
+                <input type="date" value={exDate} onChange={e => setExDate(e.target.value)}
+                  className="h-10 w-full rounded-lg border border-gray-200 px-3 text-sm outline-none focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/40" />
+              </div>
+              {/* All day toggle */}
+              <div>
+                <div className="mb-1.5 flex items-center justify-between">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-gray-400">All Day</label>
+                  <button type="button" onClick={() => setExAllDay(v => !v)}
+                    className={`relative inline-flex h-5 w-9 rounded-full border-2 border-transparent transition-colors ${exAllDay ? 'bg-[#6BA3D6]' : 'bg-gray-200'}`}>
+                    <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${exAllDay ? 'translate-x-4' : 'translate-x-0'}`} />
+                  </button>
+                </div>
+                {!exAllDay && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="mb-1 block text-xs text-gray-400">From</label>
+                      <select value={exStart} onChange={e => setExStart(Number(e.target.value))}
+                        className="h-9 w-full rounded-lg border border-gray-200 px-2 text-sm outline-none focus:border-[#6BA3D6]">
+                        {Array.from({ length: 32 }, (_, i) => i * 30 + 360).map(m => <option key={m} value={m}>{fmtTime(m)}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs text-gray-400">To</label>
+                      <select value={exEnd} onChange={e => setExEnd(Number(e.target.value))}
+                        className="h-9 w-full rounded-lg border border-gray-200 px-2 text-sm outline-none focus:border-[#6BA3D6]">
+                        {Array.from({ length: 32 }, (_, i) => (i + 1) * 30 + 360).filter(m => m > exStart).map(m => <option key={m} value={m}>{fmtTime(m)}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                )}
+              </div>
+              {/* Reason */}
+              <div>
+                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-400">Reason</label>
+                <input type="text" value={exReason} onChange={e => setExReason(e.target.value)}
+                  placeholder="e.g. Public holiday, Sick day…"
+                  className="h-10 w-full rounded-lg border border-gray-200 px-3 text-sm outline-none focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/40" />
+              </div>
+            </div>
+            <div className="mt-5 flex items-center justify-end gap-3">
+              <button onClick={() => setExOpen(false)}
+                className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50">Cancel</button>
+              <button onClick={submitEx} disabled={!exDate || !exWho.length}
+                className="rounded-lg px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-40"
+                style={{ backgroundColor: exType === 'block' ? '#ef4444' : '#6BA3D6' }}>
+                {exType === 'block' ? 'Apply Block' : 'Add Availability'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   )
 }
