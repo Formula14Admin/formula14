@@ -146,6 +146,9 @@ interface PortalProgram {
   seriesStart: string
   seriesEnd: string
   repeat: string
+  enrolmentType: 'instant' | 'approval'
+  termLength: number
+  termFee: number
 }
 
 const PORTAL_PROGRAMS: PortalProgram[] = [
@@ -164,6 +167,9 @@ const PORTAL_PROGRAMS: PortalProgram[] = [
     seriesStart: '2026-07-06',
     seriesEnd: '2026-09-28',
     repeat: 'Weekly',
+    enrolmentType: 'instant',
+    termLength: 13,
+    termFee: 45 * 13,
   },
   {
     id: 'pg-dom-academy',
@@ -180,6 +186,9 @@ const PORTAL_PROGRAMS: PortalProgram[] = [
     seriesStart: '2026-07-01',
     seriesEnd: '2026-09-30',
     repeat: 'Weekly',
+    enrolmentType: 'approval',
+    termLength: 13,
+    termFee: 45 * 13,
   },
   {
     id: 'pg-snipers',
@@ -196,6 +205,9 @@ const PORTAL_PROGRAMS: PortalProgram[] = [
     seriesStart: '2026-07-02',
     seriesEnd: '2026-09-24',
     repeat: 'Weekly',
+    enrolmentType: 'approval',
+    termLength: 13,
+    termFee: 40 * 13,
   },
   {
     id: 'pg-shooters-lab',
@@ -212,6 +224,9 @@ const PORTAL_PROGRAMS: PortalProgram[] = [
     seriesStart: '2026-07-03',
     seriesEnd: '2026-09-25',
     repeat: 'Weekly',
+    enrolmentType: 'instant',
+    termLength: 13,
+    termFee: 40 * 13,
   },
   {
     id: 'pg-walking-bball',
@@ -228,6 +243,9 @@ const PORTAL_PROGRAMS: PortalProgram[] = [
     seriesStart: '2026-07-07',
     seriesEnd: '2026-09-29',
     repeat: 'Weekly',
+    enrolmentType: 'instant',
+    termLength: 13,
+    termFee: 15 * 13,
   },
   {
     id: 'pg-midday-ladies',
@@ -244,6 +262,9 @@ const PORTAL_PROGRAMS: PortalProgram[] = [
     seriesStart: '2026-07-01',
     seriesEnd: '2026-09-30',
     repeat: 'Weekly',
+    enrolmentType: 'instant',
+    termLength: 13,
+    termFee: 20 * 13,
   },
   {
     id: 'pg-adult-beginner',
@@ -260,6 +281,9 @@ const PORTAL_PROGRAMS: PortalProgram[] = [
     seriesStart: '2026-07-04',
     seriesEnd: '2026-09-26',
     repeat: 'Weekly',
+    enrolmentType: 'instant',
+    termLength: 13,
+    termFee: 25 * 13,
   },
 ]
 
@@ -442,12 +466,14 @@ export default function PortalPage() {
   const [bookerName, setBookerName] = useState('')
   const [toastMsg, setToastMsg] = useState('')
   const [bookedIds, setBookedIds] = useState<Set<string>>(new Set())
-  const [portalTab,       setPortalTab]       = useState<'sessions' | 'programs'>('sessions')
-  const [enrolledPrograms, setEnrolledPrograms] = useState<Set<string>>(new Set())
-  const [waitlistPrograms, setWaitlistPrograms] = useState<Set<string>>(new Set())
-  const [enrolModal,      setEnrolModal]      = useState<PortalProgram | null>(null)
-  const [enrolName,       setEnrolName]       = useState('')
-  const [shareModal,      setShareModal]      = useState<{ url: string; sessionType: string } | null>(null)
+  const [portalTab,          setPortalTab]          = useState<'sessions' | 'programs'>('sessions')
+  const [enrolledPrograms,   setEnrolledPrograms]   = useState<Set<string>>(new Set())
+  const [waitlistPrograms,   setWaitlistPrograms]   = useState<Set<string>>(new Set())
+  const [pendingPrograms,    setPendingPrograms]    = useState<Set<string>>(new Set())
+  const [enrolStep,          setEnrolStep]          = useState<'confirm' | 'payment' | null>(null)
+  const [enrolModal,         setEnrolModal]         = useState<PortalProgram | null>(null)
+  const [enrolName,          setEnrolName]          = useState('')
+  const [shareModal,         setShareModal]         = useState<{ url: string; sessionType: string } | null>(null)
 
   const weekDates = useMemo(() => {
     return Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
@@ -506,18 +532,53 @@ export default function PortalPage() {
     return `$${price} casual rate`
   }
 
-  function confirmEnrol() {
+  function openEnrolModal(prog: PortalProgram) {
+    setEnrolModal(prog)
+    setEnrolName('')
+    setEnrolStep('confirm')
+  }
+
+  function proceedToPayment() {
     if (!enrolModal || !enrolName.trim()) return
+    if (enrolModal.enrolmentType === 'approval') {
+      // Store request in localStorage for admin to action
+      const request = {
+        id: uid(),
+        bookingId: enrolModal.id,
+        athleteName: enrolName.trim(),
+        requestedAt: new Date().toISOString().slice(0, 10),
+        status: 'pending-approval',
+      }
+      try {
+        const existing = JSON.parse(localStorage.getItem('f14_enrolmentRequests') ?? '[]')
+        localStorage.setItem('f14_enrolmentRequests', JSON.stringify([...existing, request]))
+      } catch {}
+      setPendingPrograms(prev => new Set([...prev, enrolModal.id]))
+      setEnrolModal(null)
+      setEnrolStep(null)
+      setEnrolName('')
+      setToastMsg(`Enrolment request sent for ${enrolModal.name}. We'll be in touch!`)
+      setTimeout(() => setToastMsg(''), 4000)
+    } else {
+      // Instant: go to payment step
+      setEnrolStep('payment')
+    }
+  }
+
+  function confirmPayment() {
+    if (!enrolModal) return
     const prog = enrolModal
     if (prog.enrolled >= prog.capacity) {
       setWaitlistPrograms(prev => new Set([...prev, prog.id]))
+      setToastMsg(`Added to waitlist for ${prog.name}`)
     } else {
       setEnrolledPrograms(prev => new Set([...prev, prog.id]))
+      setToastMsg(`Payment confirmed! You're enrolled in ${prog.name} 🎉`)
     }
     setEnrolModal(null)
+    setEnrolStep(null)
     setEnrolName('')
-    setToastMsg(prog.enrolled >= prog.capacity ? `Added to waitlist for ${prog.name}` : `Enrolled in ${prog.name}!`)
-    setTimeout(() => setToastMsg(''), 3000)
+    setTimeout(() => setToastMsg(''), 4000)
   }
 
   return (
@@ -704,28 +765,43 @@ export default function PortalPage() {
                   <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-gray-500">{cat}s</h2>
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     {catPrograms.map(prog => {
-                      const isEnrolled  = enrolledPrograms.has(prog.id)
+                      const isEnrolled   = enrolledPrograms.has(prog.id)
                       const isWaitlisted = waitlistPrograms.has(prog.id)
-                      const isFull      = prog.enrolled >= prog.capacity
-                      const spotsLeft   = Math.max(0, prog.capacity - prog.enrolled)
-                      const coachColor  = prog.coach === 'matt' ? COACH_MATT_COLOR : COACH_JADE_COLOR
+                      const isPending    = pendingPrograms.has(prog.id)
+                      const isFull       = prog.enrolled >= prog.capacity
+                      const spotsLeft    = Math.max(0, prog.capacity - prog.enrolled)
+                      const coachColor   = prog.coach === 'matt' ? COACH_MATT_COLOR : COACH_JADE_COLOR
+                      const isApproval   = prog.enrolmentType === 'approval'
                       return (
                         <div key={prog.id}
                           className="rounded-2xl border bg-white p-5 shadow-sm"
-                          style={{ borderColor: isEnrolled ? '#86efac' : isWaitlisted ? '#fde68a' : '#e5e7eb', backgroundColor: isEnrolled ? '#f0fdf4' : isWaitlisted ? '#fffbeb' : 'white' }}>
+                          style={{
+                            borderColor: isEnrolled ? '#86efac' : isWaitlisted ? '#fde68a' : isPending ? '#fde68a' : '#e5e7eb',
+                            backgroundColor: isEnrolled ? '#f0fdf4' : isWaitlisted ? '#fffbeb' : isPending ? '#fffbeb' : 'white',
+                          }}>
                           {/* Program name + category badge */}
                           <div className="mb-3 flex items-start justify-between gap-2">
                             <div>
                               <p className="text-base font-bold text-gray-900">{prog.name}</p>
-                              <span className="mt-0.5 inline-block rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
-                                style={{ backgroundColor: PROGRAM_BG, color: PROGRAM_COLOR }}>
-                                {prog.category}
-                              </span>
+                              <div className="mt-1 flex flex-wrap gap-1">
+                                <span className="inline-block rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+                                  style={{ backgroundColor: PROGRAM_BG, color: PROGRAM_COLOR }}>
+                                  {prog.category}
+                                </span>
+                                {isApproval && (
+                                  <span className="inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-700">
+                                    Approval Required
+                                  </span>
+                                )}
+                              </div>
                             </div>
-                            {(isEnrolled || isWaitlisted) && (
+                            {(isEnrolled || isWaitlisted || isPending) && (
                               <span className="shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide"
-                                style={{ backgroundColor: isEnrolled ? '#dcfce7' : '#fef3c7', color: isEnrolled ? '#16a34a' : '#d97706' }}>
-                                {isEnrolled ? 'Enrolled' : 'Waitlisted'}
+                                style={{
+                                  backgroundColor: isEnrolled ? '#dcfce7' : '#fef3c7',
+                                  color: isEnrolled ? '#16a34a' : '#d97706',
+                                }}>
+                                {isEnrolled ? 'Enrolled' : isWaitlisted ? 'Waitlisted' : 'Pending Approval'}
                               </span>
                             )}
                           </div>
@@ -752,15 +828,22 @@ export default function PortalPage() {
                               <span className="font-medium text-gray-800">{prog.space}</span>
                             </div>
                             <div className="flex items-center justify-between">
-                              <span className="text-gray-500">Cost</span>
-                              <span className="font-semibold text-gray-900">${prog.costPerSession} / session</span>
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <span className="text-gray-500">Dates</span>
+                              <span className="text-gray-500">Term Dates</span>
                               <span className="text-xs font-medium text-gray-700">
                                 {new Date(prog.seriesStart + 'T00:00:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })} –{' '}
                                 {new Date(prog.seriesEnd + 'T00:00:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}
                               </span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-gray-500">Sessions in term</span>
+                              <span className="font-medium text-gray-800">{prog.termLength} sessions</span>
+                            </div>
+                            <div className="flex items-center justify-between border-t border-gray-100 pt-1.5">
+                              <span className="text-gray-700 font-semibold">Term Fee</span>
+                              <span className="font-bold text-gray-900">${prog.termFee.toFixed(2)}</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs text-gray-400">(${prog.costPerSession} × {prog.termLength} sessions)</span>
                             </div>
                           </div>
 
@@ -793,15 +876,26 @@ export default function PortalPage() {
                               <div className="flex items-center justify-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 py-2 text-sm font-semibold text-amber-700">
                                 On Waitlist
                               </div>
+                            ) : isPending ? (
+                              <div className="flex items-center justify-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 py-2 text-sm font-semibold text-amber-700">
+                                Enrolment Pending Approval
+                              </div>
                             ) : isFull ? (
                               <button type="button"
-                                onClick={() => { setEnrolModal(prog); setEnrolName('') }}
+                                onClick={() => openEnrolModal(prog)}
                                 className="w-full rounded-xl border border-amber-300 bg-amber-50 py-2.5 text-sm font-bold text-amber-700 transition hover:bg-amber-100">
                                 Full — Join Waitlist
                               </button>
+                            ) : isApproval ? (
+                              <button type="button"
+                                onClick={() => openEnrolModal(prog)}
+                                className="w-full rounded-xl py-2.5 text-sm font-bold text-white transition hover:opacity-90"
+                                style={{ backgroundColor: '#92400e' }}>
+                                Request to Enrol
+                              </button>
                             ) : (
                               <button type="button"
-                                onClick={() => { setEnrolModal(prog); setEnrolName('') }}
+                                onClick={() => openEnrolModal(prog)}
                                 className="w-full rounded-xl py-2.5 text-sm font-bold text-white transition hover:opacity-90"
                                 style={{ backgroundColor: PROGRAM_COLOR }}>
                                 Enrol Now
@@ -850,18 +944,22 @@ export default function PortalPage() {
         </div>
       )}
 
-      {/* ── Enrol Modal ───────────────────────────────────────────────────────── */}
-      {enrolModal && (
+      {/* ── Enrol Modal (step 1: confirm details) ────────────────────────────── */}
+      {enrolModal && enrolStep === 'confirm' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
               <div>
                 <h2 className="text-base font-bold text-gray-900">
-                  {enrolModal.enrolled >= enrolModal.capacity ? 'Join Waitlist' : 'Enrol in Program'}
+                  {enrolModal.enrolled >= enrolModal.capacity
+                    ? 'Join Waitlist'
+                    : enrolModal.enrolmentType === 'approval'
+                    ? 'Request to Enrol'
+                    : 'Enrol in Program'}
                 </h2>
                 <p className="mt-0.5 text-sm text-gray-500">{enrolModal.name}</p>
               </div>
-              <button type="button" onClick={() => setEnrolModal(null)}
+              <button type="button" onClick={() => { setEnrolModal(null); setEnrolStep(null) }}
                 className="rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100">
                 <IconX size={18} />
               </button>
@@ -870,14 +968,20 @@ export default function PortalPage() {
               <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 space-y-2 text-sm">
                 <div className="flex justify-between"><span className="text-gray-500">Program</span><span className="font-semibold text-gray-800">{enrolModal.name}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">Schedule</span><span className="font-semibold text-gray-800">{enrolModal.repeat} · {enrolModal.dayOfWeek}s · {minsToLabel(enrolModal.startMins)}</span></div>
-                <div className="flex justify-between"><span className="text-gray-500">Cost</span><span className="font-semibold text-gray-800">${enrolModal.costPerSession} / session</span></div>
-                <div className="flex justify-between"><span className="text-gray-500">Dates</span><span className="font-semibold text-gray-800">
+                <div className="flex justify-between"><span className="text-gray-500">Term Dates</span><span className="font-semibold text-gray-800">
                   {new Date(enrolModal.seriesStart + 'T00:00:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })} – {new Date(enrolModal.seriesEnd + 'T00:00:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}
                 </span></div>
+                <div className="flex justify-between"><span className="text-gray-500">Sessions</span><span className="font-semibold text-gray-800">{enrolModal.termLength} sessions</span></div>
+                <div className="flex justify-between border-t border-gray-200 pt-1.5"><span className="font-semibold text-gray-700">Term Fee</span><span className="font-bold text-gray-900">${enrolModal.termFee.toFixed(2)}</span></div>
               </div>
               {enrolModal.enrolled >= enrolModal.capacity && (
                 <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
                   This program is currently full. Join the waitlist and we'll contact you if a spot opens up.
+                </div>
+              )}
+              {enrolModal.enrolmentType === 'approval' && enrolModal.enrolled < enrolModal.capacity && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                  This program requires approval. Once approved, you'll be contacted to complete payment.
                 </div>
               )}
               <div>
@@ -888,14 +992,68 @@ export default function PortalPage() {
               </div>
             </div>
             <div className="flex justify-end gap-2 border-t border-gray-100 px-6 py-4">
-              <button type="button" onClick={() => setEnrolModal(null)}
+              <button type="button" onClick={() => { setEnrolModal(null); setEnrolStep(null) }}
                 className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50">
                 Cancel
               </button>
-              <button type="button" onClick={confirmEnrol} disabled={!enrolName.trim()}
+              <button type="button" onClick={proceedToPayment} disabled={!enrolName.trim()}
                 className="rounded-xl px-5 py-2 text-sm font-bold text-white transition hover:opacity-90 disabled:opacity-40"
                 style={{ backgroundColor: enrolModal.enrolled >= enrolModal.capacity ? '#D97706' : '#D4A520' }}>
-                {enrolModal.enrolled >= enrolModal.capacity ? 'Join Waitlist' : 'Confirm Enrolment'}
+                {enrolModal.enrolled >= enrolModal.capacity
+                  ? 'Join Waitlist'
+                  : enrolModal.enrolmentType === 'approval'
+                  ? 'Send Request'
+                  : 'Proceed to Payment'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Enrol Modal (step 2: payment summary — instant only) ──────────────── */}
+      {enrolModal && enrolStep === 'payment' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+              <div>
+                <h2 className="text-base font-bold text-gray-900">Payment Summary</h2>
+                <p className="mt-0.5 text-sm text-gray-500">{enrolModal.name}</p>
+              </div>
+              <button type="button" onClick={() => { setEnrolModal(null); setEnrolStep(null) }}
+                className="rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100">
+                <IconX size={18} />
+              </button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 space-y-2 text-sm">
+                <div className="flex justify-between"><span className="text-gray-500">Enrolling as</span><span className="font-semibold text-gray-800">{enrolName}</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">Program</span><span className="font-semibold text-gray-800">{enrolModal.name}</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">Sessions</span><span className="font-semibold text-gray-800">{enrolModal.termLength} × {enrolModal.dayOfWeek}s</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">Per session</span><span className="font-semibold text-gray-800">${enrolModal.costPerSession.toFixed(2)}</span></div>
+                <div className="flex justify-between border-t border-gray-200 pt-1.5">
+                  <span className="text-base font-bold text-gray-900">Total due today</span>
+                  <span className="text-base font-bold text-gray-900">${enrolModal.termFee.toFixed(2)}</span>
+                </div>
+              </div>
+              <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-center">
+                <p className="text-xs font-semibold text-gray-500">🔒 Demo mode — no real payment will be processed</p>
+                <p className="mt-0.5 text-xs text-gray-400">In production this connects to Stripe</p>
+              </div>
+              <p className="text-center text-xs text-gray-400 leading-relaxed">
+                Need help with the term fee?{' '}
+                <a href="mailto:admin@formula14.com.au" className="underline hover:text-gray-600">Contact us at admin@formula14.com.au</a>{' '}
+                to discuss payment options.
+              </p>
+            </div>
+            <div className="flex justify-end gap-2 border-t border-gray-100 px-6 py-4">
+              <button type="button" onClick={() => setEnrolStep('confirm')}
+                className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50">
+                Back
+              </button>
+              <button type="button" onClick={confirmPayment}
+                className="rounded-xl px-5 py-2 text-sm font-bold text-white transition hover:opacity-90"
+                style={{ backgroundColor: '#10b981' }}>
+                Confirm & Pay ${enrolModal.termFee.toFixed(2)}
               </button>
             </div>
           </div>

@@ -194,10 +194,15 @@ type Booking = {
   seriesId?: string
   memberTier?: MemberTier
   adminOverride?: boolean
-  capacity?: number       // for Small Group Session
+  capacity?: number
   joinRequests?: JoinRequest[]
-  joinCode?: string       // shareable join link code for Small Group / Team Training
+  joinCode?: string
   notes?: string
+  // Program-specific fields
+  enrolmentType?: 'instant' | 'approval'
+  pricePerSession?: number
+  termLength?: number
+  enrolments?: ProgramEnrolment[]
 }
 
 // ── Join Requests ──────────────────────────────────────────────────────────────
@@ -205,8 +210,16 @@ type JoinRequest = {
   id: string
   bookingId: string
   athleteName: string
-  requestedAt: string  // e.g. '2026-06-20'
+  requestedAt: string
   status: 'pending' | 'accepted' | 'declined'
+}
+
+// ── Program Enrolments ─────────────────────────────────────────────────────────
+type ProgramEnrolment = {
+  id: string
+  athleteName: string
+  requestedAt: string
+  status: 'pending-approval' | 'approved' | 'payment-required' | 'paid' | 'declined'
 }
 
 // ── Coach Availability (merged from availability/page.tsx) ─────────────────────
@@ -534,8 +547,22 @@ function makeSamples(today: string): Booking[] {
     { id:'sm1', date:today, spaceId:'shooting', startMins:10*60,     duration:60, sessionType:'Shooting Machine Rental', athletes:['Liam Carter'],    coach:'', bookingType:'casual' },
     { id:'sm2', date:tm,    spaceId:'shooting', startMins:13*60+30,  duration:45, sessionType:'Shooting Machine Rental', athletes:['Jordan Williams'], coach:'', bookingType:'casual' },
     // Program demos
-    { id:'pg1', date:today, spaceId:'secondary', startMins:12*60, duration:60, sessionType:'Mid Day Ladies Comp', athletes:[], coach:'jade', bookingType:'program' },
-    { id:'pg2', date:tm,    spaceId:'primary',   startMins:10*60, duration:60, sessionType:'Domestic Academy',  athletes:['Aisha Thompson','Devon Knox','Tyler Ross','Priya Mehta','Sam Liu','Zara Obi'], coach:'matt', bookingType:'program' },
+    { id:'pg1', date:today, spaceId:'secondary', startMins:12*60, duration:60, sessionType:'Mid Day Ladies Comp', athletes:['Aisha Thompson','Devon Knox'], coach:'jade', bookingType:'program', capacity:20, enrolmentType:'instant', pricePerSession:20, termLength:13,
+      enrolments:[
+        { id:'en1', athleteName:'Aisha Thompson', requestedAt:today, status:'paid' as const },
+        { id:'en2', athleteName:'Devon Knox',     requestedAt:today, status:'paid' as const },
+      ],
+    },
+    { id:'pg2', date:tm,    spaceId:'primary',   startMins:10*60, duration:60, sessionType:'Domestic Academy',  athletes:['Tyler Ross','Priya Mehta','Sam Liu','Zara Obi'], coach:'matt', bookingType:'program', capacity:15, enrolmentType:'approval', pricePerSession:45, termLength:13,
+      enrolments:[
+        { id:'en3', athleteName:'Tyler Ross',     requestedAt:today, status:'paid'             as const },
+        { id:'en4', athleteName:'Priya Mehta',    requestedAt:today, status:'paid'             as const },
+        { id:'en5', athleteName:'Sam Liu',        requestedAt:today, status:'paid'             as const },
+        { id:'en6', athleteName:'Zara Obi',       requestedAt:today, status:'paid'             as const },
+        { id:'en7', athleteName:'Kai Okafor',     requestedAt:today, status:'pending-approval' as const },
+        { id:'en8', athleteName:'Marcus Davies',  requestedAt:today, status:'pending-approval' as const },
+      ],
+    },
   ]
 }
 
@@ -1002,12 +1029,72 @@ export default function BookingsPage() {
   const pendingJoinRequestCount = bookings.reduce((sum, b) =>
     sum + (b.joinRequests?.filter(jr => jr.status === 'pending').length ?? 0), 0
   )
+  const pendingEnrolmentCount = bookings.reduce((sum, b) =>
+    sum + (b.enrolments?.filter(e => e.status === 'pending-approval').length ?? 0), 0
+  )
+  const totalPendingCount = pendingJoinRequestCount + pendingEnrolmentCount
 
   // Sync pending count to localStorage so the Dashboard can display it
   useEffect(() => {
     if (typeof window === 'undefined') return
-    localStorage.setItem('f14_pendingJoinCount', String(pendingJoinRequestCount))
-  }, [pendingJoinRequestCount])
+    localStorage.setItem('f14_pendingJoinCount', String(totalPendingCount))
+  }, [totalPendingCount])
+
+  // Import enrolment requests submitted from the athlete portal
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const raw = localStorage.getItem('f14_enrolmentRequests')
+    if (!raw) return
+    try {
+      const incoming: Array<{ id: string; bookingId: string; athleteName: string; requestedAt: string; status: ProgramEnrolment['status'] }> = JSON.parse(raw)
+      if (!incoming.length) return
+      setBookings(prev => prev.map(b => {
+        const newEnrols = incoming.filter(e => e.bookingId === b.id && !(b.enrolments ?? []).some(ex => ex.id === e.id))
+        if (!newEnrols.length) return b
+        return { ...b, enrolments: [...(b.enrolments ?? []), ...newEnrols] }
+      }))
+    } catch {}
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Program enrolment actions ─────────────────────────────────────────────────
+  function approveEnrolment(bookingId: string, enrolmentId: string) {
+    setBookings(prev => prev.map(b => {
+      if (b.id !== bookingId) return b
+      const enrolment = (b.enrolments ?? []).find(e => e.id === enrolmentId)
+      if (!enrolment) return b
+      const updatedEnrolments = (b.enrolments ?? []).map(e =>
+        e.id === enrolmentId ? { ...e, status: 'payment-required' as const } : e
+      )
+      return { ...b, enrolments: updatedEnrolments }
+    }))
+    showToast('Enrolment approved — athlete notified to complete payment.')
+  }
+
+  function declineEnrolment(bookingId: string, enrolmentId: string) {
+    setBookings(prev => prev.map(b => {
+      if (b.id !== bookingId) return b
+      const updatedEnrolments = (b.enrolments ?? []).map(e =>
+        e.id === enrolmentId ? { ...e, status: 'declined' as const } : e
+      )
+      return { ...b, enrolments: updatedEnrolments }
+    }))
+    showToast('Enrolment request declined.')
+  }
+
+  function markEnrolmentPaid(bookingId: string, enrolmentId: string) {
+    setBookings(prev => prev.map(b => {
+      if (b.id !== bookingId) return b
+      const enrolment = (b.enrolments ?? []).find(e => e.id === enrolmentId)
+      const updatedEnrolments = (b.enrolments ?? []).map(e =>
+        e.id === enrolmentId ? { ...e, status: 'paid' as const } : e
+      )
+      const newAthletes = enrolment && !b.athletes.includes(enrolment.athleteName)
+        ? [...b.athletes, enrolment.athleteName]
+        : b.athletes
+      return { ...b, enrolments: updatedEnrolments, athletes: newAthletes }
+    }))
+    showToast('Marked as enrolled and paid.')
+  }
 
   function handleSave(items: (Omit<Booking, 'id'> & { id?: string })[]) {
     // ── Check 1 & 2: Facility + Coach availability (admin override bypasses) ──────
@@ -1205,7 +1292,7 @@ export default function BookingsPage() {
   const TABS: { id: 'calendar' | 'availability' | 'join-requests'; label: string; badge?: number }[] = [
     { id: 'calendar',      label: 'Calendar' },
     { id: 'availability',  label: 'Availability' },
-    { id: 'join-requests', label: 'Join Requests', badge: pendingJoinRequestCount },
+    { id: 'join-requests', label: 'Join Requests', badge: totalPendingCount },
   ]
 
   return (
@@ -1266,6 +1353,9 @@ export default function BookingsPage() {
           bookings={bookings}
           onAccept={acceptJoinRequest}
           onDecline={declineJoinRequest}
+          onApproveEnrolment={approveEnrolment}
+          onDeclineEnrolment={declineEnrolment}
+          onMarkPaid={markEnrolmentPaid}
         />
       )}
 
@@ -1644,6 +1734,9 @@ export default function BookingsPage() {
           onEdit={b => setModal({ kind: 'edit', booking: b })}
           onEditSeries={b => setModal({ kind: 'editSeries', booking: b })}
           creditUsage={creditUsage}
+          onApproveEnrolment={approveEnrolment}
+          onDeclineEnrolment={declineEnrolment}
+          onMarkPaid={markEnrolmentPaid}
         />
       )}
 
@@ -2285,6 +2378,7 @@ function SelectPicker({ value, onChange, options, accentColor = '#6BA3D6', getPa
 // ── Booking Modal ──────────────────────────────────────────────────────────────
 function BookingModal({
   modal, today, onClose, onSave, onDelete, onDeleteFrom, onSaveFrom, onEdit, onEditSeries, creditUsage,
+  onApproveEnrolment, onDeclineEnrolment, onMarkPaid,
 }: {
   modal: NonNullable<Modal>
   today: string
@@ -2296,6 +2390,9 @@ function BookingModal({
   onEdit: (b: Booking) => void
   onEditSeries: (b: Booking) => void
   creditUsage: Record<string, number>
+  onApproveEnrolment?: (bookingId: string, enrolmentId: string) => void
+  onDeclineEnrolment?: (bookingId: string, enrolmentId: string) => void
+  onMarkPaid?: (bookingId: string, enrolmentId: string) => void
 }) {
   const isView          = modal.kind === 'view'
   const editSeriesFuture = modal.kind === 'editSeries'
@@ -2325,9 +2422,17 @@ function BookingModal({
   const [adminOverride, setAdminOverride] = useState(src?.adminOverride ?? false)
   const [capacity, setCapacity] = useState<number>(src?.capacity ?? 15)
   const [notes, setNotes] = useState(src?.notes ?? '')
+  const [enrolmentType, setEnrolmentType] = useState<'instant' | 'approval'>(src?.enrolmentType ?? 'instant')
+  const [pricePerSession, setPricePerSession] = useState<number>(src?.pricePerSession ?? 0)
+  const [termLengthOverride, setTermLengthOverride] = useState<number | null>(src?.termLength ?? null)
   const accentColor  = bookingType === 'casual' ? '#6BAD6B' : bookingType === 'unavailable' ? '#ef4444' : bookingType === 'program' ? '#D4A520' : '#6BA3D6'
   const isIndividual = bookingType === 'member' && sessionType === 'Individual Work Out'
   const isMachineRental = sessionType === 'Shooting Machine Rental'
+  const computedTermLength = (repeat !== 'none' && repeatUntil)
+    ? occurrenceDates(date, repeat, repeatUntil).length
+    : 1
+  const effectiveTermLength = termLengthOverride ?? computedTermLength
+  const termFee = pricePerSession * effectiveTermLength
 
   const sessionTypeOpts: Array<{ value: string; label: string; muted?: boolean; header?: boolean }> = [
     { value: '', label: 'Select A Session Type', muted: true },
@@ -2412,7 +2517,7 @@ function BookingModal({
     const effectiveAthletes = isIndividual
       ? (singleAthlete === 'other' ? (customAthlete.trim() ? [customAthlete.trim()] : []) : singleAthlete ? [singleAthlete] : [])
       : [...athletes, ...memberCasualNames]
-    const base = { spaceId, startMins, duration, sessionType, athletes: effectiveAthletes, coach, bookingType, memberTier: memberTier || undefined, adminOverride: adminOverride || undefined, capacity: bookingType === 'program' ? capacity : undefined, notes: trimmedNotes }
+    const base = { spaceId, startMins, duration, sessionType, athletes: effectiveAthletes, coach, bookingType, memberTier: memberTier || undefined, adminOverride: adminOverride || undefined, capacity: bookingType === 'program' ? capacity : undefined, notes: trimmedNotes, enrolmentType: bookingType === 'program' ? enrolmentType : undefined, pricePerSession: bookingType === 'program' ? pricePerSession : undefined, termLength: bookingType === 'program' ? effectiveTermLength : undefined }
     if (editSeriesFuture) {
       onSaveFrom(src!.date, src!.seriesId!, base)
     } else if (repeat === 'none' || !repeatUntil) {
@@ -2585,6 +2690,15 @@ function BookingModal({
                   <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">Notes</p>
                   <p className="whitespace-pre-wrap text-sm text-gray-700">{src!.notes}</p>
                 </div>
+              )}
+              {/* Program enrolment management panel */}
+              {src!.bookingType === 'program' && (
+                <ProgramEnrolmentPanel
+                  booking={src!}
+                  onApprove={onApproveEnrolment ?? (() => {})}
+                  onDecline={onDeclineEnrolment ?? (() => {})}
+                  onMarkPaid={onMarkPaid ?? (() => {})}
+                />
               )}
             </div>
             )
@@ -2857,6 +2971,68 @@ function BookingModal({
                       <div className="flex h-10 w-full items-center justify-center rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-500">
                         {Math.max(0, capacity - athletes.length)} of {capacity}
                       </div>
+                    </div>
+                  </div>
+
+                  {/* Enrolment Type */}
+                  <div>
+                    <label className={LABEL}>Enrolment Type</label>
+                    <div className="flex overflow-hidden rounded-lg border border-gray-200">
+                      {(['instant', 'approval'] as const).map((type, i) => (
+                        <button
+                          key={type}
+                          type="button"
+                          onClick={() => setEnrolmentType(type)}
+                          className={`flex-1 py-2 text-sm font-semibold transition ${i === 0 ? '' : 'border-l border-gray-200'}`}
+                          style={enrolmentType === type
+                            ? { backgroundColor: accentColor, color: 'white' }
+                            : { backgroundColor: 'white', color: '#6b7280' }}
+                        >
+                          {type === 'instant' ? 'Instant Enrolment' : 'Approval Required'}
+                        </button>
+                      ))}
+                    </div>
+                    {enrolmentType === 'approval' && (
+                      <p className="mt-1 text-center text-[11px] text-gray-400">Athletes must be approved before payment is triggered</p>
+                    )}
+                  </div>
+
+                  {/* Price per session | Term Length | Term Fee */}
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className={LABEL}>Price / Session</label>
+                      <div className="relative">
+                        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-gray-400">$</span>
+                        <input
+                          type="number"
+                          min={0}
+                          step={1}
+                          value={pricePerSession}
+                          onChange={e => setPricePerSession(parseFloat(e.target.value) || 0)}
+                          className="h-10 w-full rounded-lg border border-gray-200 bg-white pl-7 pr-3 text-center text-sm text-gray-800 outline-none transition focus:border-[#D4A520] focus:ring-1 focus:ring-[#D4A520]/40"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className={LABEL}>Term Length</label>
+                      <input
+                        type="number"
+                        min={1}
+                        value={termLengthOverride ?? computedTermLength}
+                        onChange={e => {
+                          const v = parseInt(e.target.value) || 1
+                          setTermLengthOverride(v === computedTermLength ? null : v)
+                        }}
+                        className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-center text-sm text-gray-800 outline-none transition focus:border-[#D4A520] focus:ring-1 focus:ring-[#D4A520]/40"
+                      />
+                      <p className="mt-0.5 text-center text-[10px] text-gray-400">sessions in term</p>
+                    </div>
+                    <div>
+                      <label className={LABEL}>Term Fee</label>
+                      <div className="flex h-10 w-full items-center justify-center rounded-lg border border-gray-200 bg-amber-50 text-sm font-bold text-amber-700">
+                        ${termFee.toFixed(2)}
+                      </div>
+                      <p className="mt-0.5 text-center text-[10px] text-gray-400">read-only · auto-calculated</p>
                     </div>
                   </div>
 
@@ -4742,17 +4918,157 @@ function AvailabilityTab({
   )
 }
 
+// ── Program Enrolment Panel (shown inside view modal for program bookings) ──────
+function ProgramEnrolmentPanel({
+  booking, onApprove, onDecline, onMarkPaid,
+}: {
+  booking: Booking
+  onApprove: (bookingId: string, enrolmentId: string) => void
+  onDecline: (bookingId: string, enrolmentId: string) => void
+  onMarkPaid: (bookingId: string, enrolmentId: string) => void
+}) {
+  const ACCENT = '#D4A520'
+  const enrolments = booking.enrolments ?? []
+  const capacity = booking.capacity ?? 0
+  const paid = enrolments.filter(e => e.status === 'paid')
+  const pending = enrolments.filter(e => e.status === 'pending-approval')
+  const paymentRequired = enrolments.filter(e => e.status === 'payment-required')
+  const declined = enrolments.filter(e => e.status === 'declined')
+  const termFee = (booking.pricePerSession ?? 0) * (booking.termLength ?? 1)
+
+  function statusBadge(status: ProgramEnrolment['status']) {
+    switch (status) {
+      case 'paid':             return <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-bold text-green-700">Paid</span>
+      case 'pending-approval': return <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">Pending Approval</span>
+      case 'payment-required': return <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-700">Payment Required</span>
+      case 'approved':         return <span className="rounded-full bg-teal-100 px-2 py-0.5 text-[10px] font-bold text-teal-700">Approved</span>
+      case 'declined':         return <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-700">Declined</span>
+    }
+  }
+
+  return (
+    <div className="mt-2 space-y-3">
+      <div className="flex items-center justify-between border-t border-gray-100 pt-3">
+        <p className="text-xs font-bold uppercase tracking-wide text-gray-400">Enrolments</p>
+        <div className="flex items-center gap-2 text-xs text-gray-500">
+          <span>{paid.length} paid</span>
+          {capacity > 0 && <><span>·</span><span>{capacity - paid.length} spots left</span></>}
+          {booking.enrolmentType === 'approval' && (
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">Approval Required</span>
+          )}
+        </div>
+      </div>
+
+      {/* Capacity bar */}
+      {capacity > 0 && (
+        <div>
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+            <div className="h-full rounded-full" style={{ width: `${Math.min(100, (paid.length / capacity) * 100)}%`, backgroundColor: ACCENT }} />
+          </div>
+          <p className="mt-0.5 text-center text-[10px] text-gray-400">{paid.length} / {capacity} enrolled</p>
+        </div>
+      )}
+
+      {/* Pending approval */}
+      {pending.length > 0 && (
+        <div className="space-y-1.5">
+          <p className="text-[11px] font-semibold text-amber-600">Awaiting Approval ({pending.length})</p>
+          {pending.map(e => (
+            <div key={e.id} className="flex items-center justify-between rounded-lg border border-amber-100 bg-amber-50 px-3 py-2">
+              <div>
+                <p className="text-sm font-semibold text-gray-800">{e.athleteName}</p>
+                <p className="text-[11px] text-gray-400">Requested {dateLabel(e.requestedAt)} · Term fee: ${termFee.toFixed(2)}</p>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <button onClick={() => onApprove(booking.id, e.id)}
+                  className="flex items-center gap-1 rounded-lg bg-[#D4A520] px-3 py-1.5 text-xs font-bold text-white transition hover:opacity-90">
+                  <IconCheck size={12} /> Approve
+                </button>
+                <button onClick={() => onDecline(booking.id, e.id)}
+                  className="flex items-center gap-1 rounded-lg bg-red-500 px-3 py-1.5 text-xs font-bold text-white transition hover:opacity-90">
+                  <IconX size={12} /> Decline
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Payment required */}
+      {paymentRequired.length > 0 && (
+        <div className="space-y-1.5">
+          <p className="text-[11px] font-semibold text-blue-600">Payment Requested ({paymentRequired.length})</p>
+          {paymentRequired.map(e => (
+            <div key={e.id} className="flex items-center justify-between rounded-lg border border-blue-100 bg-blue-50 px-3 py-2">
+              <div>
+                <p className="text-sm font-semibold text-gray-800">{e.athleteName}</p>
+                <p className="text-[11px] text-gray-400">Awaiting payment · ${termFee.toFixed(2)}</p>
+              </div>
+              <button onClick={() => onMarkPaid(booking.id, e.id)}
+                className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 transition hover:bg-gray-50">
+                Mark as Paid
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Enrolled & paid */}
+      {paid.length > 0 && (
+        <div className="space-y-1">
+          <p className="text-[11px] font-semibold text-green-600">Enrolled ({paid.length})</p>
+          {paid.map(e => (
+            <div key={e.id} className="flex items-center justify-between rounded-lg border border-green-100 bg-green-50 px-3 py-2">
+              <p className="text-sm font-semibold text-gray-800">{e.athleteName}</p>
+              <div className="flex items-center gap-2">
+                {statusBadge(e.status)}
+                <button onClick={() => onMarkPaid(booking.id, e.id)}
+                  className="rounded px-2 py-0.5 text-[10px] font-semibold text-gray-400 transition hover:bg-gray-100 hover:text-gray-600">
+                  Override
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Declined */}
+      {declined.length > 0 && (
+        <div className="space-y-1">
+          <p className="text-[11px] font-semibold text-gray-400">Declined ({declined.length})</p>
+          {declined.map(e => (
+            <div key={e.id} className="flex items-center justify-between rounded-lg border border-gray-100 px-3 py-2 opacity-60">
+              <p className="text-sm text-gray-500">{e.athleteName}</p>
+              {statusBadge(e.status)}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {enrolments.length === 0 && (
+        <p className="text-center text-sm text-gray-400">No enrolments yet</p>
+      )}
+    </div>
+  )
+}
+
 // ── Join Requests Tab ───────────────────────────────────────────────────────────
 function JoinRequestsTab({
-  bookings, onAccept, onDecline,
+  bookings, onAccept, onDecline, onApproveEnrolment, onDeclineEnrolment, onMarkPaid,
 }: {
   bookings: Booking[]
   onAccept: (bookingId: string, requestId: string, athleteName: string) => void
   onDecline: (bookingId: string, requestId: string) => void
+  onApproveEnrolment: (bookingId: string, enrolmentId: string) => void
+  onDeclineEnrolment: (bookingId: string, enrolmentId: string) => void
+  onMarkPaid: (bookingId: string, enrolmentId: string) => void
 }) {
-  const ACCEPT = '#6BA3D6'
-  const DECLINE = '#ef4444'
-  const withPending = bookings.filter(b => (b.joinRequests ?? []).some(jr => jr.status === 'pending'))
+  const ACCEPT     = '#6BA3D6'
+  const PROG_ACCENT = '#D4A520'
+  const DECLINE    = '#ef4444'
+  const withPendingJoins = bookings.filter(b => (b.joinRequests ?? []).some(jr => jr.status === 'pending'))
+  const withPendingEnrols = bookings.filter(b => (b.enrolments ?? []).some(e => e.status === 'pending-approval'))
+  const allEmpty = withPendingJoins.length === 0 && withPendingEnrols.length === 0
 
   return (
     <div className="flex-1 overflow-y-auto min-h-0 bg-[#f4f6f9]">
@@ -4761,92 +5077,143 @@ function JoinRequestsTab({
           <IconClipboardList size={22} style={{ color: ACCEPT }} />
           <div>
             <h1 className="text-xl font-bold text-gray-900">Join Requests</h1>
-            <p className="text-sm text-gray-500">Pending requests to join Small Group Sessions</p>
+            <p className="text-sm text-gray-500">Pending requests for Small Group Sessions and Program Enrolments</p>
           </div>
         </div>
       </div>
 
-      <div className="mx-auto max-w-[900px] space-y-4 p-6">
-        {withPending.length === 0 ? (
+      <div className="mx-auto max-w-[900px] space-y-6 p-6">
+        {allEmpty ? (
           <div className="rounded-xl border border-dashed border-gray-200 bg-white p-12 text-center">
             <IconUsers size={32} className="mx-auto mb-2 text-gray-300" />
-            <p className="text-sm text-gray-400">No pending join requests</p>
+            <p className="text-sm text-gray-400">No pending requests</p>
           </div>
         ) : (
-          withPending.map(b => {
-            const sp = SPACES.find(s => s.id === b.spaceId)
-            const requests = b.joinRequests ?? []
-            const pending = requests.filter(jr => jr.status === 'pending')
-            const resolved = requests.filter(jr => jr.status !== 'pending')
-            const capacity = b.capacity ?? 0
-            const filledPct = capacity > 0 ? Math.min(100, (b.athletes.length / capacity) * 100) : 0
-            const coachName = b.coach === 'matt' ? 'Matt' : b.coach === 'jade' ? 'Jade' : b.coach === 'other' ? 'Other' : '—'
-            return (
-              <div key={b.id} className="rounded-xl border border-gray-200 bg-white p-5">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-sm font-bold text-gray-900">{b.sessionType}</p>
-                    <p className="mt-0.5 text-xs text-gray-500">
-                      {parse(b.date).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })}
-                      {' · '}{fmtTime(b.startMins)} – {fmtTime(b.startMins + b.duration)}
-                    </p>
-                    <p className="text-xs text-gray-400">{sp?.label ?? b.spaceId} · Coach {coachName}</p>
-                  </div>
-                  <div className="w-40 shrink-0">
-                    <div className="flex items-center justify-between text-[11px] font-semibold text-gray-500">
-                      <span>Spots</span>
-                      <span>{b.athletes.length} / {capacity || '—'}</span>
-                    </div>
-                    <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
-                      <div className="h-full rounded-full" style={{ width: `${filledPct}%`, backgroundColor: ACCEPT }} />
-                    </div>
-                  </div>
-                </div>
+          <>
+            {/* ── Small Group Join Requests ── */}
+            {withPendingJoins.length > 0 && (
+              <div className="space-y-4">
+                <h2 className="text-xs font-bold uppercase tracking-wide text-gray-400">Small Group Session Join Requests</h2>
+                {withPendingJoins.map(b => {
+                  const sp = SPACES.find(s => s.id === b.spaceId)
+                  const requests = b.joinRequests ?? []
+                  const pending = requests.filter(jr => jr.status === 'pending')
+                  const resolved = requests.filter(jr => jr.status !== 'pending')
+                  const capacity = b.capacity ?? 0
+                  const filledPct = capacity > 0 ? Math.min(100, (b.athletes.length / capacity) * 100) : 0
+                  const coachName = b.coach === 'matt' ? 'Matt' : b.coach === 'jade' ? 'Jade' : b.coach === 'other' ? 'Other' : '—'
+                  return (
+                    <div key={b.id} className="rounded-xl border border-gray-200 bg-white p-5">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <p className="text-sm font-bold text-gray-900">{b.sessionType}</p>
+                          <p className="mt-0.5 text-xs text-gray-500">
+                            {parse(b.date).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })}
+                            {' · '}{fmtTime(b.startMins)} – {fmtTime(b.startMins + b.duration)}
+                          </p>
+                          <p className="text-xs text-gray-400">{sp?.label ?? b.spaceId} · Coach {coachName}</p>
+                        </div>
+                        <div className="w-40 shrink-0">
+                          <div className="flex items-center justify-between text-[11px] font-semibold text-gray-500">
+                            <span>Spots</span>
+                            <span>{b.athletes.length} / {capacity || '—'}</span>
+                          </div>
+                          <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+                            <div className="h-full rounded-full" style={{ width: `${filledPct}%`, backgroundColor: ACCEPT }} />
+                          </div>
+                        </div>
+                      </div>
 
-                <div className="mt-4 space-y-2">
-                  {pending.map(jr => (
-                    <div key={jr.id} className="flex items-center justify-between rounded-lg border border-gray-100 bg-gray-50 px-3 py-2.5">
-                      <div>
-                        <p className="text-sm font-semibold text-gray-800">{jr.athleteName}</p>
-                        <p className="text-[11px] text-gray-400">Requested on {dateLabel(jr.requestedAt)}</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => onAccept(b.id, jr.id, jr.athleteName)}
-                          className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition hover:opacity-90"
-                          style={{ backgroundColor: ACCEPT }}
-                        >
-                          <IconCheck size={13} /> Accept
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onDecline(b.id, jr.id)}
-                          className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition hover:opacity-90"
-                          style={{ backgroundColor: DECLINE }}
-                        >
-                          <IconX size={13} /> Decline
-                        </button>
+                      <div className="mt-4 space-y-2">
+                        {pending.map(jr => (
+                          <div key={jr.id} className="flex items-center justify-between rounded-lg border border-gray-100 bg-gray-50 px-3 py-2.5">
+                            <div>
+                              <p className="text-sm font-semibold text-gray-800">{jr.athleteName}</p>
+                              <p className="text-[11px] text-gray-400">Requested on {dateLabel(jr.requestedAt)}</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button type="button" onClick={() => onAccept(b.id, jr.id, jr.athleteName)}
+                                className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition hover:opacity-90"
+                                style={{ backgroundColor: ACCEPT }}>
+                                <IconCheck size={13} /> Accept
+                              </button>
+                              <button type="button" onClick={() => onDecline(b.id, jr.id)}
+                                className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition hover:opacity-90"
+                                style={{ backgroundColor: DECLINE }}>
+                                <IconX size={13} /> Decline
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                        {resolved.map(jr => (
+                          <div key={jr.id} className="flex items-center justify-between rounded-lg border border-gray-100 px-3 py-2 opacity-60">
+                            <p className="text-sm text-gray-500">{jr.athleteName}</p>
+                            <span className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase"
+                              style={jr.status === 'accepted' ? { backgroundColor: '#dcfce7', color: '#15803d' } : { backgroundColor: '#fee2e2', color: '#b91c1c' }}>
+                              {jr.status}
+                            </span>
+                          </div>
+                        ))}
                       </div>
                     </div>
-                  ))}
-                  {resolved.map(jr => (
-                    <div key={jr.id} className="flex items-center justify-between rounded-lg border border-gray-100 px-3 py-2 opacity-60">
-                      <p className="text-sm text-gray-500">{jr.athleteName}</p>
-                      <span
-                        className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase"
-                        style={jr.status === 'accepted'
-                          ? { backgroundColor: '#dcfce7', color: '#15803d' }
-                          : { backgroundColor: '#fee2e2', color: '#b91c1c' }}
-                      >
-                        {jr.status}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+                  )
+                })}
               </div>
-            )
-          })
+            )}
+
+            {/* ── Program Enrolment Requests ── */}
+            {withPendingEnrols.length > 0 && (
+              <div className="space-y-4">
+                <h2 className="text-xs font-bold uppercase tracking-wide text-gray-400">Program Enrolment Requests</h2>
+                {withPendingEnrols.map(b => {
+                  const sp = SPACES.find(s => s.id === b.spaceId)
+                  const pendingEnrols = (b.enrolments ?? []).filter(e => e.status === 'pending-approval')
+                  const termFee = (b.pricePerSession ?? 0) * (b.termLength ?? 1)
+                  const coachName = b.coach === 'matt' ? 'Matt' : b.coach === 'jade' ? 'Jade' : b.coach === 'other' ? 'Other' : '—'
+                  return (
+                    <div key={b.id} className="rounded-xl border border-[#D4A520]/40 bg-white p-5">
+                      <div className="mb-3 flex items-start justify-between gap-4">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-bold text-gray-900">{b.sessionType}</p>
+                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">Approval Required</span>
+                          </div>
+                          <p className="mt-0.5 text-xs text-gray-500">
+                            {parse(b.date).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })}
+                            {' · '}{fmtTime(b.startMins)} – {fmtTime(b.startMins + b.duration)}
+                          </p>
+                          <p className="text-xs text-gray-400">{sp?.label ?? b.spaceId} · Coach {coachName} · {b.termLength ?? 1} sessions · ${termFee.toFixed(2)} term fee</p>
+                        </div>
+                        <span className="text-sm font-bold" style={{ color: PROG_ACCENT }}>{pendingEnrols.length} pending</span>
+                      </div>
+                      <div className="space-y-2">
+                        {pendingEnrols.map(e => (
+                          <div key={e.id} className="flex items-center justify-between rounded-lg border border-amber-100 bg-amber-50 px-3 py-2.5">
+                            <div>
+                              <p className="text-sm font-semibold text-gray-800">{e.athleteName}</p>
+                              <p className="text-[11px] text-gray-400">Requested {dateLabel(e.requestedAt)} · ${termFee.toFixed(2)} term fee</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button type="button" onClick={() => onApproveEnrolment(b.id, e.id)}
+                                className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-bold text-white transition hover:opacity-90"
+                                style={{ backgroundColor: PROG_ACCENT }}>
+                                <IconCheck size={13} /> Approve
+                              </button>
+                              <button type="button" onClick={() => onDeclineEnrolment(b.id, e.id)}
+                                className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-bold text-white transition hover:opacity-90"
+                                style={{ backgroundColor: DECLINE }}>
+                                <IconX size={13} /> Decline
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
