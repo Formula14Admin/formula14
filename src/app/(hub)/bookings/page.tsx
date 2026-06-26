@@ -22,10 +22,7 @@ import {
   IconChevronDown,
   IconLink,
   IconCopy,
-  IconDotsVertical,
-  IconExternalLink,
-  IconSearch,
-  IconSettings,
+
 } from '@tabler/icons-react'
 
 // ── Grid constants ─────────────────────────────────────────────────────────────
@@ -620,7 +617,7 @@ export default function BookingsPage() {
   const [conflictMsg, setConflictMsg] = useState<string | null>(null)
 
   // ── Module tab state ──────────────────────────────────────────────────────────
-  const [pageTab, setPageTab] = useState<'calendar' | 'book-session' | 'booking-info' | 'join-requests'>('calendar')
+  const [pageTab, setPageTab] = useState<'calendar' | 'booking-info' | 'join-requests'>('calendar')
 
   // Coach Availability state (merged from old availability page)
   const [coaches, setCoaches] = useState<Coach[]>(DEFAULT_COACHES)
@@ -1342,9 +1339,8 @@ export default function BookingsPage() {
 
   const hours = Array.from({ length: END_H - START_H }, (_, i) => START_H + i)
 
-  const TABS: { id: 'calendar' | 'book-session' | 'booking-info' | 'join-requests'; label: string; badge?: number }[] = [
+  const TABS: { id: 'calendar' | 'booking-info' | 'join-requests'; label: string; badge?: number }[] = [
     { id: 'calendar',      label: 'Calendar' },
-    { id: 'book-session',  label: 'Book a Session' },
     { id: 'booking-info',  label: 'Booking Information' },
     { id: 'join-requests', label: 'Join Requests', badge: totalPendingCount },
   ]
@@ -1372,10 +1368,6 @@ export default function BookingsPage() {
           </button>
         ))}
       </div>
-
-      {pageTab === 'book-session' && (
-        <SessionTypeManagement />
-      )}
 
       {pageTab === 'booking-info' && (
         <BookingInformationTab />
@@ -4169,485 +4161,478 @@ function AvTimeSelect({ value, onChange, minMins }: { value: number; onChange: (
 
 // ── Booking Information Tab ────────────────────────────────────────────────────
 
-const BOOKING_INFO_LS = 'f14_booking_settings'
+const BIT_LS_SETTINGS = 'f14_booking_settings'
+const BIT_LS_META     = 'f14_session_type_meta'
+const BIT_LS_PRICING  = 'f14_pricing_configs'
+const BIT_LS_CAT      = 'f14_program_catalogue'
+const BIT_ACCENT      = '#6BA3D6'
 
-const BOOKING_INFO_TYPES = [
-  { id: 'individual',               label: 'Individual Work Out', bg: '#dcfce7', color: '#15803d' },
-  { id: 'small-group',              label: 'Small Group Session', bg: '#dbeafe', color: '#1d4ed8' },
-  { id: 'team-training',            label: 'Team Training',       bg: '#ede9fe', color: '#6d28d9' },
-  { id: 'casual-shooting',          label: 'Casual Shooting',     bg: '#fef3c7', color: '#b45309' },
-  { id: 'shooting-machine-session', label: 'Shooting Machine',    bg: '#fdf5e0', color: '#D4A520' },
-  { id: 'weight-room-session',      label: 'Weight Room',         bg: '#fce8eb', color: '#9B2335' },
+interface BITMeta {
+  label?: string
+  description?: string
+  durationMins?: number
+  emoji?: string
+  location?: string
+  style?: string
+}
+
+interface BITPricingTier   { min: number; max: number | null; pricePerAthlete: number }
+interface BITPricingConfig { sessionType: string; tiers: BITPricingTier[] }
+
+const BIT_TYPES = [
+  { id: 'individual',               label: 'Individual Work Out', emoji: '🏀', description: '1-on-1 coached session tailored to your development goals.',    durationMins: 60,  location: 'Primary Station',            style: 'Coached',    accentColor: '#6BA3D6' },
+  { id: 'small-group',              label: 'Small Group Session', emoji: '👥', description: 'Train alongside 2–6 athletes under expert coach guidance.',       durationMins: 90,  location: 'Primary / Secondary Station', style: 'Coached',    accentColor: '#6BA3D6' },
+  { id: 'team-training',            label: 'Team Training',       emoji: '🏆', description: 'Full-team structured training session. Book your whole squad.',   durationMins: 120, location: 'Primary Station',            style: 'Coached',    accentColor: '#6BA3D6' },
+  { id: 'casual-shooting',          label: 'Casual Shooting',     emoji: '🎯', description: 'Open gym practice — grab a ball and work on your shot.',          durationMins: 60,  location: 'Shooting Bay',               style: 'Self-serve', accentColor: '#f59e0b' },
+  { id: 'shooting-machine-session', label: 'Shooting Machine',    emoji: '⚡', description: 'High-volume reps with the automatic rebounder machine.',          durationMins: 60,  location: 'Shooting Bay',               style: 'Self-serve', accentColor: '#f59e0b' },
+  { id: 'weight-room-session',      label: 'Weight Room',         emoji: '💪', description: 'Strength & conditioning in the dedicated weight room.',            durationMins: 60,  location: 'Weight Room',                style: 'Self-serve', accentColor: '#9B2335' },
 ]
 
-const INIT_BOOKING_INFO: Record<string, { enabled: boolean; reason: string }> =
-  Object.fromEntries(BOOKING_INFO_TYPES.map(t => [t.id, { enabled: true, reason: '' }]))
+const INIT_BIT_SETTINGS = Object.fromEntries(BIT_TYPES.map(t => [t.id, { enabled: true, reason: '' }]))
 
 function BookingInformationTab() {
-  const [bookingSettings, setBookingSettings] = useState<Record<string, { enabled: boolean; reason: string }>>(() => {
+  // ── State
+  const [settings, setSettings] = useState<Record<string, { enabled: boolean; reason: string }>>(() => {
     try {
-      const raw = typeof window !== 'undefined' ? localStorage.getItem(BOOKING_INFO_LS) : null
-      if (raw) return { ...INIT_BOOKING_INFO, ...JSON.parse(raw) }
+      const raw = typeof window !== 'undefined' ? localStorage.getItem(BIT_LS_SETTINGS) : null
+      if (raw) return { ...INIT_BIT_SETTINGS, ...JSON.parse(raw) }
     } catch {}
-    return INIT_BOOKING_INFO
+    return INIT_BIT_SETTINGS
   })
 
-  useEffect(() => {
-    if (Object.keys(bookingSettings).length === 0) return
-    localStorage.setItem(BOOKING_INFO_LS, JSON.stringify(bookingSettings))
-  }, [bookingSettings])
+  const [meta, setMeta] = useState<Record<string, BITMeta>>(() => {
+    try {
+      const raw = typeof window !== 'undefined' ? localStorage.getItem(BIT_LS_META) : null
+      if (raw) return JSON.parse(raw)
+    } catch {}
+    return {}
+  })
 
-  const INPUT_CLS = 'w-full rounded-lg border border-gray-200 px-3 py-2 text-xs text-gray-900 outline-none transition focus:border-[#6BA3D6] focus:ring-2 focus:ring-[#6BA3D6]/10'
+  const [pricingConfigs, setPricingConfigs] = useState<BITPricingConfig[]>([])
+  const [catalogue, setCatalogue] = useState<ProgramCatalogueItem[]>(INIT_CATALOGUE_FALLBACK)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editIsProg, setEditIsProg] = useState(false)
+  const [editDraft, setEditDraft] = useState({ label: '', description: '', durationMins: '', emoji: '', location: '', style: '' })
+  const [progDraft, setProgDraft] = useState({ name: '', description: '', colourTag: '' })
+
+  // ── Persist
+  useEffect(() => {
+    localStorage.setItem(BIT_LS_SETTINGS, JSON.stringify(settings))
+  }, [settings])
+
+  useEffect(() => {
+    if (Object.keys(meta).length > 0) localStorage.setItem(BIT_LS_META, JSON.stringify(meta))
+  }, [meta])
+
+  useEffect(() => {
+    try { const r = localStorage.getItem(BIT_LS_PRICING); if (r) setPricingConfigs(JSON.parse(r)) } catch {}
+    try { const r = localStorage.getItem(BIT_LS_CAT); if (r) { const p = JSON.parse(r); if (p.length > 0) setCatalogue(p) } } catch {}
+  }, [])
+
+  // ── Pricing helpers
+  function getLivePrice(typeId: string): number | null {
+    return pricingConfigs.find(c => c.sessionType === typeId)?.tiers[0]?.pricePerAthlete ?? null
+  }
+
+  const sgsRange = useMemo(() => {
+    const cfg = pricingConfigs.find(c => c.sessionType === 'small-group')
+    if (!cfg || cfg.tiers.length === 0) return null
+    const prices = cfg.tiers.map(t => t.pricePerAthlete)
+    return { min: Math.min(...prices), max: Math.max(...prices) }
+  }, [pricingConfigs])
+
+  // ── Toggle / reason helpers
+  function setEnabled(id: string, v: boolean) {
+    setSettings(prev => ({ ...prev, [id]: { ...(prev[id] ?? { enabled: true, reason: '' }), enabled: v } }))
+  }
+  function setReason(id: string, v: string) {
+    setSettings(prev => ({ ...prev, [id]: { ...(prev[id] ?? { enabled: true, reason: '' }), reason: v } }))
+  }
+
+  // ── Edit helpers
+  function openSessionEdit(id: string) {
+    const def = BIT_TYPES.find(t => t.id === id)!
+    const m = meta[id] ?? {}
+    setEditDraft({
+      label: m.label ?? def.label,
+      description: m.description ?? def.description,
+      durationMins: String(m.durationMins ?? def.durationMins),
+      emoji: m.emoji ?? def.emoji,
+      location: m.location ?? def.location,
+      style: m.style ?? def.style,
+    })
+    setEditIsProg(false)
+    setEditingId(id)
+  }
+
+  function openProgEdit(id: string) {
+    const prog = catalogue.find(p => p.id === id)
+    if (!prog) return
+    setProgDraft({ name: prog.name, description: prog.description, colourTag: prog.colourTag })
+    setEditIsProg(true)
+    setEditingId(id)
+  }
+
+  function saveSessionEdit() {
+    if (!editingId) return
+    setMeta(prev => ({
+      ...prev,
+      [editingId]: {
+        ...(editDraft.label        ? { label: editDraft.label }                       : {}),
+        ...(editDraft.description  ? { description: editDraft.description }           : {}),
+        ...(editDraft.durationMins ? { durationMins: Number(editDraft.durationMins) } : {}),
+        ...(editDraft.emoji        ? { emoji: editDraft.emoji }                       : {}),
+        ...(editDraft.location     ? { location: editDraft.location }                 : {}),
+        ...(editDraft.style        ? { style: editDraft.style }                       : {}),
+      },
+    }))
+    setEditingId(null)
+  }
+
+  function saveProgEdit() {
+    if (!editingId) return
+    setCatalogue(prev => {
+      const next = prev.map(p =>
+        p.id === editingId
+          ? { ...p, name: progDraft.name || p.name, description: progDraft.description, colourTag: progDraft.colourTag || p.colourTag }
+          : p
+      )
+      try { localStorage.setItem(BIT_LS_CAT, JSON.stringify(next)) } catch {}
+      return next
+    })
+    setEditingId(null)
+  }
+
+  const devProgs    = catalogue.filter(p => p.category === 'development')
+  const socialProgs = catalogue.filter(p => p.category === 'social')
+
+  const FIELD_CLS = 'w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-[#6BA3D6] focus:ring-2 focus:ring-[#6BA3D6]/10'
+  const LBL_CLS   = 'mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500'
+
+  // ── Shared admin right-column (toggle + edit button)
+  function AdminCol({ id, accentColor, isProg }: { id: string; accentColor: string; isProg?: boolean }) {
+    const tog = settings[id] ?? { enabled: true, reason: '' }
+    return (
+      <div className="flex shrink-0 flex-col items-center justify-center gap-3 border-l border-gray-100 bg-gray-50/60 px-5 py-5" style={{ minWidth: 116 }}>
+        <div className="flex flex-col items-center gap-1.5">
+          <Toggle on={tog.enabled} onChange={v => setEnabled(id, v)} color={accentColor} />
+          <span className={`text-xs font-bold ${tog.enabled ? 'text-green-600' : 'text-gray-400'}`}>
+            {tog.enabled ? 'On' : 'Off'}
+          </span>
+        </div>
+        <button
+          onClick={() => isProg ? openProgEdit(id) : openSessionEdit(id)}
+          className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 transition hover:bg-gray-100 hover:border-gray-300"
+        >
+          <IconPencil size={12} /> Edit
+        </button>
+      </div>
+    )
+  }
+
+  // ── Reason row (shown below tile when OFF)
+  function ReasonRow({ id }: { id: string }) {
+    const tog = settings[id] ?? { enabled: true, reason: '' }
+    if (tog.enabled) return null
+    return (
+      <div className="mt-1.5 flex items-center gap-2 rounded-xl border border-dashed border-amber-200 bg-amber-50/60 px-4 py-2.5">
+        <IconAlertCircle size={14} className="shrink-0 text-amber-400" />
+        <input
+          type="text"
+          value={tog.reason}
+          onChange={e => setReason(id, e.target.value)}
+          placeholder="Reason shown to athletes (optional) — e.g. Temporarily unavailable: closed for maintenance"
+          className="flex-1 bg-transparent text-sm text-gray-700 outline-none placeholder:text-gray-400"
+        />
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-1 min-h-0 flex-col overflow-y-auto" style={{ backgroundColor: '#f4f6f9' }}>
-      <div className="p-6 max-w-2xl">
+      <div className="mx-auto w-full max-w-[1040px] px-6 py-8">
+
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Booking Information</h1>
-          <p className="mt-0.5 text-sm text-gray-500">Control which session types are available in the athlete booking portal</p>
+          <p className="mt-0.5 text-sm text-gray-500">
+            Control which session types athletes can see and book. Toggle off to hide a type; add a reason to show it greyed with a message.
+          </p>
         </div>
 
-        <div className="rounded-xl border border-gray-200 bg-white p-5">
-          <h2 className="mb-1 flex items-center gap-2 text-base font-semibold text-gray-800">
-            <IconSettings size={17} style={{ color: '#6BA3D6' }} /> Booking Settings
-          </h2>
-          <p className="mb-4 text-xs text-gray-400">
-            Turning a type off with no reason hides the tile; adding a reason shows it greyed out with a message to athletes.
-          </p>
-          <div className="space-y-2">
-            {BOOKING_INFO_TYPES.map(st => {
-              const tog = bookingSettings[st.id] ?? { enabled: true, reason: '' }
+        {/* ── Session Types ─────────────────────────────────────────── */}
+        <div className="mb-8">
+          <h2 className="mb-3 text-xs font-bold uppercase tracking-wide text-gray-500">Session Types</h2>
+          <div className="flex flex-col gap-3">
+            {BIT_TYPES.map(def => {
+              const m   = meta[def.id] ?? {}
+              const tog = settings[def.id] ?? { enabled: true, reason: '' }
+              const label        = m.label        ?? def.label
+              const description  = m.description  ?? def.description
+              const durationMins = m.durationMins ?? def.durationMins
+              const emoji        = m.emoji        ?? def.emoji
+              const location     = m.location     ?? def.location
+              const style        = m.style        ?? def.style
+              const lp = def.id === 'small-group' ? null : getLivePrice(def.id)
+
               return (
-                <div key={st.id} className="rounded-xl border border-gray-100 p-3">
-                  <div className="flex items-center justify-between gap-4">
-                    <span className="rounded-full px-2.5 py-0.5 text-xs font-semibold"
-                      style={{ backgroundColor: st.bg, color: st.color }}>
-                      {st.label}
-                    </span>
-                    <div className="flex items-center gap-3">
-                      {!tog.enabled && (
-                        <span className="text-xs text-gray-400">
-                          {tog.reason ? 'Greyed out with reason' : 'Hidden from athletes'}
-                        </span>
-                      )}
-                      <Toggle on={tog.enabled} onChange={v =>
-                        setBookingSettings(prev => ({
-                          ...prev,
-                          [st.id]: { ...(prev[st.id] ?? { enabled: true, reason: '' }), enabled: v },
-                        }))} />
+                <div key={def.id}>
+                  <div className={`flex w-full overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm transition-opacity ${tog.enabled ? '' : 'opacity-60'}`}>
+                    {/* Left accent bar */}
+                    <div className="w-1.5 shrink-0 self-stretch" style={{ backgroundColor: def.accentColor }} />
+
+                    {/* Tile body */}
+                    <div className="flex flex-1 min-w-0 items-stretch">
+
+                      {/* Emoji + name + description */}
+                      <div className="flex flex-1 items-center gap-5 px-6 py-5">
+                        <span className="shrink-0 text-4xl leading-none">{emoji}</span>
+                        <div className="min-w-0">
+                          <p className="text-lg font-bold text-gray-900">{label}</p>
+                          <p className="mt-0.5 text-sm leading-snug text-gray-500">{description}</p>
+                          {!tog.enabled && tog.reason && (
+                            <p className="mt-1.5 text-xs font-medium text-amber-600">Athletes see: &ldquo;{tog.reason}&rdquo;</p>
+                          )}
+                          {!tog.enabled && !tog.reason && (
+                            <p className="mt-1.5 text-xs text-gray-400">Hidden from athletes</p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Middle: Duration · Location · Style */}
+                      <div className="hidden shrink-0 flex-col justify-center gap-2.5 border-l border-gray-100 px-5 py-5 md:flex" style={{ minWidth: 200 }}>
+                        {([
+                          { label: 'Duration',  value: `${durationMins} min` },
+                          { label: 'Location',  value: location },
+                          { label: 'Style',     value: style },
+                        ] as const).map(d => (
+                          <div key={d.label}>
+                            <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">{d.label}</p>
+                            <p className="mt-0.5 text-sm font-medium text-gray-700">{d.value}</p>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Pricing (read-only) */}
+                      <div className="flex shrink-0 flex-col items-center justify-center gap-1 border-l border-gray-100 px-5 py-5" style={{ minWidth: 128 }}>
+                        {def.id === 'small-group'
+                          ? sgsRange
+                            ? (
+                              <div className="text-center leading-tight">
+                                <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">At lockout</p>
+                                <p className="mt-0.5 text-xl font-bold" style={{ color: def.accentColor }}>${sgsRange.min}–${sgsRange.max}</p>
+                                <p className="text-[10px] text-gray-400">per athlete</p>
+                              </div>
+                            )
+                            : <p className="text-xs text-center text-gray-400">Set at lockout</p>
+                          : lp !== null
+                            ? <p className="text-2xl font-bold" style={{ color: BIT_ACCENT }}>${lp}</p>
+                            : <p className="text-sm text-gray-400">—</p>
+                        }
+                        <p className="mt-1 text-[9px] font-semibold uppercase tracking-wide text-gray-300">Pricing Config</p>
+                      </div>
                     </div>
+
+                    {/* Admin controls */}
+                    <AdminCol id={def.id} accentColor={def.accentColor} />
                   </div>
-                  {!tog.enabled && (
-                    <input
-                      type="text"
-                      value={tog.reason}
-                      onChange={e => setBookingSettings(prev => ({
-                        ...prev,
-                        [st.id]: { ...prev[st.id]!, reason: e.target.value },
-                      }))}
-                      placeholder="Reason (optional) — e.g. Temporarily unavailable: closed for maintenance until 1 July"
-                      className={INPUT_CLS + ' mt-2'}
-                    />
-                  )}
+
+                  {/* Reason input when OFF */}
+                  <ReasonRow id={def.id} />
                 </div>
               )
             })}
           </div>
         </div>
-      </div>
-    </div>
-  )
-}
 
-// ── Session Type Management ────────────────────────────────────────────────────
+        {/* ── Programmes ─────────────────────────────────────────────── */}
+        {(devProgs.length > 0 || socialProgs.length > 0) && (
+          <div>
+            <h2 className="mb-3 text-xs font-bold uppercase tracking-wide text-gray-500">Programmes</h2>
 
-const STM_ACCENT           = '#6BA3D6'
-const STM_SHARE_BASE       = 'formula14.com.au/book'
-const STM_LS_PROGRAMME_CAT = 'f14_program_catalogue'
-const STM_LS_META          = 'f14_stm_meta'
-
-interface STMBuiltIn {
-  id: string; label: string; emoji: string; durationMins: number
-  location: string; style: string; availability: string; accentColor: string; slug: string
-}
-
-const STM_BUILT_IN: STMBuiltIn[] = [
-  { id: 'individual',               label: 'Individual Work Out', emoji: '🏀', durationMins:  60, location: 'Primary Station',             style: 'Coached',    availability: 'Mon–Fri, hours vary', accentColor: '#6BA3D6', slug: 'individual-workout'   },
-  { id: 'small-group',              label: 'Small Group Session', emoji: '👥', durationMins:  90, location: 'Primary / Secondary Station',  style: 'Coached',    availability: 'Hours vary',          accentColor: '#6BA3D6', slug: 'small-group-session'  },
-  { id: 'team-training',            label: 'Team Training',       emoji: '🏆', durationMins: 120, location: 'Primary Station',             style: 'Coached',    availability: 'Hours vary',          accentColor: '#6BA3D6', slug: 'team-training'        },
-  { id: 'casual-shooting',          label: 'Casual Shooting',     emoji: '🎯', durationMins:  60, location: 'Shooting Bay',                style: 'Self-serve', availability: 'Mon–Sat, open hours', accentColor: '#f59e0b', slug: 'casual-shooting'      },
-  { id: 'shooting-machine-session', label: 'Shooting Machine',    emoji: '⚡', durationMins:  60, location: 'Shooting Bay',                style: 'Self-serve', availability: 'Mon–Sat, open hours', accentColor: '#f59e0b', slug: 'shooting-machine'     },
-  { id: 'weight-room-session',      label: 'Weight Room',         emoji: '💪', durationMins:  60, location: 'Weight Room',                 style: 'Self-serve', availability: 'Mon–Sat, open hours', accentColor: '#9B2335', slug: 'weight-room'          },
-]
-
-function SessionTypeManagement() {
-  const [catalogue, setCatalogue] = useState<ProgramCatalogueItem[]>(INIT_CATALOGUE_FALLBACK)
-  const [meta, setMeta] = useState<Record<string, { description?: string; location?: string }>>({})
-  const [search, setSearch] = useState('')
-  const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [editDesc, setEditDesc] = useState('')
-  const [editLoc, setEditLoc] = useState('')
-  const [copied, setCopied] = useState<string | null>(null)
-  const [toast, setToast] = useState<string | null>(null)
-
-  // ── Load / persist ──────────────────────────────────────────────────────────
-
-  useEffect(() => {
-    try { const r = localStorage.getItem(STM_LS_PROGRAMME_CAT); if (r) { const p = JSON.parse(r); if (p.length > 0) setCatalogue(p) } } catch {}
-    try { const r = localStorage.getItem(STM_LS_META); if (r) setMeta(JSON.parse(r)) } catch {}
-  }, [])
-
-  useEffect(() => {
-    if (Object.keys(meta).length === 0) return
-    localStorage.setItem(STM_LS_META, JSON.stringify(meta))
-  }, [meta])
-
-  function showToast(msg: string) {
-    setToast(msg)
-    setTimeout(() => setToast(null), 2500)
-  }
-
-  function copyLink(slug: string, id: string) {
-    navigator.clipboard.writeText(`${STM_SHARE_BASE}/${slug}`).catch(() => {})
-    setCopied(id)
-    setTimeout(() => setCopied(null), 2000)
-    showToast('Booking link copied to clipboard')
-  }
-
-  function openEdit(id: string) {
-    const builtin = STM_BUILT_IN.find(t => t.id === id)
-    const prog = catalogue.find(p => p.id === id)
-    setEditDesc(meta[id]?.description ?? builtin?.location ?? prog?.description ?? '')
-    setEditLoc(meta[id]?.location ?? builtin?.location ?? '')
-    setEditingId(id)
-    setMenuOpenId(null)
-  }
-
-  function saveEdit() {
-    if (!editingId) return
-    setMeta(prev => ({ ...prev, [editingId]: { description: editDesc, location: editLoc } }))
-    setEditingId(null)
-  }
-
-  // ── Search / selection ──────────────────────────────────────────────────────
-
-  const sq = search.toLowerCase()
-  const matchSearch = (label: string, extra = '') => !sq || label.toLowerCase().includes(sq) || extra.toLowerCase().includes(sq)
-
-  const devProgs    = catalogue.filter(p => p.category === 'development')
-  const socialProgs = catalogue.filter(p => p.category === 'social')
-
-  const builtinVisible = STM_BUILT_IN.filter(t => matchSearch(t.label, t.location))
-  const devVisible     = devProgs.filter(p => matchSearch(p.name, p.description))
-  const socialVisible  = socialProgs.filter(p => matchSearch(p.name, p.description))
-
-  const allIds = [...STM_BUILT_IN.map(t => t.id), ...catalogue.map(p => p.id)]
-  const allSelected  = allIds.length > 0 && allIds.every(id => selected.has(id))
-  const someSelected = allIds.some(id => selected.has(id)) && !allSelected
-
-  function toggleAll() { setSelected(allSelected ? new Set() : new Set(allIds)) }
-  function toggleOne(id: string) {
-    setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
-  }
-
-  // ── Row renderer ────────────────────────────────────────────────────────────
-
-  function STMRow({
-    id, emoji, label, durationMins, location, style, availability, accentColor, slug, isLast, isProg, pricePerSession,
-  }: {
-    id: string; emoji: string; label: string; durationMins: number; location: string
-    style: string; availability: string; accentColor: string; slug: string
-    isLast: boolean; isProg?: boolean; pricePerSession?: number
-  }) {
-    const isMenuOpen = menuOpenId === id
-    const isCopied  = copied === id
-    const displayLoc = meta[id]?.location ?? location
-
-    return (
-      <div className={`relative flex items-center gap-3 px-5 py-4 bg-white hover:bg-gray-50/50 transition-colors
-        ${isLast ? '' : 'border-b border-gray-100'}`}>
-
-        {/* Colour accent bar */}
-        <div className="absolute inset-y-0 left-0 w-[3px]" style={{ backgroundColor: accentColor }} />
-
-        {/* Checkbox */}
-        <div className="pl-3 shrink-0">
-          <input type="checkbox" checked={selected.has(id)} onChange={() => toggleOne(id)}
-            className="h-4 w-4 cursor-pointer rounded border-gray-300 accent-[#6BA3D6]" />
-        </div>
-
-        {/* Emoji + name + meta */}
-        <div className="flex-1 min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xl leading-none">{emoji}</span>
-            <p className="text-sm font-bold text-gray-900">{label}</p>
-          </div>
-          <p className="mt-0.5 text-xs text-gray-500">
-            {durationMins} min
-            <span className="mx-1.5 text-gray-300">·</span>
-            {displayLoc}
-            <span className="mx-1.5 text-gray-300">·</span>
-            {style}
-            {isProg && pricePerSession !== undefined && (
-              <><span className="mx-1.5 text-gray-300">·</span>${pricePerSession}/session</>
-            )}
-          </p>
-        </div>
-
-        {/* Availability */}
-        <div className="hidden w-44 shrink-0 xl:block">
-          <p className="text-xs text-gray-500">{availability}</p>
-        </div>
-
-        {/* Actions */}
-        <div className="flex shrink-0 items-center gap-1.5">
-          <button onClick={() => copyLink(slug, id)}
-            className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 transition hover:bg-gray-50 hover:border-gray-300">
-            <IconCopy size={12} />
-            {isCopied ? 'Copied!' : 'Copy Link'}
-          </button>
-          <a href={`/portal`} target="_blank" rel="noopener noreferrer" title="Preview athlete booking page"
-            className="rounded-lg border border-gray-200 bg-white p-1.5 text-gray-400 transition hover:bg-gray-50 hover:text-gray-600">
-            <IconExternalLink size={14} />
-          </a>
-
-          {/* Three-dot menu */}
-          <div className="relative">
-            <button onClick={() => setMenuOpenId(isMenuOpen ? null : id)}
-              className="rounded-lg border border-gray-200 bg-white p-1.5 text-gray-400 transition hover:bg-gray-50 hover:text-gray-600">
-              <IconDotsVertical size={14} />
-            </button>
-            {isMenuOpen && (
-              <div className="absolute right-0 top-full z-30 mt-1 min-w-[168px] rounded-xl border border-gray-200 bg-white py-1 shadow-xl">
-                <button onClick={() => openEdit(id)}
-                  className="flex w-full items-center gap-2.5 px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50">
-                  <IconPencil size={14} className="text-gray-400" /> Edit details
-                </button>
-                {isProg && (
-                  <button className="flex w-full items-center gap-2.5 px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50">
-                    <IconUsers size={14} className="text-gray-400" /> Manage Enrolments
-                  </button>
-                )}
-                <div className="mx-3 my-1 border-t border-gray-100" />
-                <button className="flex w-full items-center gap-2.5 px-3.5 py-2 text-sm text-red-500 hover:bg-red-50">
-                  <IconTrash size={14} /> Delete
-                </button>
-              </div>
+            {([
+              { progs: devProgs,    sectionLabel: 'Development', progEmoji: '🎓', sectionColor: '#1d4ed8', sectionBg: '#dbeafe', categoryLabel: 'Development Program' },
+              { progs: socialProgs, sectionLabel: 'Social',      progEmoji: '🤝', sectionColor: '#15803d', sectionBg: '#dcfce7', categoryLabel: 'Social Program' },
+            ] as const).map(({ progs, sectionLabel, progEmoji, sectionColor, sectionBg, categoryLabel }) =>
+              progs.length > 0 && (
+                <div key={sectionLabel} className="mb-4">
+                  <div className="mb-2 flex items-center gap-2">
+                    <span className="text-xs font-bold uppercase tracking-wide" style={{ color: sectionColor }}>{sectionLabel}</span>
+                    <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ backgroundColor: sectionBg, color: sectionColor }}>
+                      {progs.length}
+                    </span>
+                  </div>
+                  <div className="flex flex-col gap-3">
+                    {progs.map(prog => {
+                      const tog = settings[prog.id] ?? { enabled: true, reason: '' }
+                      return (
+                        <div key={prog.id}>
+                          <div className={`flex w-full overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm transition-opacity ${tog.enabled ? '' : 'opacity-60'}`}>
+                            <div className="w-1.5 shrink-0 self-stretch" style={{ backgroundColor: prog.colourTag }} />
+                            <div className="flex flex-1 min-w-0 items-stretch">
+                              <div className="flex flex-1 items-center gap-5 px-6 py-5">
+                                <span className="shrink-0 text-4xl leading-none">{progEmoji}</span>
+                                <div className="min-w-0">
+                                  <p className="text-lg font-bold text-gray-900">{prog.name}</p>
+                                  <p className="mt-0.5 text-sm leading-snug text-gray-500">{prog.description || 'No description set'}</p>
+                                  {!tog.enabled && tog.reason && (
+                                    <p className="mt-1.5 text-xs font-medium text-amber-600">Athletes see: &ldquo;{tog.reason}&rdquo;</p>
+                                  )}
+                                  {!tog.enabled && !tog.reason && (
+                                    <p className="mt-1.5 text-xs text-gray-400">Hidden from athletes</p>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="hidden shrink-0 flex-col justify-center gap-2.5 border-l border-gray-100 px-5 py-5 md:flex" style={{ minWidth: 200 }}>
+                                {([
+                                  { label: 'Category',  value: categoryLabel },
+                                  { label: 'Enrolment', value: prog.enrolmentType === 'instant' ? 'Instant' : 'Approval required' },
+                                  { label: 'Capacity',  value: `Max ${prog.maxCapacity} athletes` },
+                                ] as const).map(d => (
+                                  <div key={d.label}>
+                                    <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">{d.label}</p>
+                                    <p className="mt-0.5 text-sm font-medium text-gray-700">{d.value}</p>
+                                  </div>
+                                ))}
+                              </div>
+                              <div className="flex shrink-0 flex-col items-center justify-center gap-1 border-l border-gray-100 px-5 py-5" style={{ minWidth: 128 }}>
+                                <p className="text-2xl font-bold" style={{ color: prog.colourTag }}>${prog.pricePerSession}</p>
+                                <p className="text-[10px] text-gray-400">per session</p>
+                                <p className="mt-1 text-[9px] font-semibold uppercase tracking-wide text-gray-300">Pricing Config</p>
+                              </div>
+                            </div>
+                            <AdminCol id={prog.id} accentColor={prog.colourTag} isProg />
+                          </div>
+                          <ReasonRow id={prog.id} />
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
             )}
           </div>
-        </div>
-      </div>
-    )
-  }
-
-  // ── Edit modal ──────────────────────────────────────────────────────────────
-
-  const editingBuiltin = STM_BUILT_IN.find(t => t.id === editingId)
-  const editingProg    = catalogue.find(p => p.id === editingId)
-
-  // ── Render ──────────────────────────────────────────────────────────────────
-
-  return (
-    <div className="flex flex-1 min-h-0 flex-col overflow-y-auto" style={{ backgroundColor: '#f4f6f9' }}>
-      <div className="px-6 pt-6 pb-4">
-        {/* Page header */}
-        <div className="mb-5 flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Book a Session</h1>
-            <p className="mt-0.5 text-sm text-gray-500">Session types available for athlete booking</p>
-          </div>
-          <button className="flex shrink-0 items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white transition hover:opacity-90"
-            style={{ backgroundColor: STM_ACCENT }}>
-            <IconPlus size={16} /> Create Session Type
-          </button>
-        </div>
-        {/* Search */}
-        <div className="relative max-w-sm">
-          <IconSearch size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Search session types…"
-            className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-4 text-sm outline-none transition focus:border-[#6BA3D6] focus:ring-2 focus:ring-[#6BA3D6]/10" />
-        </div>
+        )}
       </div>
 
-      <div className="px-6 pb-10 space-y-4">
-        {/* Org header (Calendly-style) */}
-        <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white text-[11px] font-black"
-            style={{ backgroundColor: STM_ACCENT }}>F14</div>
-          <div>
-            <p className="text-sm font-bold text-gray-800">Formula14</p>
-            <p className="text-xs text-gray-400">{allIds.length} session types</p>
-          </div>
-        </div>
-
-        {/* Main list */}
-        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-          {/* Column header */}
-          <div className="flex items-center gap-3 border-b border-gray-100 bg-gray-50 px-5 py-3">
-            <div className="pl-3 shrink-0">
-              <input type="checkbox" checked={allSelected}
-                ref={r => { if (r) r.indeterminate = someSelected }}
-                onChange={toggleAll}
-                className="h-4 w-4 cursor-pointer rounded border-gray-300 accent-[#6BA3D6]" />
-            </div>
-            <span className="flex-1 text-[11px] font-bold uppercase tracking-wide text-gray-400">Session Type</span>
-            <span className="hidden w-44 text-[11px] font-bold uppercase tracking-wide text-gray-400 xl:block">Availability</span>
-            <span className="w-36" />
-          </div>
-
-          {/* Built-in session type rows */}
-          {builtinVisible.map((type, i) => (
-            <STMRow key={type.id}
-              id={type.id} emoji={type.emoji} label={type.label} durationMins={type.durationMins}
-              location={type.location} style={type.style} availability={type.availability}
-              accentColor={type.accentColor} slug={type.slug}
-              isLast={i === builtinVisible.length - 1 && devVisible.length === 0 && socialVisible.length === 0} />
-          ))}
-
-          {/* Development Programs */}
-          {devVisible.length > 0 && (
-            <>
-              <div className="flex items-center gap-2 border-t border-gray-100 bg-blue-50/50 px-6 py-2.5">
-                <span className="text-[11px] font-bold uppercase tracking-wide" style={{ color: '#1d4ed8' }}>Development Programs</span>
-                <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ backgroundColor: '#dbeafe', color: '#1d4ed8' }}>
-                  {devVisible.length}
-                </span>
-              </div>
-              {devVisible.map((prog, i) => (
-                <STMRow key={prog.id}
-                  id={prog.id} emoji="🎓" label={prog.name} durationMins={60}
-                  location="Primary Station" style="Program" availability="Term-based schedule"
-                  accentColor={prog.colourTag} slug={`prog-${prog.id}`}
-                  isLast={i === devVisible.length - 1 && socialVisible.length === 0}
-                  isProg pricePerSession={prog.pricePerSession} />
-              ))}
-            </>
-          )}
-
-          {/* Social Programs */}
-          {socialVisible.length > 0 && (
-            <>
-              <div className="flex items-center gap-2 border-t border-gray-100 bg-green-50/50 px-6 py-2.5">
-                <span className="text-[11px] font-bold uppercase tracking-wide" style={{ color: '#15803d' }}>Social Programs</span>
-                <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ backgroundColor: '#dcfce7', color: '#15803d' }}>
-                  {socialVisible.length}
-                </span>
-              </div>
-              {socialVisible.map((prog, i) => (
-                <STMRow key={prog.id}
-                  id={prog.id} emoji="🤝" label={prog.name} durationMins={60}
-                  location="Primary Station" style="Program" availability="Term-based schedule"
-                  accentColor={prog.colourTag} slug={`prog-${prog.id}`}
-                  isLast={i === socialVisible.length - 1}
-                  isProg pricePerSession={prog.pricePerSession} />
-              ))}
-            </>
-          )}
-
-          {/* Empty state */}
-          {builtinVisible.length === 0 && devVisible.length === 0 && socialVisible.length === 0 && (
-            <div className="px-6 py-12 text-center text-sm text-gray-400">
-              No session types match &ldquo;{search}&rdquo;
-            </div>
-          )}
-        </div>
-
-      </div>
-
-      {/* Bulk action bar */}
-      {selected.size > 0 && (
-        <div className="fixed bottom-6 left-1/2 z-40 flex -translate-x-1/2 items-center gap-3 rounded-2xl border border-gray-200 bg-white px-5 py-3 shadow-xl">
-          <span className="text-sm font-semibold text-gray-700">{selected.size} selected</span>
-          <div className="h-4 w-px bg-gray-200" />
-          <button className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-500 hover:bg-red-50">
-            Delete
-          </button>
-          <button onClick={() => setSelected(new Set())}
-            className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100">
-            <IconX size={14} />
-          </button>
-        </div>
-      )}
-
-      {/* Click-away dismiss for menus */}
-      {menuOpenId && (
-        <div className="fixed inset-0 z-20" onClick={() => setMenuOpenId(null)} />
-      )}
-
-      {/* Edit modal */}
+      {/* ── Edit Modal ────────────────────────────────────────────────────── */}
       {editingId !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl">
+          <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
               <h3 className="text-base font-bold text-gray-900">
-                Edit — {editingBuiltin?.label ?? editingProg?.name ?? ''}
+                Edit — {editIsProg
+                  ? catalogue.find(p => p.id === editingId)?.name
+                  : (meta[editingId]?.label ?? BIT_TYPES.find(t => t.id === editingId)?.label)
+                }
               </h3>
               <button onClick={() => setEditingId(null)}
                 className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100">
                 <IconX size={16} />
               </button>
             </div>
-            <div className="space-y-4 px-6 py-5">
-              {editingBuiltin && (
+
+            <div className="max-h-[70vh] space-y-4 overflow-y-auto px-6 py-5">
+              {!editIsProg ? (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="col-span-2">
+                      <label className={LBL_CLS}>Session Name</label>
+                      <input value={editDraft.label}
+                        onChange={e => setEditDraft(d => ({ ...d, label: e.target.value }))}
+                        className={FIELD_CLS} />
+                    </div>
+                    <div className="col-span-2">
+                      <label className={LBL_CLS}>Description</label>
+                      <input value={editDraft.description}
+                        onChange={e => setEditDraft(d => ({ ...d, description: e.target.value }))}
+                        className={FIELD_CLS} />
+                    </div>
+                    <div>
+                      <label className={LBL_CLS}>Duration (min)</label>
+                      <input type="number" min={5} step={5} value={editDraft.durationMins}
+                        onChange={e => setEditDraft(d => ({ ...d, durationMins: e.target.value }))}
+                        className={FIELD_CLS} />
+                    </div>
+                    <div>
+                      <label className={LBL_CLS}>Icon (emoji)</label>
+                      <input value={editDraft.emoji}
+                        onChange={e => setEditDraft(d => ({ ...d, emoji: e.target.value }))}
+                        className={FIELD_CLS} />
+                    </div>
+                    <div className="col-span-2">
+                      <label className={LBL_CLS}>Location / Space</label>
+                      <input value={editDraft.location}
+                        onChange={e => setEditDraft(d => ({ ...d, location: e.target.value }))}
+                        className={FIELD_CLS} />
+                    </div>
+                    <div className="col-span-2">
+                      <label className={LBL_CLS}>Session Style</label>
+                      <select value={editDraft.style}
+                        onChange={e => setEditDraft(d => ({ ...d, style: e.target.value }))}
+                        className={FIELD_CLS + ' cursor-pointer'}>
+                        <option value="Coached">Coached</option>
+                        <option value="Self-serve">Self-serve</option>
+                        <option value="Membership credit">Membership credit</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2.5">
+                    <IconInfoCircle size={13} className="shrink-0 text-blue-400" />
+                    <p className="text-xs text-blue-600">Pricing is managed in <strong>Pricing &amp; Payments → Pricing Config</strong></p>
+                  </div>
+                </>
+              ) : (
                 <>
                   <div>
-                    <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500">Location / Space</label>
-                    <input
-                      value={editLoc || editingBuiltin.location}
-                      onChange={e => setEditLoc(e.target.value)}
-                      className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-[#6BA3D6] focus:ring-2 focus:ring-[#6BA3D6]/10"
-                    />
+                    <label className={LBL_CLS}>Programme Name</label>
+                    <input value={progDraft.name}
+                      onChange={e => setProgDraft(d => ({ ...d, name: e.target.value }))}
+                      className={FIELD_CLS} />
                   </div>
-                  <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
-                    <p className="text-xs font-semibold text-gray-500">Duration: {editingBuiltin.durationMins} min</p>
-                    <p className="mt-0.5 text-xs text-gray-400">Duration is set in session configuration.</p>
+                  <div>
+                    <label className={LBL_CLS}>Description</label>
+                    <textarea rows={3} value={progDraft.description}
+                      onChange={e => setProgDraft(d => ({ ...d, description: e.target.value }))}
+                      className={FIELD_CLS + ' resize-none'} />
+                  </div>
+                  <div>
+                    <label className={LBL_CLS}>Colour Tag</label>
+                    <div className="flex items-center gap-3">
+                      <input type="color" value={progDraft.colourTag}
+                        onChange={e => setProgDraft(d => ({ ...d, colourTag: e.target.value }))}
+                        className="h-10 w-14 cursor-pointer rounded-lg border border-gray-200 p-1" />
+                      <input value={progDraft.colourTag}
+                        onChange={e => setProgDraft(d => ({ ...d, colourTag: e.target.value }))}
+                        placeholder="#6BA3D6" className={FIELD_CLS} />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2.5">
+                    <IconInfoCircle size={13} className="shrink-0 text-blue-400" />
+                    <p className="text-xs text-blue-600">Pricing &amp; capacity are managed in <strong>Pricing &amp; Payments → Pricing Config</strong></p>
                   </div>
                 </>
               )}
-              {editingProg && (
-                <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 text-sm text-gray-600">
-                  <p className="font-semibold text-gray-700">{editingProg.name}</p>
-                  <p className="mt-0.5 text-xs text-gray-500">{editingProg.description}</p>
-                  <p className="mt-1 text-xs text-gray-400">${editingProg.pricePerSession}/session · Max {editingProg.maxCapacity} athletes</p>
-                </div>
-              )}
-              <div className="flex items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2.5">
-                <IconLink size={13} className="shrink-0 text-blue-400" />
-                <p className="text-xs text-blue-600">
-                  Pricing managed in <strong>Pricing &amp; Payments → Pricing Config</strong>
-                </p>
-              </div>
             </div>
+
             <div className="flex items-center justify-end gap-3 border-t border-gray-100 px-6 py-4">
               <button onClick={() => setEditingId(null)}
                 className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50">
                 Cancel
               </button>
-              {editingBuiltin && (
-                <button onClick={saveEdit}
-                  className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-bold text-white hover:opacity-90"
-                  style={{ backgroundColor: STM_ACCENT }}>
-                  <IconCheck size={14} /> Save
-                </button>
-              )}
+              <button
+                onClick={editIsProg ? saveProgEdit : saveSessionEdit}
+                className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-bold text-white transition hover:opacity-90"
+                style={{ backgroundColor: BIT_ACCENT }}>
+                <IconCheck size={14} /> Save changes
+              </button>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Toast notification */}
-      {toast && (
-        <div className="fixed bottom-8 right-8 z-50 flex items-center gap-2 rounded-xl bg-gray-900 px-4 py-3 text-sm font-semibold text-white shadow-lg">
-          <IconCheck size={15} className="text-green-400" />
-          {toast}
         </div>
       )}
     </div>
   )
 }
+
 
 // ── Availability Tab ────────────────────────────────────────────────────────────
 function AvailabilityTab({

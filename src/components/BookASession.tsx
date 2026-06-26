@@ -20,9 +20,20 @@ const LS_BOOKINGS         = 'f14_athlete_bookings'
 const LS_PRICING_CONFIGS  = 'f14_pricing_configs'
 const LS_BOOKING_SETTINGS = 'f14_booking_settings'
 const LS_PROGRAMME_CAT    = 'f14_program_catalogue'
+const LS_SESSION_META     = 'f14_session_type_meta'
 const SHARE_BASE = 'formula14.com.au/join'
 
 const PRICING_TYPE_MAP: Record<SessionTypeId, string> = {
+  'individual':       'individual',
+  'small-group':      'small-group',
+  'team-training':    'team-training',
+  'casual-shooting':  'casual-shooting',
+  'shooting-machine': 'shooting-machine-session',
+  'weight-room':      'weight-room-session',
+}
+
+// Maps BookASession SessionTypeId → Booking Information tab id (for meta lookup)
+const META_ID_MAP: Record<SessionTypeId, string> = {
   'individual':       'individual',
   'small-group':      'small-group',
   'team-training':    'team-training',
@@ -818,6 +829,7 @@ export function BookASession({
   const [pricingConfigs, setPricingConfigs] = useState<PricingConfigData[]>([])
   const [bookingSettings, setBookingSettings] = useState<Record<string, BookingToggleData>>({})
   const [programmes, setProgrammes] = useState<ProgrammeItemData[]>([])
+  const [sessionMeta, setSessionMeta] = useState<Record<string, { label?: string; description?: string; durationMins?: number; emoji?: string }>>({})
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -832,6 +844,10 @@ export function BookASession({
     try {
       const raw = localStorage.getItem(LS_PROGRAMME_CAT)
       if (raw) setProgrammes(JSON.parse(raw))
+    } catch {}
+    try {
+      const raw = localStorage.getItem(LS_SESSION_META)
+      if (raw) setSessionMeta(JSON.parse(raw))
     } catch {}
   }, [])
 
@@ -849,7 +865,22 @@ export function BookASession({
     return config.tiers[0].pricePerAthlete
   }
 
-  const selectedType = SESSION_TYPES.find(t => t.id === typeId) ?? null
+  // Apply admin-editable meta overrides (from Booking Information tab) to session type definitions
+  const mergedSessionTypes = useMemo(() =>
+    SESSION_TYPES.map(type => {
+      const m = sessionMeta[META_ID_MAP[type.id]]
+      if (!m) return type
+      return {
+        ...type,
+        ...(m.label        ? { label: m.label }                       : {}),
+        ...(m.description  ? { description: m.description }           : {}),
+        ...(m.durationMins ? { durationMins: m.durationMins }         : {}),
+        ...(m.emoji        ? { emoji: m.emoji }                       : {}),
+      }
+    })
+  , [sessionMeta])
+
+  const selectedType = mergedSessionTypes.find(t => t.id === typeId) ?? null
   const isJoinFlow = sgsFlow === 'join'
 
   const isPastBooking = !!(
@@ -1002,7 +1033,7 @@ export function BookASession({
                     <h1 className="mb-2 text-2xl font-bold text-gray-900">Book a Session</h1>
                     <p className="mb-6 text-sm text-gray-500">Choose the type of session you&apos;d like to book.</p>
                     <div className="flex flex-col gap-3">
-                      {SESSION_TYPES.flatMap(type => {
+                      {mergedSessionTypes.flatMap(type => {
                         const pricingTypeId = PRICING_TYPE_MAP[type.id]
                         const toggle = bookingSettings[pricingTypeId]
                         if (toggle && !toggle.enabled && !toggle.reason) return []
