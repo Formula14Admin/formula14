@@ -620,7 +620,7 @@ export default function BookingsPage() {
   const [conflictMsg, setConflictMsg] = useState<string | null>(null)
 
   // ── Module tab state ──────────────────────────────────────────────────────────
-  const [pageTab, setPageTab] = useState<'calendar' | 'book-session' | 'join-requests'>('calendar')
+  const [pageTab, setPageTab] = useState<'calendar' | 'book-session' | 'booking-info' | 'join-requests'>('calendar')
 
   // Coach Availability state (merged from old availability page)
   const [coaches, setCoaches] = useState<Coach[]>(DEFAULT_COACHES)
@@ -1342,9 +1342,10 @@ export default function BookingsPage() {
 
   const hours = Array.from({ length: END_H - START_H }, (_, i) => START_H + i)
 
-  const TABS: { id: 'calendar' | 'book-session' | 'join-requests'; label: string; badge?: number }[] = [
+  const TABS: { id: 'calendar' | 'book-session' | 'booking-info' | 'join-requests'; label: string; badge?: number }[] = [
     { id: 'calendar',      label: 'Calendar' },
     { id: 'book-session',  label: 'Book a Session' },
+    { id: 'booking-info',  label: 'Booking Information' },
     { id: 'join-requests', label: 'Join Requests', badge: totalPendingCount },
   ]
 
@@ -1374,6 +1375,10 @@ export default function BookingsPage() {
 
       {pageTab === 'book-session' && (
         <SessionTypeManagement />
+      )}
+
+      {pageTab === 'booking-info' && (
+        <BookingInformationTab />
       )}
 
       {pageTab === 'join-requests' && (
@@ -4162,13 +4167,104 @@ function AvTimeSelect({ value, onChange, minMins }: { value: number; onChange: (
   return <TimePicker value={value} onChange={onChange} options={opts} />
 }
 
+// ── Booking Information Tab ────────────────────────────────────────────────────
+
+const BOOKING_INFO_LS = 'f14_booking_settings'
+
+const BOOKING_INFO_TYPES = [
+  { id: 'individual',               label: 'Individual Work Out', bg: '#dcfce7', color: '#15803d' },
+  { id: 'small-group',              label: 'Small Group Session', bg: '#dbeafe', color: '#1d4ed8' },
+  { id: 'team-training',            label: 'Team Training',       bg: '#ede9fe', color: '#6d28d9' },
+  { id: 'casual-shooting',          label: 'Casual Shooting',     bg: '#fef3c7', color: '#b45309' },
+  { id: 'shooting-machine-session', label: 'Shooting Machine',    bg: '#fdf5e0', color: '#D4A520' },
+  { id: 'weight-room-session',      label: 'Weight Room',         bg: '#fce8eb', color: '#9B2335' },
+]
+
+const INIT_BOOKING_INFO: Record<string, { enabled: boolean; reason: string }> =
+  Object.fromEntries(BOOKING_INFO_TYPES.map(t => [t.id, { enabled: true, reason: '' }]))
+
+function BookingInformationTab() {
+  const [bookingSettings, setBookingSettings] = useState<Record<string, { enabled: boolean; reason: string }>>(() => {
+    try {
+      const raw = typeof window !== 'undefined' ? localStorage.getItem(BOOKING_INFO_LS) : null
+      if (raw) return { ...INIT_BOOKING_INFO, ...JSON.parse(raw) }
+    } catch {}
+    return INIT_BOOKING_INFO
+  })
+
+  useEffect(() => {
+    if (Object.keys(bookingSettings).length === 0) return
+    localStorage.setItem(BOOKING_INFO_LS, JSON.stringify(bookingSettings))
+  }, [bookingSettings])
+
+  const INPUT_CLS = 'w-full rounded-lg border border-gray-200 px-3 py-2 text-xs text-gray-900 outline-none transition focus:border-[#6BA3D6] focus:ring-2 focus:ring-[#6BA3D6]/10'
+
+  return (
+    <div className="flex flex-1 min-h-0 flex-col overflow-y-auto" style={{ backgroundColor: '#f4f6f9' }}>
+      <div className="p-6 max-w-2xl">
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-gray-900">Booking Information</h1>
+          <p className="mt-0.5 text-sm text-gray-500">Control which session types are available in the athlete booking portal</p>
+        </div>
+
+        <div className="rounded-xl border border-gray-200 bg-white p-5">
+          <h2 className="mb-1 flex items-center gap-2 text-base font-semibold text-gray-800">
+            <IconSettings size={17} style={{ color: '#6BA3D6' }} /> Booking Settings
+          </h2>
+          <p className="mb-4 text-xs text-gray-400">
+            Turning a type off with no reason hides the tile; adding a reason shows it greyed out with a message to athletes.
+          </p>
+          <div className="space-y-2">
+            {BOOKING_INFO_TYPES.map(st => {
+              const tog = bookingSettings[st.id] ?? { enabled: true, reason: '' }
+              return (
+                <div key={st.id} className="rounded-xl border border-gray-100 p-3">
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="rounded-full px-2.5 py-0.5 text-xs font-semibold"
+                      style={{ backgroundColor: st.bg, color: st.color }}>
+                      {st.label}
+                    </span>
+                    <div className="flex items-center gap-3">
+                      {!tog.enabled && (
+                        <span className="text-xs text-gray-400">
+                          {tog.reason ? 'Greyed out with reason' : 'Hidden from athletes'}
+                        </span>
+                      )}
+                      <Toggle on={tog.enabled} onChange={v =>
+                        setBookingSettings(prev => ({
+                          ...prev,
+                          [st.id]: { ...(prev[st.id] ?? { enabled: true, reason: '' }), enabled: v },
+                        }))} />
+                    </div>
+                  </div>
+                  {!tog.enabled && (
+                    <input
+                      type="text"
+                      value={tog.reason}
+                      onChange={e => setBookingSettings(prev => ({
+                        ...prev,
+                        [st.id]: { ...prev[st.id]!, reason: e.target.value },
+                      }))}
+                      placeholder="Reason (optional) — e.g. Temporarily unavailable: closed for maintenance until 1 July"
+                      className={INPUT_CLS + ' mt-2'}
+                    />
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Session Type Management ────────────────────────────────────────────────────
 
-const STM_ACCENT             = '#6BA3D6'
-const STM_SHARE_BASE         = 'formula14.com.au/book'
-const STM_LS_BOOKING_SETTINGS = 'f14_booking_settings'
-const STM_LS_PROGRAMME_CAT   = 'f14_program_catalogue'
-const STM_LS_META            = 'f14_stm_meta'
+const STM_ACCENT           = '#6BA3D6'
+const STM_SHARE_BASE       = 'formula14.com.au/book'
+const STM_LS_PROGRAMME_CAT = 'f14_program_catalogue'
+const STM_LS_META          = 'f14_stm_meta'
 
 interface STMBuiltIn {
   id: string; label: string; emoji: string; durationMins: number
@@ -4185,14 +4281,11 @@ const STM_BUILT_IN: STMBuiltIn[] = [
 ]
 
 function SessionTypeManagement() {
-  const [bookingSettings, setBookingSettings] = useState<Record<string, { enabled: boolean; reason: string }>>({})
   const [catalogue, setCatalogue] = useState<ProgramCatalogueItem[]>(INIT_CATALOGUE_FALLBACK)
   const [meta, setMeta] = useState<Record<string, { description?: string; location?: string }>>({})
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
-  const [turnOffId, setTurnOffId] = useState<string | null>(null)
-  const [turnOffReason, setTurnOffReason] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editDesc, setEditDesc] = useState('')
   const [editLoc, setEditLoc] = useState('')
@@ -4202,43 +4295,14 @@ function SessionTypeManagement() {
   // ── Load / persist ──────────────────────────────────────────────────────────
 
   useEffect(() => {
-    try { const r = localStorage.getItem(STM_LS_BOOKING_SETTINGS); if (r) setBookingSettings(JSON.parse(r)) } catch {}
     try { const r = localStorage.getItem(STM_LS_PROGRAMME_CAT); if (r) { const p = JSON.parse(r); if (p.length > 0) setCatalogue(p) } } catch {}
     try { const r = localStorage.getItem(STM_LS_META); if (r) setMeta(JSON.parse(r)) } catch {}
   }, [])
 
   useEffect(() => {
-    if (Object.keys(bookingSettings).length === 0) return
-    localStorage.setItem(STM_LS_BOOKING_SETTINGS, JSON.stringify(bookingSettings))
-  }, [bookingSettings])
-
-  useEffect(() => {
     if (Object.keys(meta).length === 0) return
     localStorage.setItem(STM_LS_META, JSON.stringify(meta))
   }, [meta])
-
-  // ── Helpers ─────────────────────────────────────────────────────────────────
-
-  const isOn    = (id: string) => bookingSettings[id]?.enabled !== false
-  const getReason = (id: string) => bookingSettings[id]?.reason ?? ''
-
-  function doTurnOn(id: string) {
-    setBookingSettings(prev => ({ ...prev, [id]: { ...(prev[id] ?? { enabled: true, reason: '' }), enabled: true } }))
-    setMenuOpenId(null)
-  }
-
-  function openTurnOff(id: string) {
-    setTurnOffId(id)
-    setTurnOffReason(getReason(id))
-    setMenuOpenId(null)
-  }
-
-  function confirmTurnOff() {
-    if (!turnOffId) return
-    setBookingSettings(prev => ({ ...prev, [turnOffId]: { enabled: false, reason: turnOffReason.trim() } }))
-    setTurnOffId(null)
-    setTurnOffReason('')
-  }
 
   function showToast(msg: string) {
     setToast(msg)
@@ -4297,20 +4361,16 @@ function SessionTypeManagement() {
     style: string; availability: string; accentColor: string; slug: string
     isLast: boolean; isProg?: boolean; pricePerSession?: number
   }) {
-    const on        = isOn(id)
-    const rowReason = getReason(id)
     const isMenuOpen = menuOpenId === id
     const isCopied  = copied === id
     const displayLoc = meta[id]?.location ?? location
 
     return (
-      <div className={`relative flex items-center gap-3 px-5 py-4 transition-colors
-        ${isLast ? '' : 'border-b border-gray-100'}
-        ${on ? 'bg-white hover:bg-gray-50/50' : 'bg-gray-50/70'}`}>
+      <div className={`relative flex items-center gap-3 px-5 py-4 bg-white hover:bg-gray-50/50 transition-colors
+        ${isLast ? '' : 'border-b border-gray-100'}`}>
 
         {/* Colour accent bar */}
-        <div className="absolute inset-y-0 left-0 w-[3px]"
-          style={{ backgroundColor: on ? accentColor : '#d1d5db' }} />
+        <div className="absolute inset-y-0 left-0 w-[3px]" style={{ backgroundColor: accentColor }} />
 
         {/* Checkbox */}
         <div className="pl-3 shrink-0">
@@ -4322,12 +4382,9 @@ function SessionTypeManagement() {
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xl leading-none">{emoji}</span>
-            <p className={`text-sm font-bold ${on ? 'text-gray-900' : 'text-gray-400'}`}>{label}</p>
-            {!on && (
-              <span className="rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-gray-500">Off</span>
-            )}
+            <p className="text-sm font-bold text-gray-900">{label}</p>
           </div>
-          <p className={`mt-0.5 text-xs ${on ? 'text-gray-500' : 'text-gray-400'}`}>
+          <p className="mt-0.5 text-xs text-gray-500">
             {durationMins} min
             <span className="mx-1.5 text-gray-300">·</span>
             {displayLoc}
@@ -4337,37 +4394,24 @@ function SessionTypeManagement() {
               <><span className="mx-1.5 text-gray-300">·</span>${pricePerSession}/session</>
             )}
           </p>
-          {!on && rowReason && (
-            <p className="mt-1 text-xs italic" style={{ color: '#d97706' }}>{rowReason}</p>
-          )}
         </div>
 
         {/* Availability */}
         <div className="hidden w-44 shrink-0 xl:block">
-          <p className={`text-xs ${on ? 'text-gray-500' : 'text-gray-400'}`}>{availability}</p>
+          <p className="text-xs text-gray-500">{availability}</p>
         </div>
 
         {/* Actions */}
         <div className="flex shrink-0 items-center gap-1.5">
-          {on ? (
-            <>
-              <button onClick={() => copyLink(slug, id)}
-                className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 transition hover:bg-gray-50 hover:border-gray-300">
-                <IconCopy size={12} />
-                {isCopied ? 'Copied!' : 'Copy Link'}
-              </button>
-              <a href={`/portal`} target="_blank" rel="noopener noreferrer" title="Preview athlete booking page"
-                className="rounded-lg border border-gray-200 bg-white p-1.5 text-gray-400 transition hover:bg-gray-50 hover:text-gray-600">
-                <IconExternalLink size={14} />
-              </a>
-            </>
-          ) : (
-            <button onClick={() => doTurnOn(id)}
-              className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition hover:opacity-90"
-              style={{ borderColor: accentColor + '55', color: accentColor, backgroundColor: accentColor + '12' }}>
-              Turn On
-            </button>
-          )}
+          <button onClick={() => copyLink(slug, id)}
+            className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 transition hover:bg-gray-50 hover:border-gray-300">
+            <IconCopy size={12} />
+            {isCopied ? 'Copied!' : 'Copy Link'}
+          </button>
+          <a href={`/portal`} target="_blank" rel="noopener noreferrer" title="Preview athlete booking page"
+            className="rounded-lg border border-gray-200 bg-white p-1.5 text-gray-400 transition hover:bg-gray-50 hover:text-gray-600">
+            <IconExternalLink size={14} />
+          </a>
 
           {/* Three-dot menu */}
           <div className="relative">
@@ -4381,17 +4425,6 @@ function SessionTypeManagement() {
                   className="flex w-full items-center gap-2.5 px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50">
                   <IconPencil size={14} className="text-gray-400" /> Edit details
                 </button>
-                {on ? (
-                  <button onClick={() => openTurnOff(id)}
-                    className="flex w-full items-center gap-2.5 px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50">
-                    <IconX size={14} className="text-gray-400" /> Turn Off
-                  </button>
-                ) : (
-                  <button onClick={() => doTurnOn(id)}
-                    className="flex w-full items-center gap-2.5 px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50">
-                    <IconCheck size={14} className="text-gray-400" /> Turn On
-                  </button>
-                )}
                 {isProg && (
                   <button className="flex w-full items-center gap-2.5 px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50">
                     <IconUsers size={14} className="text-gray-400" /> Manage Enrolments
@@ -4423,7 +4456,7 @@ function SessionTypeManagement() {
         <div className="mb-5 flex items-start justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Book a Session</h1>
-            <p className="mt-0.5 text-sm text-gray-500">Manage which session types athletes can book</p>
+            <p className="mt-0.5 text-sm text-gray-500">Session types available for athlete booking</p>
           </div>
           <button className="flex shrink-0 items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white transition hover:opacity-90"
             style={{ backgroundColor: STM_ACCENT }}>
@@ -4522,13 +4555,6 @@ function SessionTypeManagement() {
           )}
         </div>
 
-        {/* Sync note */}
-        <div className="flex items-start gap-2 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
-          <IconSettings size={14} className="mt-0.5 shrink-0 text-blue-400" />
-          <p className="text-xs text-blue-600">
-            Toggles here sync with <strong>Pricing Config → Booking Settings</strong>. Changes apply instantly in the athlete portal.
-          </p>
-        </div>
       </div>
 
       {/* Bulk action bar */}
@@ -4536,10 +4562,6 @@ function SessionTypeManagement() {
         <div className="fixed bottom-6 left-1/2 z-40 flex -translate-x-1/2 items-center gap-3 rounded-2xl border border-gray-200 bg-white px-5 py-3 shadow-xl">
           <span className="text-sm font-semibold text-gray-700">{selected.size} selected</span>
           <div className="h-4 w-px bg-gray-200" />
-          <button onClick={() => { selected.forEach(id => openTurnOff(id)) }}
-            className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50">
-            Turn Off
-          </button>
           <button className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-500 hover:bg-red-50">
             Delete
           </button>
@@ -4553,46 +4575,6 @@ function SessionTypeManagement() {
       {/* Click-away dismiss for menus */}
       {menuOpenId && (
         <div className="fixed inset-0 z-20" onClick={() => setMenuOpenId(null)} />
-      )}
-
-      {/* Turn Off modal */}
-      {turnOffId !== null && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
-            <h3 className="text-base font-bold text-gray-900">Turn Off Session Type</h3>
-            <p className="mt-1.5 text-sm text-gray-500">
-              Athletes won&apos;t be able to book this. Add a reason to show them why it&apos;s unavailable.
-            </p>
-            <div className="mt-4 space-y-1.5">
-              <label className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Reason (optional)
-              </label>
-              <input
-                type="text"
-                value={turnOffReason}
-                onChange={e => setTurnOffReason(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && confirmTurnOff()}
-                placeholder="e.g. Closed for maintenance until 1 July"
-                autoFocus
-                className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-[#6BA3D6] focus:ring-2 focus:ring-[#6BA3D6]/10"
-              />
-              <p className="text-[11px] text-gray-400">
-                Leave blank to hide the tile entirely. Add a reason to show it greyed out with an explanation.
-              </p>
-            </div>
-            <div className="mt-5 flex gap-3">
-              <button onClick={() => { setTurnOffId(null); setTurnOffReason('') }}
-                className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-50">
-                Cancel
-              </button>
-              <button onClick={confirmTurnOff}
-                className="flex-1 rounded-xl py-2.5 text-sm font-bold text-white hover:opacity-90"
-                style={{ backgroundColor: '#ef4444' }}>
-                Turn Off
-              </button>
-            </div>
-          </div>
-        </div>
       )}
 
       {/* Edit modal */}

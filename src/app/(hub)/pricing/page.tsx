@@ -253,22 +253,7 @@ const INIT_SETTINGS: PricingSettings = {
   chargeExcusedAbsence: false,
 }
 
-// ─── Booking Settings (controls athlete-facing tile visibility) ───────────────
-
-interface BookingToggle { enabled: boolean; reason: string }
-type BookingSettingsState = Record<string, BookingToggle>
-
-const BOOKING_SETTINGS_LS = 'f14_booking_settings'
 const PRICING_CONFIGS_LS  = 'f14_pricing_configs'
-
-const BOOKING_SETTABLE_TYPES: SessionType[] = [
-  'individual', 'small-group', 'team-training',
-  'casual-shooting', 'shooting-machine-session', 'weight-room-session',
-]
-
-const INIT_BOOKING_SETTINGS: BookingSettingsState = Object.fromEntries(
-  BOOKING_SETTABLE_TYPES.map(t => [t, { enabled: true, reason: '' }])
-) as BookingSettingsState
 
 const INIT_SESSIONS: Session[] = [
   // Upcoming — Small Group, 2pm today. Lockout at noon (1h away at 11am).
@@ -452,14 +437,6 @@ export default function PricingPage() {
   const [editingProg,   setEditingProg]   = useState<ProgramCatalogueItem | null>(null)
   const [devCatOpen,    setDevCatOpen]    = useState(true)
   const [socialCatOpen, setSocialCatOpen] = useState(true)
-
-  const [bookingSettings, setBookingSettings] = useState<BookingSettingsState>(() => {
-    try {
-      const raw = typeof window !== 'undefined' ? localStorage.getItem(BOOKING_SETTINGS_LS) : null
-      if (raw) return { ...INIT_BOOKING_SETTINGS, ...JSON.parse(raw) }
-    } catch {}
-    return INIT_BOOKING_SETTINGS
-  })
 
   const now = DEMO_NOW
 
@@ -672,11 +649,6 @@ export default function PricingPage() {
     if (typeof window === 'undefined') return
     localStorage.setItem(PRICING_CONFIGS_LS, JSON.stringify(pricingConfigs))
   }, [pricingConfigs])
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    localStorage.setItem(BOOKING_SETTINGS_LS, JSON.stringify(bookingSettings))
-  }, [bookingSettings])
 
   function saveProg(item: ProgramCatalogueItem) {
     setCatalogue(prev => {
@@ -1216,55 +1188,6 @@ export default function PricingPage() {
             </div>
           </div>
 
-          {/* Booking Settings */}
-          <div className="rounded-xl border border-gray-200 bg-white p-5">
-            <h2 className="mb-1 flex items-center gap-2 text-base font-semibold text-gray-800">
-              <IconLockOpen size={17} style={{ color: ACCENT }} /> Booking Settings
-            </h2>
-            <p className="mb-4 text-xs text-gray-400">
-              Control which session types are available in the athlete booking portal. Turning a type off with no reason hides the tile; adding a reason shows it greyed out with a message.
-            </p>
-            <div className="space-y-2">
-              {BOOKING_SETTABLE_TYPES.map(st => {
-                const tog = bookingSettings[st] ?? { enabled: true, reason: '' }
-                return (
-                  <div key={st} className="rounded-xl border border-gray-100 p-3">
-                    <div className="flex items-center justify-between gap-4">
-                      <span className="rounded-full px-2.5 py-0.5 text-xs font-semibold"
-                        style={{ backgroundColor: SESSION_TYPE_COLORS[st].bg, color: SESSION_TYPE_COLORS[st].color }}>
-                        {SESSION_TYPE_LABELS[st]}
-                      </span>
-                      <div className="flex items-center gap-3">
-                        {!tog.enabled && (
-                          <span className="text-xs text-gray-400">
-                            {tog.reason ? 'Greyed out with reason' : 'Hidden from athletes'}
-                          </span>
-                        )}
-                        <Toggle on={tog.enabled} onToggle={() =>
-                          setBookingSettings(prev => ({
-                            ...prev,
-                            [st]: { ...(prev[st] ?? { enabled: true, reason: '' }), enabled: !tog.enabled },
-                          }))} />
-                      </div>
-                    </div>
-                    {!tog.enabled && (
-                      <input
-                        type="text"
-                        value={tog.reason}
-                        onChange={e => setBookingSettings(prev => ({
-                          ...prev,
-                          [st]: { ...prev[st]!, reason: e.target.value },
-                        }))}
-                        placeholder="Reason (optional) — e.g. Temporarily unavailable: closed for maintenance until 1 July"
-                        className={INPUT + ' mt-2 text-xs'}
-                      />
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-
           {/* Pricing Structure — all session types × 1–20 athletes, read-only */}
           <div className="rounded-xl border border-gray-200 bg-white p-5">
             <div className="mb-1 flex items-center justify-between gap-2">
@@ -1775,52 +1698,6 @@ export default function PricingPage() {
               </div>
             </div>
           )}
-
-          {/* Recent completed sessions */}
-          <div className="rounded-xl border border-gray-200 bg-white p-5">
-            <h2 className="mb-4 text-base font-semibold text-gray-800">Recent Completed Sessions</h2>
-            {sessions.filter(s => s.status === 'completed').length === 0 ? (
-              <p className="text-sm text-gray-400">No completed sessions yet.</p>
-            ) : (
-              <div className="space-y-3">
-                {sessions.filter(s => s.status === 'completed').map(session => {
-                  const typeColor = SESSION_TYPE_COLORS[session.sessionType]
-                  const attended = session.athletes.filter(sa => sa.attendanceStatus === 'attended').length
-                  const noShow   = session.athletes.filter(sa => sa.attendanceStatus === 'no-show').length
-                  const excused  = session.athletes.filter(sa => sa.attendanceStatus === 'excused').length
-                  const paid     = session.athletes.filter(sa => sa.paymentStatus === 'paid').length
-                  const required = session.athletes.filter(sa => sa.paymentStatus === 'payment-required').length
-                  const waived   = session.athletes.filter(sa => sa.paymentStatus === 'waived').length
-                  const revenue  = session.athletes
-                    .filter(sa => sa.paymentStatus === 'paid' && sa.lockedPrice != null)
-                    .reduce((sum, sa) => sum + (sa.lockedPrice ?? 0), 0)
-
-                  return (
-                    <div key={session.id} className="rounded-lg border border-gray-100 p-4">
-                      <div className="mb-2 flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="rounded-full px-2.5 py-0.5 text-xs font-semibold" style={{ backgroundColor: typeColor.bg, color: typeColor.color }}>
-                            {SESSION_TYPE_LABELS[session.sessionType]}
-                          </span>
-                          <span className="text-sm text-gray-600">{fmtDate(session.date)} · {fmtTime(session.startTime)}</span>
-                        </div>
-                        <span className="text-sm font-semibold text-gray-800">${revenue.toFixed(0)} collected</span>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2 text-xs">
-                        <span className="rounded bg-green-50 px-2 py-0.5 text-green-700">{attended} Attended</span>
-                        {noShow > 0 && <span className="rounded bg-red-50 px-2 py-0.5 text-red-700">{noShow} No Show</span>}
-                        {excused > 0 && <span className="rounded bg-amber-50 px-2 py-0.5 text-amber-700">{excused} Excused</span>}
-                        <span className="text-gray-300">·</span>
-                        {paid > 0 && <span className="rounded px-2 py-0.5" style={{ backgroundColor: PAY_STATUS.paid.bg, color: PAY_STATUS.paid.color }}>{paid} Paid</span>}
-                        {required > 0 && <span className="rounded px-2 py-0.5" style={{ backgroundColor: PAY_STATUS['payment-required'].bg, color: PAY_STATUS['payment-required'].color }}>{required} Payment Required</span>}
-                        {waived > 0 && <span className="rounded px-2 py-0.5" style={{ backgroundColor: PAY_STATUS.waived.bg, color: PAY_STATUS.waived.color }}>{waived} Waived</span>}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
 
         </div>
       )}
