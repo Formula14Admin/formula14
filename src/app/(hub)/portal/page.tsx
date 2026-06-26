@@ -77,13 +77,13 @@ const DEMO_MEMBERSHIP: MembershipData = {
     individual:       2,
     'small-group':    3,
     'casual-shooting': 5,
-    'shooting-machine': 3,
+    'shooting-machine-session': 3,
   },
   creditsUsed: {
     individual:       1,
     'small-group':    1,
     'casual-shooting': 5,
-    'shooting-machine': 1,
+    'shooting-machine-session': 1,
   },
 }
 
@@ -121,22 +121,22 @@ function athleteMembershipToData(plan: 'bronze' | 'silver' | 'gold' | 'platinum'
   const plans: Record<string, MembershipData> = {
     bronze: {
       tier: 'bronze', tierLabel: 'Bronze',
-      creditsPerWeek: { individual: 1, 'casual-shooting': 2, 'shooting-machine': 1 },
+      creditsPerWeek: { individual: 1, 'casual-shooting': 2, 'shooting-machine-session': 1 },
       creditsUsed: {},
     },
     silver: {
       tier: 'silver', tierLabel: 'Silver',
-      creditsPerWeek: { individual: 2, 'small-group': 3, 'casual-shooting': 5, 'shooting-machine': 3 },
+      creditsPerWeek: { individual: 2, 'small-group': 3, 'casual-shooting': 5, 'shooting-machine-session': 3 },
       creditsUsed: {},
     },
     gold: {
       tier: 'gold', tierLabel: 'Gold',
-      creditsPerWeek: { individual: -1, 'small-group': -1, 'casual-shooting': -1, 'shooting-machine': -1, 'weight-room': -1 },
+      creditsPerWeek: { individual: -1, 'small-group': -1, 'casual-shooting': -1, 'shooting-machine-session': -1, 'weight-room-session': -1 },
       creditsUsed: {},
     },
     platinum: {
       tier: 'platinum', tierLabel: 'Platinum',
-      creditsPerWeek: { individual: -1, 'small-group': -1, 'team-training': -1, 'casual-shooting': -1, 'shooting-machine': -1, 'weight-room': -1 },
+      creditsPerWeek: { individual: -1, 'small-group': -1, 'team-training': -1, 'casual-shooting': -1, 'shooting-machine-session': -1, 'weight-room-session': -1 },
       creditsUsed: {},
     },
   }
@@ -611,11 +611,17 @@ function getSlotsForDate(dateStr: string, typeId: string): Array<{ startMins: nu
     if (anyCoachAvailableOn(dateStr)) return []
     return [540, 660, 780].map(t => ({ startMins: t, endMins: t + 60 }))
   }
-  if (typeId === 'shooting-machine') {
+  if (typeId === 'shooting-machine-session') {
     return [540, 660, 780, 900].map(t => ({ startMins: t, endMins: t + 60 }))
   }
-  if (typeId === 'weight-room') {
+  if (typeId === 'weight-room-session') {
     return [480, 570, 660, 750, 840].map(t => ({ startMins: t, endMins: t + 60 }))
+  }
+  if (typeId === 'film-room-session') {
+    return [540, 600, 660, 720, 780, 840].map(t => ({ startMins: t, endMins: t + 60 }))
+  }
+  if (typeId === 'volume-shooting') {
+    return [480, 540, 600, 660, 720, 780, 840, 900].map(t => ({ startMins: t, endMins: t + 60 }))
   }
   return []
 }

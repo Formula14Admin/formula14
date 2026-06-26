@@ -474,6 +474,21 @@ export default function PricingPage() {
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // On mount: honour URL params to auto-open Pricing Config tab and scroll to card
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('tab') === 'pricing') {
+      setTab('pricing')
+      const session = params.get('session')
+      if (session) {
+        setTimeout(() => {
+          document.getElementById(`pricing-card-${session}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }, 200)
+      }
+    }
+  }, [])
+
   // ── Handlers ────────────────────────────────────────────────────────────────
 
   function markAttendance(sessionId: string, athleteId: string, status: AttendanceStatus) {
@@ -1289,6 +1304,7 @@ export default function PricingPage() {
 
               return (
                 <div key={config.sessionType}
+                  id={`pricing-card-${config.sessionType}`}
                   className={`rounded-xl border bg-white p-5 transition ${isEditing ? 'border-[#6BA3D6] shadow-[0_0_0_3px_rgba(107,163,214,0.10)]' : 'border-gray-200'}`}>
 
                   {/* Card header */}

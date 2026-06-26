@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
+import { CANONICAL_SESSION_TYPES } from '@/lib/sessionTypes'
 import {
   IconChevronLeft,
   IconChevronRight,
@@ -4179,16 +4180,11 @@ interface BITMeta {
 interface BITPricingTier   { min: number; max: number | null; pricePerAthlete: number }
 interface BITPricingConfig { sessionType: string; tiers: BITPricingTier[] }
 
-const BIT_TYPES = [
-  { id: 'individual',               label: 'Individual Work Out', emoji: '🏀', description: '1-on-1 coached session tailored to your development goals.',    durationMins: 60,  location: 'Primary Station',            style: 'Coached',    accentColor: '#6BA3D6' },
-  { id: 'small-group',              label: 'Small Group Session', emoji: '👥', description: 'Train alongside 2–6 athletes under expert coach guidance.',       durationMins: 90,  location: 'Primary / Secondary Station', style: 'Coached',    accentColor: '#6BA3D6' },
-  { id: 'team-training',            label: 'Team Training',       emoji: '🏆', description: 'Full-team structured training session. Book your whole squad.',   durationMins: 120, location: 'Primary Station',            style: 'Coached',    accentColor: '#6BA3D6' },
-  { id: 'casual-shooting',          label: 'Casual Shooting',     emoji: '🎯', description: 'Open gym practice — grab a ball and work on your shot.',          durationMins: 60,  location: 'Shooting Bay',               style: 'Self-serve', accentColor: '#f59e0b' },
-  { id: 'shooting-machine-session', label: 'Shooting Machine',    emoji: '⚡', description: 'High-volume reps with the automatic rebounder machine.',          durationMins: 60,  location: 'Shooting Bay',               style: 'Self-serve', accentColor: '#f59e0b' },
-  { id: 'weight-room-session',      label: 'Weight Room',         emoji: '💪', description: 'Strength & conditioning in the dedicated weight room.',            durationMins: 60,  location: 'Weight Room',                style: 'Self-serve', accentColor: '#9B2335' },
-]
-
-const INIT_BIT_SETTINGS = Object.fromEntries(BIT_TYPES.map(t => [t.id, { enabled: true, reason: '' }]))
+// First 6 canonical types default ON; film-room-session and volume-shooting default OFF (new)
+const ON_BY_DEFAULT = new Set(['individual','small-group','team-training','casual-shooting','shooting-machine-session','weight-room-session'])
+const INIT_BIT_SETTINGS = Object.fromEntries(
+  CANONICAL_SESSION_TYPES.map(t => [t.id, { enabled: ON_BY_DEFAULT.has(t.id), reason: '' }])
+)
 
 function BookingInformationTab() {
   // ── State
@@ -4251,15 +4247,17 @@ function BookingInformationTab() {
 
   // ── Edit helpers
   function openSessionEdit(id: string) {
-    const def = BIT_TYPES.find(t => t.id === id)!
+    const def = CANONICAL_SESSION_TYPES.find(t => t.id === id) ?? {
+      label: id, description: '', durationMins: 60, location: '', style: '',
+    }
     const m = meta[id] ?? {}
     setEditDraft({
       label: m.label ?? def.label,
       description: m.description ?? def.description,
       durationMins: String(m.durationMins ?? def.durationMins),
-      emoji: m.emoji ?? def.emoji,
-      location: m.location ?? def.location,
-      style: m.style ?? def.style,
+      emoji: '',
+      location: m.location ?? (('location' in def) ? def.location : ''),
+      style: m.style ?? (('style' in def) ? def.style : ''),
     })
     setEditIsProg(false)
     setEditingId(id)
@@ -4305,6 +4303,15 @@ function BookingInformationTab() {
 
   const devProgs    = catalogue.filter(p => p.category === 'development')
   const socialProgs = catalogue.filter(p => p.category === 'social')
+
+  const EXCLUDED_FROM_BIT = new Set(['development-programs', 'social-programs'])
+  const dynamicBitTypes = pricingConfigs.length > 0
+    ? pricingConfigs
+        .map(c => c.sessionType)
+        .filter(id => !EXCLUDED_FROM_BIT.has(id))
+        .map(id => CANONICAL_SESSION_TYPES.find(t => t.id === id))
+        .filter((t): t is typeof CANONICAL_SESSION_TYPES[0] => t !== null && t !== undefined)
+    : CANONICAL_SESSION_TYPES
 
   const FIELD_CLS = 'w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-[#6BA3D6] focus:ring-2 focus:ring-[#6BA3D6]/10'
   const LBL_CLS   = 'mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500'
@@ -4363,13 +4370,12 @@ function BookingInformationTab() {
         <div className="mb-8">
           <h2 className="mb-3 text-xs font-bold uppercase tracking-wide text-gray-500">Session Types</h2>
           <div className="flex flex-col gap-3">
-            {BIT_TYPES.map(def => {
+            {dynamicBitTypes.map(def => {
               const m   = meta[def.id] ?? {}
-              const tog = settings[def.id] ?? { enabled: true, reason: '' }
+              const tog = settings[def.id] ?? { enabled: false, reason: '' }
               const label        = m.label        ?? def.label
               const description  = m.description  ?? def.description
               const durationMins = m.durationMins ?? def.durationMins
-              const emoji        = m.emoji        ?? def.emoji
               const location     = m.location     ?? def.location
               const style        = m.style        ?? def.style
               const lp = def.id === 'small-group' ? null : getLivePrice(def.id)
@@ -4427,7 +4433,13 @@ function BookingInformationTab() {
                             ? <p className="text-2xl font-bold" style={{ color: BIT_ACCENT }}>${lp}</p>
                             : <p className="text-sm text-gray-400">—</p>
                         }
-                        <p className="mt-1 text-[9px] font-semibold uppercase tracking-wide text-gray-300">Pricing Config</p>
+                        <p className="mt-1 text-[9px] font-semibold uppercase tracking-wide text-gray-400">Source: Pricing Config</p>
+                        <a
+                          href={`/pricing?tab=pricing&session=${def.id}`}
+                          className="mt-1 text-[10px] font-semibold text-blue-400 underline hover:text-blue-600"
+                        >
+                          Edit pricing →
+                        </a>
                       </div>
                     </div>
 
@@ -4495,7 +4507,13 @@ function BookingInformationTab() {
                               <div className="flex shrink-0 flex-col items-center justify-center gap-1 border-l border-gray-100 px-5 py-5" style={{ minWidth: 128 }}>
                                 <p className="text-2xl font-bold" style={{ color: prog.colourTag }}>${prog.pricePerSession}</p>
                                 <p className="text-[10px] text-gray-400">per session</p>
-                                <p className="mt-1 text-[9px] font-semibold uppercase tracking-wide text-gray-300">Pricing Config</p>
+                                <p className="mt-1 text-[9px] font-semibold uppercase tracking-wide text-gray-400">Source: Pricing Config</p>
+                                <a
+                                  href="/pricing?tab=pricing"
+                                  className="mt-1 text-[10px] font-semibold text-blue-400 underline hover:text-blue-600"
+                                >
+                                  Edit pricing →
+                                </a>
                               </div>
                             </div>
                             <AdminCol id={prog.id} accentColor={prog.colourTag} isProg />
@@ -4520,7 +4538,7 @@ function BookingInformationTab() {
               <h3 className="text-base font-bold text-gray-900">
                 Edit — {editIsProg
                   ? catalogue.find(p => p.id === editingId)?.name
-                  : (meta[editingId]?.label ?? BIT_TYPES.find(t => t.id === editingId)?.label)
+                  : (meta[editingId]?.label ?? CANONICAL_SESSION_TYPES.find(t => t.id === editingId)?.label ?? editingId)
                 }
               </h3>
               <button onClick={() => setEditingId(null)}

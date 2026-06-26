@@ -10,6 +10,7 @@ import {
   IconAlertCircle,
   IconCalendarEvent,
 } from '@tabler/icons-react'
+import { CANONICAL_SESSION_TYPES, type SessionTypeId, type SessionTypeDef } from '@/lib/sessionTypes'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -23,34 +24,7 @@ const LS_PROGRAMME_CAT    = 'f14_program_catalogue'
 const LS_SESSION_META     = 'f14_session_type_meta'
 const SHARE_BASE = 'formula14.com.au/join'
 
-const PRICING_TYPE_MAP: Record<SessionTypeId, string> = {
-  'individual':       'individual',
-  'small-group':      'small-group',
-  'team-training':    'team-training',
-  'casual-shooting':  'casual-shooting',
-  'shooting-machine': 'shooting-machine-session',
-  'weight-room':      'weight-room-session',
-}
-
-// Maps BookASession SessionTypeId → Booking Information tab id (for meta lookup)
-const META_ID_MAP: Record<SessionTypeId, string> = {
-  'individual':       'individual',
-  'small-group':      'small-group',
-  'team-training':    'team-training',
-  'casual-shooting':  'casual-shooting',
-  'shooting-machine': 'shooting-machine-session',
-  'weight-room':      'weight-room-session',
-}
-
 // ── Types ─────────────────────────────────────────────────────────────────────
-
-type SessionTypeId =
-  | 'individual'
-  | 'small-group'
-  | 'team-training'
-  | 'casual-shooting'
-  | 'shooting-machine'
-  | 'weight-room'
 
 type BookingStatus = 'confirmed' | 'pending' | 'cancelled'
 type StepKind =
@@ -63,20 +37,6 @@ type StepKind =
   | 'datetime'
   | 'confirm'
   | 'success'
-
-interface SessionTypeDef {
-  id: SessionTypeId
-  label: string
-  description: string
-  durationMins: number
-  price: number | 'membership'
-  emoji: string
-  selfServe: boolean
-  whoFor: string
-  availability: string
-  membershipTiers?: string
-  accentColor: string
-}
 
 interface TimeSlot {
   startMins: number
@@ -109,8 +69,8 @@ export interface MembershipData {
   tier: string
   tierLabel: string
   // 0 = not in plan, -1 = unlimited, N = N credits per week
-  creditsPerWeek: Partial<Record<SessionTypeId, number>>
-  creditsUsed: Partial<Record<SessionTypeId, number>>
+  creditsPerWeek: Partial<Record<string, number>>
+  creditsUsed: Partial<Record<string, number>>
 }
 
 export interface AdminBookingContext {
@@ -122,7 +82,7 @@ export interface AdminBookingContext {
 
 export interface Booking {
   id: string
-  typeId: SessionTypeId
+  typeId: string
   typeLabel: string
   date: string
   startMins: number
@@ -138,57 +98,6 @@ export interface Booking {
   athleteId?: string
   athleteName?: string
 }
-
-// ── Session definitions ───────────────────────────────────────────────────────
-
-const COLOR_COACHED   = '#6BA3D6'
-const COLOR_MEMBER    = '#22c55e'
-const COLOR_SELFSERVE = '#f59e0b'
-
-const SESSION_TYPES: SessionTypeDef[] = [
-  {
-    id: 'individual', label: 'Individual Work Out', emoji: '🏀',
-    description: '1-on-1 coached session tailored to your development goals.',
-    durationMins: 60, price: 75, selfServe: false,
-    whoFor: '1-on-1 with coach', availability: 'Subject to coach availability',
-    accentColor: COLOR_COACHED,
-  },
-  {
-    id: 'small-group', label: 'Small Group Session', emoji: '👥',
-    description: 'Train alongside 2–6 athletes under expert coach guidance.',
-    durationMins: 90, price: 0, selfServe: false,
-    whoFor: '2–6 athletes + coach', availability: 'Subject to coach availability',
-    accentColor: COLOR_COACHED,
-  },
-  {
-    id: 'team-training', label: 'Team Training', emoji: '🏆',
-    description: 'Full-team structured training session. Book your whole squad.',
-    durationMins: 120, price: 150, selfServe: false,
-    whoFor: 'Full team + coach', availability: 'Subject to coach availability',
-    accentColor: COLOR_COACHED,
-  },
-  {
-    id: 'casual-shooting', label: 'Casual Shooting', emoji: '🎯',
-    description: 'Open gym practice — grab a ball and work on your shot.',
-    durationMins: 60, price: 10, selfServe: true,
-    whoFor: 'Self-serve · max 6 per space', availability: 'Mon – Sat, open hours',
-    accentColor: COLOR_SELFSERVE,
-  },
-  {
-    id: 'shooting-machine', label: 'Shooting Machine', emoji: '⚡',
-    description: 'High-volume reps with the automatic rebounder machine.',
-    durationMins: 60, price: 15, selfServe: true,
-    whoFor: 'Self-serve', availability: 'Mon – Sat, open hours',
-    accentColor: COLOR_SELFSERVE,
-  },
-  {
-    id: 'weight-room', label: 'Weight Room', emoji: '💪',
-    description: 'Strength & conditioning in the dedicated weight room.',
-    durationMins: 60, price: 15, selfServe: true,
-    whoFor: 'Self-serve', availability: 'Mon – Sat, open hours',
-    accentColor: COLOR_SELFSERVE,
-  },
-]
 
 // ── Sample SGS sessions ───────────────────────────────────────────────────────
 
@@ -235,7 +144,7 @@ function persistBookings(b: Booking[]): void {
   localStorage.setItem(LS_BOOKINGS, JSON.stringify(b))
 }
 
-function getSlotsForDate(iso: string, typeId: SessionTypeId): TimeSlot[] {
+function getSlotsForDate(iso: string, typeId: string): TimeSlot[] {
   if (iso < TODAY_ISO) return []
   const dow = (new Date(iso + 'T12:00:00').getDay() + 6) % 7 // 0=Mon…6=Sun
   if (dow === 6) return [] // closed Sunday
@@ -271,17 +180,19 @@ function getSlotsForDate(iso: string, typeId: SessionTypeId): TimeSlot[] {
       .map(t => ({ startMins: t, endMins: t + 120 }))
   }
 
-  const bases: Partial<Record<SessionTypeId, number[]>> = {
-    'casual-shooting':  [480, 540, 600, 660, 720, 780, 840],
-    'shooting-machine': [480, 540, 600, 660, 720, 780, 840, 900],
-    'weight-room':      [480, 540, 600, 660, 720, 780, 840],
+  const bases: Partial<Record<string, number[]>> = {
+    'casual-shooting':        [480, 540, 600, 660, 720, 780, 840],
+    'shooting-machine-session': [480, 540, 600, 660, 720, 780, 840, 900],
+    'weight-room-session':    [480, 540, 600, 660, 720, 780, 840],
+    'film-room-session':      [540, 600, 660, 720, 780, 840],
+    'volume-shooting':        [480, 540, 600, 660, 720, 780, 840, 900],
   }
   return (bases[typeId] ?? [])
     .filter(t => !isToday || t > NOW_MINS)
     .map(t => ({ startMins: t, endMins: t + 60 }))
 }
 
-function dateHasSlots(iso: string, typeId: SessionTypeId): boolean {
+function dateHasSlots(iso: string, typeId: string): boolean {
   return getSlotsForDate(iso, typeId).length > 0
 }
 
@@ -344,7 +255,7 @@ function CalendarPicker({
   setMonth: (m: Date) => void
   selectedDate: string | null
   onSelectDate: (iso: string) => void
-  typeId: SessionTypeId
+  typeId: string
 }) {
   const cells = useMemo(() => {
     const y = month.getFullYear(), m = month.getMonth()
@@ -467,7 +378,7 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
 
 // ── Pricing scenario helper ───────────────────────────────────────────────────
 
-function getScenario(typeId: SessionTypeId, membership: MembershipData | null): PricingScenario {
+function getScenario(typeId: string, membership: MembershipData | null): PricingScenario {
   if (!membership) return 'casual'
   const perWeek = membership.creditsPerWeek[typeId] ?? 0
   if (perWeek === 0) return 'not-in-membership'
@@ -501,7 +412,7 @@ function SessionTypeTile({
   const isDisabled     = !!disabledReason
   const isSGS          = type.id === 'small-group'
   const isTeamTraining = type.id === 'team-training'
-  const displayPrice   = livePrice != null ? livePrice : (typeof type.price === 'number' && type.price > 0 ? type.price : null)
+  const displayPrice   = livePrice
 
   return (
     <button type="button" onClick={isDisabled ? undefined : onSelect} disabled={isDisabled}
@@ -561,7 +472,7 @@ function SessionTypeTile({
             <p className="text-sm font-bold text-green-600">Included in</p>
             <p className="text-sm font-bold text-green-600">membership</p>
           </div>
-        ) : displayPrice !== null ? (
+        ) : displayPrice !== null && displayPrice !== undefined ? (
           <div className="text-center">
             <p className="text-2xl font-bold" style={{ color: ACCENT }}>${displayPrice}</p>
             {isTeamTraining && <p className="text-xs text-gray-400">/athlete</p>}
@@ -736,7 +647,6 @@ function SuccessView({
   onChangeAthlete?: () => void
 }) {
   const isRequest = booking.joinType === 'browse-request'
-  const isCodeJoin = booking.joinType === 'code'
   const hasCode = !!booking.bookingCode
   const shareLink = hasCode ? `${SHARE_BASE}/${booking.bookingCode}` : null
 
@@ -856,7 +766,7 @@ export function BookASession({
 
   // ── booking state
   const [step, setStep]             = useState<StepKind>('type')
-  const [typeId, setTypeId]         = useState<SessionTypeId | null>(null)
+  const [typeId, setTypeId]         = useState<string | null>(null)
   const [sgsFlow, setSgsFlow]       = useState<'book-new' | 'join' | null>(null)
   const [joinMethod, setJoinMethod] = useState<'code' | 'browse' | null>(null)
   const [codeInput, setCodeInput]   = useState('')
@@ -876,7 +786,7 @@ export function BookASession({
   const [pricingConfigs, setPricingConfigs] = useState<PricingConfigData[]>([])
   const [bookingSettings, setBookingSettings] = useState<Record<string, BookingToggleData>>({})
   const [programmes, setProgrammes] = useState<ProgrammeItemData[]>([])
-  const [sessionMeta, setSessionMeta] = useState<Record<string, { label?: string; description?: string; durationMins?: number; emoji?: string }>>({})
+  const [sessionMeta, setSessionMeta] = useState<Record<string, { label?: string; description?: string; durationMins?: number; location?: string; style?: string }>>({})
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -905,27 +815,34 @@ export function BookASession({
     return { min: Math.min(...prices), max: Math.max(...prices) }
   }, [pricingConfigs])
 
-  function getLivePrice(id: SessionTypeId): number | null {
-    const pricingTypeId = PRICING_TYPE_MAP[id]
-    const config = pricingConfigs.find(c => c.sessionType === pricingTypeId)
+  function getLivePrice(id: string): number | null {
+    const config = pricingConfigs.find(c => c.sessionType === id)
     if (!config || config.tiers.length === 0) return null
     return config.tiers[0].pricePerAthlete
   }
 
-  // Apply admin-editable meta overrides (from Booking Information tab) to session type definitions
-  const mergedSessionTypes = useMemo(() =>
-    SESSION_TYPES.map(type => {
-      const m = sessionMeta[META_ID_MAP[type.id]]
-      if (!m) return type
-      return {
-        ...type,
-        ...(m.label        ? { label: m.label }                       : {}),
-        ...(m.description  ? { description: m.description }           : {}),
-        ...(m.durationMins ? { durationMins: m.durationMins }         : {}),
-        ...(m.emoji        ? { emoji: m.emoji }                       : {}),
-      }
-    })
-  , [sessionMeta])
+  // Dynamic session types derived from pricingConfigs — the key three-way sync logic
+  const mergedSessionTypes = useMemo(() => {
+    const EXCLUDED = new Set(['development-programs', 'social-programs'])
+    const ids = pricingConfigs.length > 0
+      ? pricingConfigs.map(c => c.sessionType).filter(id => !EXCLUDED.has(id))
+      : CANONICAL_SESSION_TYPES.map(t => t.id)
+    return ids
+      .map(id => {
+        const base = CANONICAL_SESSION_TYPES.find(t => t.id === id)
+        if (!base) return null
+        const m = sessionMeta[id] ?? {}
+        return {
+          ...base,
+          ...(m.label        ? { label: m.label }               : {}),
+          ...(m.description  ? { description: m.description }   : {}),
+          ...(m.durationMins ? { durationMins: m.durationMins } : {}),
+          ...(m.location     ? { location: m.location }         : {}),
+          ...(m.style        ? { style: m.style }               : {}),
+        }
+      })
+      .filter((t): t is SessionTypeDef => t !== null)
+  }, [pricingConfigs, sessionMeta])
 
   const selectedType = mergedSessionTypes.find(t => t.id === typeId) ?? null
   const isJoinFlow = sgsFlow === 'join'
@@ -951,7 +868,7 @@ export function BookASession({
     setAdminOverride(false)
   }
 
-  function selectType(id: SessionTypeId) {
+  function selectType(id: string) {
     setTypeId(id)
     setStep(id === 'small-group' ? 'sgs-choice' : 'datetime')
   }
@@ -1002,7 +919,8 @@ export function BookASession({
     const bk: Booking = {
       id: uid(), typeId, typeLabel: selectedType.label,
       date, startMins, endMins, durationMins: selectedType.durationMins,
-      price: selectedType.price, status, bookingCode, notes,
+      price: getScenario(typeId, membership) === 'included' ? 'membership' : (getLivePrice(typeId) ?? 0),
+      status, bookingCode, notes,
       createdAt: new Date().toISOString(), joinType,
       ...(adminContext ? {
         athleteId: adminContext.athleteId,
@@ -1108,8 +1026,7 @@ export function BookASession({
                     <p className="mb-6 text-sm text-gray-500">Choose the type of session you&apos;d like to book.</p>
                     <div className="flex flex-col gap-3">
                       {mergedSessionTypes.flatMap(type => {
-                        const pricingTypeId = PRICING_TYPE_MAP[type.id]
-                        const toggle = bookingSettings[pricingTypeId]
+                        const toggle = bookingSettings[type.id]
                         if (toggle && !toggle.enabled && !toggle.reason) return []
                         const disabledReason = (toggle && !toggle.enabled && toggle.reason) ? toggle.reason : undefined
                         const sc = getScenario(type.id, membership)
@@ -1388,9 +1305,7 @@ export function BookASession({
                               </span>
                             : (() => {
                                 const sc = getScenario(typeId!, membership)
-                                const lp = getLivePrice(typeId!)
-                                const fallback = typeof selectedType.price === 'number' && selectedType.price > 0 ? selectedType.price : null
-                                const cost = lp ?? fallback
+                                const cost = getLivePrice(typeId!)
                                 if (sc === 'included') {
                                   return <span className="font-bold text-green-600">Membership credit</span>
                                 }
@@ -1404,9 +1319,7 @@ export function BookASession({
 
                       {typeId !== 'small-group' && (() => {
                         const sc = getScenario(typeId!, membership)
-                        const lp = getLivePrice(typeId!)
-                        const fallback = typeof selectedType.price === 'number' && selectedType.price > 0 ? selectedType.price : null
-                        const cost = lp ?? fallback
+                        const cost = getLivePrice(typeId!)
                         if (sc === 'included') {
                           const perWeek = membership?.creditsPerWeek[typeId!] ?? 0
                           const used = membership?.creditsUsed[typeId!] ?? 0
