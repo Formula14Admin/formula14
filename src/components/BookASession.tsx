@@ -48,6 +48,10 @@ interface SessionTypeDef {
   price: number | 'membership'
   emoji: string
   selfServe: boolean
+  whoFor: string
+  availability: string
+  membershipTiers?: string
+  accentColor: string
 }
 
 interface TimeSlot {
@@ -88,13 +92,54 @@ export interface Booking {
 
 // ── Session definitions ───────────────────────────────────────────────────────
 
+const COLOR_COACHED   = '#6BA3D6'
+const COLOR_MEMBER    = '#22c55e'
+const COLOR_SELFSERVE = '#f59e0b'
+
 const SESSION_TYPES: SessionTypeDef[] = [
-  { id: 'individual',       label: 'Individual Work Out', description: '1-on-1 coached session tailored to your development goals.',  durationMins: 60,  price: 35,           emoji: '🏋️', selfServe: false },
-  { id: 'small-group',      label: 'Small Group Session', description: 'Train alongside 2–6 athletes under expert coach guidance.',   durationMins: 90,  price: 'membership', emoji: '👥', selfServe: false },
-  { id: 'team-training',    label: 'Team Training',       description: 'Full-team structured training session. Book your whole squad.',durationMins: 120, price: 150,          emoji: '🏀', selfServe: false },
-  { id: 'casual-shooting',  label: 'Casual Shooting',     description: 'Open gym practice — grab a ball and work on your shot.',     durationMins: 60,  price: 10,           emoji: '🎯', selfServe: true  },
-  { id: 'shooting-machine', label: 'Shooting Machine',    description: 'High-volume reps with the automatic rebounder machine.',     durationMins: 60,  price: 15,           emoji: '⚡', selfServe: true  },
-  { id: 'weight-room',      label: 'Weight Room',         description: 'Strength & conditioning in the dedicated weight room.',      durationMins: 60,  price: 15,           emoji: '💪', selfServe: true  },
+  {
+    id: 'individual', label: 'Individual Work Out', emoji: '🏀',
+    description: '1-on-1 coached session tailored to your development goals.',
+    durationMins: 60, price: 75, selfServe: false,
+    whoFor: '1-on-1 with coach', availability: 'Subject to coach availability',
+    accentColor: COLOR_COACHED,
+  },
+  {
+    id: 'small-group', label: 'Small Group Session', emoji: '👥',
+    description: 'Train alongside 2–6 athletes under expert coach guidance.',
+    durationMins: 90, price: 'membership', selfServe: false,
+    whoFor: '2–6 athletes + coach', availability: 'Subject to coach availability',
+    membershipTiers: 'Elite & Group membership plans',
+    accentColor: COLOR_MEMBER,
+  },
+  {
+    id: 'team-training', label: 'Team Training', emoji: '🏆',
+    description: 'Full-team structured training session. Book your whole squad.',
+    durationMins: 120, price: 150, selfServe: false,
+    whoFor: 'Full team + coach', availability: 'Subject to coach availability',
+    accentColor: COLOR_COACHED,
+  },
+  {
+    id: 'casual-shooting', label: 'Casual Shooting', emoji: '🎯',
+    description: 'Open gym practice — grab a ball and work on your shot.',
+    durationMins: 60, price: 10, selfServe: true,
+    whoFor: 'Self-serve · max 6 per space', availability: 'Mon – Sat, open hours',
+    accentColor: COLOR_SELFSERVE,
+  },
+  {
+    id: 'shooting-machine', label: 'Shooting Machine', emoji: '⚡',
+    description: 'High-volume reps with the automatic rebounder machine.',
+    durationMins: 60, price: 15, selfServe: true,
+    whoFor: 'Self-serve', availability: 'Mon – Sat, open hours',
+    accentColor: COLOR_SELFSERVE,
+  },
+  {
+    id: 'weight-room', label: 'Weight Room', emoji: '💪',
+    description: 'Strength & conditioning in the dedicated weight room.',
+    durationMins: 60, price: 15, selfServe: true,
+    whoFor: 'Self-serve', availability: 'Mon – Sat, open hours',
+    accentColor: COLOR_SELFSERVE,
+  },
 ]
 
 // ── Sample SGS sessions ───────────────────────────────────────────────────────
@@ -364,17 +409,88 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
   )
 }
 
-// ── SGS choice card ───────────────────────────────────────────────────────────
+// ── Session type tile (full-width horizontal) ─────────────────────────────────
 
-function ChoiceCard({ emoji, title, description, onClick }: {
-  emoji: string; title: string; description: string; onClick: () => void
+function TileDetail({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">{label}</p>
+      <p className="mt-0.5 text-sm font-medium text-gray-700">{value}</p>
+    </div>
+  )
+}
+
+function SessionTypeTile({ type, onSelect }: { type: SessionTypeDef; onSelect: () => void }) {
+  const isMembership = type.price === 'membership'
+  const isSelfServe  = type.selfServe
+
+  return (
+    <button type="button" onClick={onSelect}
+      className="group relative flex w-full overflow-hidden rounded-xl border border-gray-200 bg-white text-left shadow-sm transition-all hover:border-[#6BA3D6] hover:shadow-md active:scale-[0.995]">
+      {/* Left accent bar */}
+      <div className="w-1 shrink-0 self-stretch" style={{ backgroundColor: type.accentColor }} />
+
+      {/* Emoji + name + description */}
+      <div className="flex flex-1 items-center gap-5 px-6 py-5">
+        <span className="shrink-0 text-4xl leading-none">{type.emoji}</span>
+        <div className="min-w-0">
+          <p className="text-lg font-bold text-gray-900 transition group-hover:text-[#6BA3D6]">{type.label}</p>
+          <p className="mt-0.5 text-sm leading-snug text-gray-500">{type.description}</p>
+        </div>
+      </div>
+
+      {/* Middle: key details */}
+      <div className="hidden shrink-0 flex-col justify-center gap-3 border-l border-gray-100 px-6 py-5 md:flex" style={{ minWidth: 220 }}>
+        <TileDetail label="Duration" value={`${type.durationMins} min`} />
+        <TileDetail label="Who it's for" value={type.whoFor} />
+        <TileDetail label="Availability" value={type.availability} />
+        {type.membershipTiers && (
+          <TileDetail label="Included in" value={type.membershipTiers} />
+        )}
+      </div>
+
+      {/* Right: price + CTA */}
+      <div className="flex shrink-0 flex-col items-center justify-center gap-3 border-l border-gray-100 px-6 py-5" style={{ minWidth: 148 }}>
+        {isMembership ? (
+          <div className="text-center leading-tight">
+            <p className="text-base font-bold text-green-600">Membership</p>
+            <p className="text-base font-bold text-green-600">credit</p>
+          </div>
+        ) : (
+          <div className="text-center">
+            <p className="text-2xl font-bold" style={{ color: ACCENT }}>${type.price}</p>
+            {isSelfServe && <p className="text-xs text-gray-400">Self-serve</p>}
+          </div>
+        )}
+        <div className="flex items-center gap-1 rounded-lg px-4 py-2 text-sm font-bold text-white transition group-hover:opacity-90"
+          style={{ backgroundColor: ACCENT }}>
+          Book Now <span aria-hidden>→</span>
+        </div>
+      </div>
+    </button>
+  )
+}
+
+// ── SGS choice tile (horizontal, full-width) ──────────────────────────────────
+
+function ChoiceTile({ emoji, title, description, badge, onClick }: {
+  emoji: string; title: string; description: string; badge?: string; onClick: () => void
 }) {
   return (
     <button type="button" onClick={onClick}
-      className="group flex flex-col rounded-2xl border border-gray-200 bg-white p-6 text-left shadow-sm transition hover:border-[#6BA3D6] hover:shadow-md">
-      <div className="mb-3 text-3xl">{emoji}</div>
-      <p className="text-base font-bold text-gray-900 transition group-hover:text-[#6BA3D6]">{title}</p>
-      <p className="mt-2 text-sm leading-relaxed text-gray-500">{description}</p>
+      className="group flex w-full items-center gap-5 overflow-hidden rounded-xl border border-gray-200 bg-white px-6 py-5 text-left shadow-sm transition-all hover:border-[#6BA3D6] hover:shadow-md active:scale-[0.995]">
+      <span className="shrink-0 text-3xl leading-none">{emoji}</span>
+      <div className="flex-1 min-w-0">
+        <p className="text-base font-bold text-gray-900 transition group-hover:text-[#6BA3D6]">{title}</p>
+        <p className="mt-0.5 text-sm leading-snug text-gray-500">{description}</p>
+      </div>
+      {badge && (
+        <span className="shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold"
+          style={{ backgroundColor: ACCENT + '15', color: '#4a7fb5' }}>
+          {badge}
+        </span>
+      )}
+      <span className="shrink-0 text-gray-300 transition group-hover:text-[#6BA3D6]">→</span>
     </button>
   )
 }
@@ -745,39 +861,21 @@ export function BookASession({
               {step === 'type' && (
                 <div>
                   <h1 className="mb-2 text-2xl font-bold text-gray-900">Book a Session</h1>
-                  <p className="mb-8 text-sm text-gray-500">Choose the type of session you&apos;d like to book.</p>
-                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  <p className="mb-6 text-sm text-gray-500">Choose the type of session you&apos;d like to book.</p>
+                  <div className="flex flex-col gap-3">
                     {SESSION_TYPES.map(type => (
-                      <button key={type.id} type="button" onClick={() => selectType(type.id)}
-                        className="group flex flex-col rounded-2xl border border-gray-200 bg-white p-5 text-left shadow-sm transition hover:border-[#6BA3D6] hover:shadow-md">
-                        <div className="mb-3 text-3xl">{type.emoji}</div>
-                        <p className="text-base font-bold text-gray-900 transition group-hover:text-[#6BA3D6]">{type.label}</p>
-                        <p className="mt-1 text-sm leading-relaxed text-gray-500">{type.description}</p>
-                        <div className="mt-auto pt-4 flex flex-wrap items-center gap-2">
-                          <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600">
-                            {type.durationMins} min
-                          </span>
-                          <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${type.price === 'membership' ? 'bg-green-50 text-green-700' : 'bg-blue-50 text-blue-700'}`}>
-                            {type.price === 'membership' ? 'Membership credit' : `$${type.price}`}
-                          </span>
-                          {type.selfServe && (
-                            <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">Self-serve</span>
-                          )}
-                        </div>
-                      </button>
+                      <SessionTypeTile key={type.id} type={type} onSelect={() => selectType(type.id)} />
                     ))}
 
-                    {/* Programs card */}
+                    {/* Programs tile */}
                     {onRequestPrograms && (
-                      <button type="button" onClick={onRequestPrograms}
-                        className="group flex flex-col rounded-2xl border border-gray-200 bg-white p-5 text-left shadow-sm transition hover:border-[#6BA3D6] hover:shadow-md">
-                        <div className="mb-3 text-3xl">📚</div>
-                        <p className="text-base font-bold text-gray-900 transition group-hover:text-[#6BA3D6]">Programs</p>
-                        <p className="mt-1 text-sm leading-relaxed text-gray-500">Browse seasonal programs and enrol your athlete.</p>
-                        <div className="mt-auto pt-4">
-                          <span className="rounded-full bg-purple-50 px-2.5 py-1 text-xs font-semibold text-purple-700">View programs →</span>
-                        </div>
-                      </button>
+                      <ChoiceTile
+                        emoji="📚"
+                        title="Programs"
+                        description="Browse seasonal development and social programs and enrol your athlete."
+                        badge="View programs"
+                        onClick={onRequestPrograms}
+                      />
                     )}
                   </div>
                 </div>
@@ -789,12 +887,13 @@ export function BookASession({
                   <BackBtn onClick={resetFlow} />
                   <h2 className="mb-2 text-xl font-bold text-gray-900">Small Group Session</h2>
                   <p className="mb-6 text-sm text-gray-500">Would you like to create a new session, or join an existing one?</p>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <ChoiceCard emoji="📅" title="Book a Session"
-                      description="Create a new small group session and share your booking code to invite others."
+                  <div className="flex flex-col gap-3">
+                    <ChoiceTile emoji="➕" title="Book a New Session"
+                      description="Create your own Small Group Session and invite others to join with a unique booking code."
+                      badge="Available times shown next"
                       onClick={() => { setSgsFlow('book-new'); setStep('datetime') }} />
-                    <ChoiceCard emoji="🔗" title="Join a Session"
-                      description="Enter a code from a friend, or browse all upcoming sessions with spots available."
+                    <ChoiceTile emoji="🔗" title="Join an Existing Session"
+                      description="Enter a code from a friend for instant access, or browse open sessions and request to join."
                       onClick={() => { setSgsFlow('join'); setStep('sgs-join-method') }} />
                   </div>
                 </div>
@@ -806,12 +905,14 @@ export function BookASession({
                   <BackBtn onClick={() => setStep('sgs-choice')} />
                   <h2 className="mb-2 text-xl font-bold text-gray-900">Join a Session</h2>
                   <p className="mb-6 text-sm text-gray-500">How would you like to find the session?</p>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <ChoiceCard emoji="🔑" title="Enter a Code"
+                  <div className="flex flex-col gap-3">
+                    <ChoiceTile emoji="🔑" title="Enter a Code"
                       description="Got a booking code from a friend? Enter it to join their session directly — no approval needed."
+                      badge="Instant access"
                       onClick={() => { setJoinMethod('code'); setStep('sgs-code-entry') }} />
-                    <ChoiceCard emoji="🔍" title="Browse Available Sessions"
+                    <ChoiceTile emoji="🔍" title="Browse Available Sessions"
                       description="See all upcoming sessions with spots open. Send a request and the coach will approve you."
+                      badge="Approval required"
                       onClick={() => { setJoinMethod('browse'); setStep('sgs-browse') }} />
                   </div>
                 </div>
