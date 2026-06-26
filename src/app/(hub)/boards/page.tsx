@@ -127,7 +127,7 @@ const INIT_BOARDS: KanbanBoard[] = [
       ]},
       { id:'c1-4', title:'Done', color:'#dcfce7', cards:[
         mk({ id:'k19', title:'Complete summer training wrap-up', priority:'medium', assignee:'Matt Brasser', createdAt:'2026-05-01' }),
-        mk({ id:'k1a', title:'Onboard new athletes — June cohort', priority:'high', assignee:'Jade Wilson', createdAt:'2026-06-02' }),
+        mk({ id:'k1a', title:'Onboard new athletes — June cohort', priority:'high', assignee:'Jade Brasser', createdAt:'2026-06-02' }),
       ]},
     ],
   },
@@ -142,19 +142,19 @@ const INIT_BOARDS: KanbanBoard[] = [
         mk({ id:'k23', title:'Sam — post footwork fundamentals', priority:'low', labelIds:['l2'] }),
       ]},
       { id:'c2-2', title:'Goal Set', color:'#dbeafe', cards:[
-        mk({ id:'k24', title:'Aisha — shooting off the dribble', priority:'high', labelIds:['l2'], dueDate:'2026-08-01', assignee:'Jade Wilson',
+        mk({ id:'k24', title:'Aisha — shooting off the dribble', priority:'high', labelIds:['l2'], dueDate:'2026-08-01', assignee:'Jade Brasser',
           description:'Focus on pull-up jumper and floater. Target: 40% from mid-range off the dribble.' }),
         mk({ id:'k25', title:'Marcus — off-ball movement & cutting', priority:'high', labelIds:['l2'], assignee:'Matt Brasser' }),
       ]},
       { id:'c2-3', title:'In Progress', color:'#fef3c7', cards:[
         mk({ id:'k26', title:'Liam — ball handling fundamentals', priority:'medium', labelIds:['l2','l1'], assignee:'Matt Brasser',
           description:'6-week program targeting weak-hand dribbling and change of direction.' }),
-        mk({ id:'k27', title:'Priya — three-point range extension', priority:'medium', labelIds:['l1'], dueDate:'2026-07-01', assignee:'Jade Wilson' }),
-        mk({ id:'k28', title:'Tyler — mid-range pull-up', priority:'medium', labelIds:['l2'], assignee:'Jade Wilson' }),
+        mk({ id:'k27', title:'Priya — three-point range extension', priority:'medium', labelIds:['l1'], dueDate:'2026-07-01', assignee:'Jade Brasser' }),
+        mk({ id:'k28', title:'Tyler — mid-range pull-up', priority:'medium', labelIds:['l2'], assignee:'Jade Brasser' }),
       ]},
       { id:'c2-4', title:'Achieved', color:'#dcfce7', cards:[
         mk({ id:'k29', title:'Devon — layup package (both hands)', priority:'medium', labelIds:['l2'], assignee:'Matt Brasser', createdAt:'2026-05-10' }),
-        mk({ id:'k2a', title:'Zara — basic defensive stance & slides', priority:'medium', labelIds:['l2'], assignee:'Jade Wilson', createdAt:'2026-05-20' }),
+        mk({ id:'k2a', title:'Zara — basic defensive stance & slides', priority:'medium', labelIds:['l2'], assignee:'Jade Brasser', createdAt:'2026-05-20' }),
       ]},
     ],
   },
@@ -170,11 +170,11 @@ const INIT_BOARDS: KanbanBoard[] = [
         mk({ id:'k34', title:'Install additional storage shelving', priority:'low', labelIds:['l6'] }),
       ]},
       { id:'c3-2', title:'In Progress', color:'#fef3c7', cards:[
-        mk({ id:'k35', title:'Update facility safety signage', priority:'high', labelIds:['l6'], assignee:'Jade Wilson' }),
+        mk({ id:'k35', title:'Update facility safety signage', priority:'high', labelIds:['l6'], assignee:'Jade Brasser' }),
         mk({ id:'k36', title:'Repair scoreboard display', priority:'medium', labelIds:['l5'] }),
       ]},
       { id:'c3-3', title:'Done', color:'#dcfce7', cards:[
-        mk({ id:'k37', title:'Deep clean of changerooms', priority:'medium', labelIds:['l6'], assignee:'Jade Wilson', createdAt:'2026-06-01' }),
+        mk({ id:'k37', title:'Deep clean of changerooms', priority:'medium', labelIds:['l6'], assignee:'Jade Brasser', createdAt:'2026-06-01' }),
         mk({ id:'k38', title:'Purchase new ball bag', priority:'low', labelIds:['l5'], createdAt:'2026-05-20' }),
         mk({ id:'k39', title:'Renew public liability insurance', priority:'urgent', labelIds:['l7','l4'], assignee:'Matt Brasser', createdAt:'2026-05-15' }),
       ]},

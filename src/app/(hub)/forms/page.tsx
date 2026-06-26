@@ -271,7 +271,7 @@ const INIT_SUBMISSIONS: Submission[] = [
       fi7:'Athlete landed awkwardly after a layup attempt and rolled his right ankle. Immediate pain, unable to continue.',
       fi8:'Right ankle',fi9:'Moderate',
       fi11:'RICE protocol applied — Rest, Ice for 20 minutes, Compression bandage, leg elevated. Athlete monitored for 30 min.',
-      fi12:'Jade Wilson',fi13:['Parent/guardian notified','Incident follow-up required'],fi14:'Matt Brasser' } },
+      fi12:'Jade Brasser',fi13:['Parent/guardian notified','Incident follow-up required'],fi14:'Matt Brasser' } },
 
   { id: 's11', formId: 'f-health', submittedAt: '2026-06-02T09:00:00', submittedBy: 'Jordan Mitchell',
     data: { fh3:'Jordan Mitchell',fh4:'2009-03-15',fh6:'No',fh7:'No',fh8:'No',fh9:'No',fh10:'No',fh11:'No',

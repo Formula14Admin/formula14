@@ -95,7 +95,7 @@ export const INIT_STAFF: StaffMember[] = [
   {
     id: 's2',
     firstName: 'Jade',
-    lastName: 'Wilson',
+    lastName: 'Brasser',
     role: 'Assistant Coach',
     employmentType: 'part-time',
     status: 'active',
@@ -107,7 +107,7 @@ export const INIT_STAFF: StaffMember[] = [
     bsb: '734-000',
     accountNumber: '87654321',
     tfn: '987654321',
-    emergencyContactName: 'Tom Wilson',
+    emergencyContactName: 'Tom Brasser',
     emergencyContactPhone: '0411 890 123',
     notes: 'Skills and conditioning specialist. Runs group sessions and shooting clinics. Available Tue–Sat.',
     documents: [
@@ -152,7 +152,7 @@ export const INIT_PAY_RUNS: PayRun[] = [
     staffCount: 2,
     entries: [
       { staffId: 's1', staffName: 'Matt Brasser', sessions: 0, hours: 40, rate: 30, rateType: 'hourly', calculatedAmount: 1200, adjustedAmount: 1200, notes: '' },
-      { staffId: 's2', staffName: 'Jade Wilson',  sessions: 0, hours: 34, rate: 25, rateType: 'hourly', calculatedAmount:  850, adjustedAmount:  850, notes: '' },
+      { staffId: 's2', staffName: 'Jade Brasser',  sessions: 0, hours: 34, rate: 25, rateType: 'hourly', calculatedAmount:  850, adjustedAmount:  850, notes: '' },
     ],
   },
   {
@@ -165,7 +165,7 @@ export const INIT_PAY_RUNS: PayRun[] = [
     staffCount: 2,
     entries: [
       { staffId: 's1', staffName: 'Matt Brasser', sessions: 0, hours: 40, rate: 30, rateType: 'hourly', calculatedAmount: 1200, adjustedAmount: 1200, notes: '' },
-      { staffId: 's2', staffName: 'Jade Wilson',  sessions: 0, hours: 34, rate: 25, rateType: 'hourly', calculatedAmount:  850, adjustedAmount:  850, notes: '' },
+      { staffId: 's2', staffName: 'Jade Brasser',  sessions: 0, hours: 34, rate: 25, rateType: 'hourly', calculatedAmount:  850, adjustedAmount:  850, notes: '' },
     ],
   },
   {
@@ -178,7 +178,7 @@ export const INIT_PAY_RUNS: PayRun[] = [
     staffCount: 2,
     entries: [
       { staffId: 's1', staffName: 'Matt Brasser', sessions: 0, hours: 40, rate: 30, rateType: 'hourly', calculatedAmount: 1200, adjustedAmount: 1200, notes: '' },
-      { staffId: 's2', staffName: 'Jade Wilson',  sessions: 0, hours: 34, rate: 25, rateType: 'hourly', calculatedAmount:  850, adjustedAmount:  850, notes: '' },
+      { staffId: 's2', staffName: 'Jade Brasser',  sessions: 0, hours: 34, rate: 25, rateType: 'hourly', calculatedAmount:  850, adjustedAmount:  850, notes: '' },
     ],
   },
   {
@@ -191,7 +191,7 @@ export const INIT_PAY_RUNS: PayRun[] = [
     staffCount: 3,
     entries: [
       { staffId: 's1', staffName: 'Matt Brasser', sessions: 0, hours: 40, rate: 30, rateType: 'hourly',      calculatedAmount: 1200, adjustedAmount: 1200, notes: '' },
-      { staffId: 's2', staffName: 'Jade Wilson',  sessions: 0, hours: 34, rate: 25, rateType: 'hourly',      calculatedAmount:  850, adjustedAmount:  850, notes: '' },
+      { staffId: 's2', staffName: 'Jade Brasser',  sessions: 0, hours: 34, rate: 25, rateType: 'hourly',      calculatedAmount:  850, adjustedAmount:  850, notes: '' },
       { staffId: 's3', staffName: 'Sam Torres',   sessions: 8, hours:  0, rate: 45, rateType: 'per-session', calculatedAmount:  360, adjustedAmount:  360, notes: '8 sessions 15–28 Jun' },
     ],
   },

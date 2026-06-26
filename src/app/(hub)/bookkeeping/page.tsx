@@ -95,14 +95,14 @@ const INIT_TRANSACTIONS: Transaction[] = [
 
   // ── June 2026 Expenses ────────────────────────────────────────────────────
   { id: 'j20', date: '2026-06-01', description: 'Matt Brasser — coaching wages',             type: 'expense', category: 'wages',        amount: 1200.00, reference: 'PAY-MB-0601',  notes: 'Fortnightly — 1–14 Jun' },
-  { id: 'j21', date: '2026-06-01', description: 'Jade Wilson — coaching wages',              type: 'expense', category: 'wages',        amount:  850.00, reference: 'PAY-JW-0601',  notes: 'Fortnightly — 1–14 Jun' },
+  { id: 'j21', date: '2026-06-01', description: 'Jade Brasser — coaching wages',              type: 'expense', category: 'wages',        amount:  850.00, reference: 'PAY-JW-0601',  notes: 'Fortnightly — 1–14 Jun' },
   { id: 'j22', date: '2026-06-01', description: 'Facility hire — gymnasium (June)',          type: 'expense', category: 'facility',     amount:  800.00, reference: 'FACIL-2406',    notes: 'Monthly lease, Oakleigh facility' },
   { id: 'j23', date: '2026-06-02', description: 'Public liability insurance — June',         type: 'expense', category: 'insurance',    amount:  185.00, reference: 'INS-2406',      notes: '' },
   { id: 'j24', date: '2026-06-06', description: 'Training equipment — cones & balls',        type: 'expense', category: 'equipment',    amount:  340.00, reference: 'EQ-001',        notes: '12 agility cones, 4 training balls' },
   { id: 'j25', date: '2026-06-08', description: 'Meta Ads — social media marketing',         type: 'expense', category: 'marketing',    amount:  150.00, reference: 'MKT-0608',      notes: 'Jun 8–21 campaign' },
   { id: 'j26', date: '2026-06-12', description: 'Admin software subscription',               type: 'expense', category: 'admin',        amount:  149.00, reference: 'ADMIN-JUN',     notes: 'Monthly SaaS tools' },
   { id: 'j27', date: '2026-06-15', description: 'Matt Brasser — coaching wages',             type: 'expense', category: 'wages',        amount: 1200.00, reference: 'PAY-MB-0615',  notes: 'Fortnightly — 15–28 Jun' },
-  { id: 'j28', date: '2026-06-15', description: 'Jade Wilson — coaching wages',              type: 'expense', category: 'wages',        amount:  850.00, reference: 'PAY-JW-0615',  notes: 'Fortnightly — 15–28 Jun' },
+  { id: 'j28', date: '2026-06-15', description: 'Jade Brasser — coaching wages',              type: 'expense', category: 'wages',        amount:  850.00, reference: 'PAY-JW-0615',  notes: 'Fortnightly — 15–28 Jun' },
   { id: 'j29', date: '2026-06-18', description: 'Electricity — facility share',              type: 'expense', category: 'utilities',    amount:  220.00, reference: 'UTIL-JUN',      notes: 'Pro-rata electricity for training space' },
 
   // ── May 2026 Income ───────────────────────────────────────────────────────
@@ -125,13 +125,13 @@ const INIT_TRANSACTIONS: Transaction[] = [
 
   // ── May 2026 Expenses ─────────────────────────────────────────────────────
   { id: 'm20', date: '2026-05-01', description: 'Matt Brasser — coaching wages',             type: 'expense', category: 'wages',        amount: 1200.00, reference: 'PAY-MB-0501',  notes: 'Fortnightly — 1–14 May' },
-  { id: 'm21', date: '2026-05-01', description: 'Jade Wilson — coaching wages',              type: 'expense', category: 'wages',        amount:  850.00, reference: 'PAY-JW-0501',  notes: 'Fortnightly — 1–14 May' },
+  { id: 'm21', date: '2026-05-01', description: 'Jade Brasser — coaching wages',              type: 'expense', category: 'wages',        amount:  850.00, reference: 'PAY-JW-0501',  notes: 'Fortnightly — 1–14 May' },
   { id: 'm22', date: '2026-05-01', description: 'Facility hire — gymnasium (May)',           type: 'expense', category: 'facility',     amount:  800.00, reference: 'FACIL-2405',    notes: 'Monthly lease, Oakleigh facility' },
   { id: 'm23', date: '2026-05-02', description: 'Public liability insurance — May',          type: 'expense', category: 'insurance',    amount:  185.00, reference: 'INS-2405',      notes: '' },
   { id: 'm24', date: '2026-05-10', description: 'Marketing — print flyers & signage',        type: 'expense', category: 'marketing',    amount:  120.00, reference: 'MKT-0510',      notes: '500 A5 flyers + 2 corflute signs' },
   { id: 'm25', date: '2026-05-12', description: 'Admin software subscription',               type: 'expense', category: 'admin',        amount:  149.00, reference: 'ADMIN-MAY',     notes: '' },
   { id: 'm26', date: '2026-05-15', description: 'Matt Brasser — coaching wages',             type: 'expense', category: 'wages',        amount: 1200.00, reference: 'PAY-MB-0515',  notes: 'Fortnightly — 15–28 May' },
-  { id: 'm27', date: '2026-05-15', description: 'Jade Wilson — coaching wages',              type: 'expense', category: 'wages',        amount:  850.00, reference: 'PAY-JW-0515',  notes: 'Fortnightly — 15–28 May' },
+  { id: 'm27', date: '2026-05-15', description: 'Jade Brasser — coaching wages',              type: 'expense', category: 'wages',        amount:  850.00, reference: 'PAY-JW-0515',  notes: 'Fortnightly — 15–28 May' },
   { id: 'm28', date: '2026-05-20', description: 'Electricity — facility share',              type: 'expense', category: 'utilities',    amount:  195.00, reference: 'UTIL-MAY',      notes: '' },
   { id: 'm29', date: '2026-05-28', description: 'Equipment — basketball tape & pump',        type: 'expense', category: 'equipment',    amount:   75.00, reference: 'EQ-002',        notes: '' },
 ]

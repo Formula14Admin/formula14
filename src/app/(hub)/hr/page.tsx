@@ -128,7 +128,7 @@ const ONBOARDING_TASKS: OnboardingTask[] = [
 
 // Sample leave requests
 const INIT_LEAVE: LeaveRequest[] = [
-  { id: 'lr1', staffId: 's2', staffName: 'Jade Wilson',  type: 'annual',   startDate: '2026-07-07', endDate: '2026-07-11', days: 5,  reason: 'Family holiday',       status: 'pending',  submittedDate: '2026-06-20' },
+  { id: 'lr1', staffId: 's2', staffName: 'Jade Brasser',  type: 'annual',   startDate: '2026-07-07', endDate: '2026-07-11', days: 5,  reason: 'Family holiday',       status: 'pending',  submittedDate: '2026-06-20' },
   { id: 'lr2', staffId: 's3', staffName: 'Sam Torres',   type: 'sick',     startDate: '2026-06-18', endDate: '2026-06-18', days: 1,  reason: 'Unwell',               status: 'approved', submittedDate: '2026-06-18' },
   { id: 'lr3', staffId: 's1', staffName: 'Matt Brasser', type: 'personal', startDate: '2026-08-03', endDate: '2026-08-03', days: 1,  reason: 'Personal commitment',  status: 'pending',  submittedDate: '2026-06-22' },
 ]
@@ -143,7 +143,7 @@ const INIT_REVIEWS: PerformanceReview[] = [
     completedDate: '2026-06-15',
   },
   {
-    id: 'pr2', staffId: 's2', staffName: 'Jade Wilson', period: 'H1 2026',
+    id: 'pr2', staffId: 's2', staffName: 'Jade Brasser', period: 'H1 2026',
     rating: 4, selfAssessment: 'Great group session results but I need to update my Level 1 cert which expired.',
     managerNotes: 'Excellent with athletes, especially juniors. Must address qualification expiry as a priority.',
     actionItems: ['Renew Level 1 coaching cert immediately', 'Lead at least 2 shooting clinics independently by Sep 2026'],
