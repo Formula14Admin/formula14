@@ -113,6 +113,13 @@ export interface MembershipData {
   creditsUsed: Partial<Record<SessionTypeId, number>>
 }
 
+export interface AdminBookingContext {
+  athleteId: string
+  athleteName: string
+  initials: string
+  avatarColor: string
+}
+
 export interface Booking {
   id: string
   typeId: SessionTypeId
@@ -127,6 +134,9 @@ export interface Booking {
   notes: string
   createdAt: string
   joinType: 'new' | 'code' | 'browse-request'
+  adminOverride?: boolean
+  athleteId?: string
+  athleteName?: string
 }
 
 // ── Session definitions ───────────────────────────────────────────────────────
@@ -650,7 +660,15 @@ function MyBookingsView({ bookings, onCancel }: { bookings: Booking[]; onCancel:
                       style={{ backgroundColor: style.bg, color: style.color }}>
                       {style.label}
                     </span>
+                    {b.adminOverride && (
+                      <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-semibold text-violet-700">
+                        Admin override
+                      </span>
+                    )}
                   </div>
+                  {b.athleteName && (
+                    <p className="mt-0.5 text-xs text-gray-500">For: <span className="font-medium">{b.athleteName}</span></p>
+                  )}
                   <p className="mt-1 text-sm text-gray-600">
                     {displayDate(b.date, { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' })}
                     {' · '}{minsToLabel(b.startMins)} – {minsToLabel(b.endMins)}
@@ -707,13 +725,15 @@ function MyBookingsView({ bookings, onCancel }: { bookings: Booking[]; onCancel:
 // ── Success view ──────────────────────────────────────────────────────────────
 
 function SuccessView({
-  booking, onBookAnother, onViewBookings, copied, onCopy,
+  booking, onBookAnother, onViewBookings, copied, onCopy, adminContext, onChangeAthlete,
 }: {
   booking: Booking
   onBookAnother: () => void
   onViewBookings: () => void
   copied: 'code' | 'link' | null
   onCopy: (text: string, type: 'code' | 'link') => void
+  adminContext?: AdminBookingContext | null
+  onChangeAthlete?: () => void
 }) {
   const isRequest = booking.joinType === 'browse-request'
   const isCodeJoin = booking.joinType === 'code'
@@ -737,6 +757,14 @@ function SuccessView({
             {cfg.icon}
           </div>
           <h2 className="text-xl font-bold text-gray-900">{cfg.title}</h2>
+          {adminContext && (
+            <p className="mt-1 text-sm font-semibold text-gray-700">
+              Booked for{' '}
+              <span className="font-bold" style={{ color: adminContext.avatarColor }}>
+                {adminContext.athleteName}
+              </span>
+            </p>
+          )}
           <p className="mt-2 text-sm text-gray-600">{cfg.sub}</p>
           <div className="mt-5 rounded-xl bg-white/60 px-4 py-3 text-sm">
             <p className="font-semibold text-gray-800">{booking.typeLabel}</p>
@@ -781,10 +809,25 @@ function SuccessView({
             style={{ backgroundColor: ACCENT }}>
             View My Bookings
           </button>
-          <button type="button" onClick={onBookAnother}
-            className="w-full rounded-xl border border-gray-200 bg-white py-3 text-sm font-semibold text-gray-600 transition hover:bg-gray-50">
-            Book Another Session
-          </button>
+          {adminContext ? (
+            <>
+              <button type="button" onClick={onBookAnother}
+                className="w-full rounded-xl border border-gray-200 bg-white py-3 text-sm font-semibold text-gray-600 transition hover:bg-gray-50">
+                Book Another for {adminContext.athleteName.split(' ')[0]}
+              </button>
+              {onChangeAthlete && (
+                <button type="button" onClick={() => { onBookAnother(); onChangeAthlete() }}
+                  className="w-full rounded-xl border border-gray-200 bg-white py-3 text-sm font-semibold text-gray-600 transition hover:bg-gray-50">
+                  Book for a Different Athlete
+                </button>
+              )}
+            </>
+          ) : (
+            <button type="button" onClick={onBookAnother}
+              className="w-full rounded-xl border border-gray-200 bg-white py-3 text-sm font-semibold text-gray-600 transition hover:bg-gray-50">
+              Book Another Session
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -797,12 +840,16 @@ export interface BookASessionProps {
   isAdminPreview?: boolean
   membership?: MembershipData | null
   onRequestPrograms?: () => void
+  adminContext?: AdminBookingContext | null
+  onChangeAthlete?: () => void
 }
 
 export function BookASession({
   isAdminPreview = false,
   membership = null,
   onRequestPrograms,
+  adminContext = null,
+  onChangeAthlete,
 }: BookASessionProps) {
   // ── view: booking flow vs my bookings
   const [view, setView] = useState<'book' | 'my-bookings'>('book')
@@ -823,6 +870,7 @@ export function BookASession({
   const [bookings, setBookings]     = useState<Booking[]>(loadBookings)
   const [lastBooking, setLastBooking] = useState<Booking | null>(null)
   const [copied, setCopied]         = useState<'code' | 'link' | null>(null)
+  const [adminOverride, setAdminOverride] = useState(false)
 
   // ── Pricing config loaded from Pricing & Payments ─────────────────────────
   const [pricingConfigs, setPricingConfigs] = useState<PricingConfigData[]>([])
@@ -900,6 +948,7 @@ export function BookASession({
     setStep('type'); setTypeId(null); setSgsFlow(null); setJoinMethod(null)
     setCodeInput(''); setCodeError(''); setMatchedSgs(null); setBrowsePick(null)
     setSelectedDate(null); setSelectedSlot(null); setNotes(''); setLastBooking(null)
+    setAdminOverride(false)
   }
 
   function selectType(id: SessionTypeId) {
@@ -955,6 +1004,11 @@ export function BookASession({
       date, startMins, endMins, durationMins: selectedType.durationMins,
       price: selectedType.price, status, bookingCode, notes,
       createdAt: new Date().toISOString(), joinType,
+      ...(adminContext ? {
+        athleteId: adminContext.athleteId,
+        athleteName: adminContext.athleteName,
+        adminOverride,
+      } : {}),
     }
 
     const updated = [bk, ...bookings]
@@ -988,6 +1042,27 @@ export function BookASession({
           <p className="text-xs font-semibold" style={{ color: '#4a7fb5' }}>
             This is the athlete-facing booking experience — you are viewing it as an admin.
           </p>
+        </div>
+      )}
+
+      {/* Admin booking context banner */}
+      {adminContext && (
+        <div className="flex shrink-0 items-center gap-3 border-b border-blue-100 bg-blue-50 px-5 py-2.5">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
+            style={{ backgroundColor: adminContext.avatarColor }}>
+            {adminContext.initials}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-bold text-blue-900">{adminContext.athleteName}</p>
+            <p className="text-[11px] text-blue-500">Booking on behalf of this athlete</p>
+          </div>
+          {onChangeAthlete && (
+            <button type="button" onClick={() => { resetFlow(); onChangeAthlete() }}
+              className="shrink-0 text-xs font-semibold underline"
+              style={{ color: '#4a7fb5' }}>
+              Change athlete
+            </button>
+          )}
         </div>
       )}
 
@@ -1370,6 +1445,21 @@ export function BookASession({
                         </div>
                       )}
 
+                      {adminContext && typeId && typeId !== 'small-group' && ['over-limit', 'not-in-membership'].includes(getScenario(typeId, membership)) && (
+                        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                          <label className="flex cursor-pointer items-start gap-3">
+                            <input type="checkbox" checked={adminOverride} onChange={e => setAdminOverride(e.target.checked)}
+                              className="mt-0.5 h-4 w-4 cursor-pointer" />
+                            <div>
+                              <p className="text-sm font-bold text-amber-800">Admin Override</p>
+                              <p className="mt-0.5 text-xs text-amber-600">
+                                Book this session regardless of credit limits or membership eligibility.
+                              </p>
+                            </div>
+                          </label>
+                        </div>
+                      )}
+
                       <div>
                         <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500">
                           Anything for your coach? (optional)
@@ -1404,6 +1494,8 @@ export function BookASession({
           onViewBookings={() => { setView('my-bookings'); resetFlow() }}
           copied={copied}
           onCopy={copyText}
+          adminContext={adminContext}
+          onChangeAthlete={onChangeAthlete}
         />
       )}
     </div>

@@ -8,8 +8,9 @@ import {
   IconX,
   IconCalendarEvent,
   IconUser,
+  IconSearch,
 } from '@tabler/icons-react'
-import { BookASession, type MembershipData } from '@/components/BookASession'
+import { BookASession, type MembershipData, type AdminBookingContext } from '@/components/BookASession'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -84,6 +85,62 @@ const DEMO_MEMBERSHIP: MembershipData = {
     'casual-shooting': 5,
     'shooting-machine': 1,
   },
+}
+
+// ─── Athlete data ─────────────────────────────────────────────────────────────
+
+interface PortalAthlete {
+  id: string
+  firstName: string
+  lastName: string
+  membershipPlan: 'bronze' | 'silver' | 'gold' | 'platinum' | null
+}
+
+const PORTAL_ATHLETES: PortalAthlete[] = [
+  { id: 'a1',  firstName: 'Liam',   lastName: 'Carter',   membershipPlan: 'bronze'   },
+  { id: 'a2',  firstName: 'Jordan', lastName: 'Williams', membershipPlan: 'silver'   },
+  { id: 'a3',  firstName: 'Aisha',  lastName: 'Thompson', membershipPlan: 'gold'     },
+  { id: 'a4',  firstName: 'Marcus', lastName: 'Davies',   membershipPlan: 'gold'     },
+  { id: 'a5',  firstName: 'Devon',  lastName: 'Knox',     membershipPlan: null       },
+  { id: 'a6',  firstName: 'Kai',    lastName: 'Okafor',   membershipPlan: 'bronze'   },
+  { id: 'a7',  firstName: 'Tyler',  lastName: 'Ross',     membershipPlan: 'silver'   },
+  { id: 'a8',  firstName: 'Priya',  lastName: 'Mehta',    membershipPlan: 'silver'   },
+  { id: 'a9',  firstName: 'Sam',    lastName: 'Liu',      membershipPlan: 'platinum' },
+  { id: 'a10', firstName: 'Zara',   lastName: 'Obi',      membershipPlan: 'bronze'   },
+]
+
+const AVATAR_COLORS = ['#6BA3D6','#6BAD6B','#D4A520','#D46B6B','#9B6BD4','#D46BAF','#6BD4C8','#D48B6B','#8B6BD4','#6BD48B']
+
+function getAthleteAvatarColor(id: string): string {
+  const idx = parseInt(id.replace(/\D/g, ''), 10) - 1
+  return AVATAR_COLORS[Math.max(0, idx) % AVATAR_COLORS.length]
+}
+
+function athleteMembershipToData(plan: 'bronze' | 'silver' | 'gold' | 'platinum' | null): MembershipData | null {
+  if (!plan) return null
+  const plans: Record<string, MembershipData> = {
+    bronze: {
+      tier: 'bronze', tierLabel: 'Bronze',
+      creditsPerWeek: { individual: 1, 'casual-shooting': 2, 'shooting-machine': 1 },
+      creditsUsed: {},
+    },
+    silver: {
+      tier: 'silver', tierLabel: 'Silver',
+      creditsPerWeek: { individual: 2, 'small-group': 3, 'casual-shooting': 5, 'shooting-machine': 3 },
+      creditsUsed: {},
+    },
+    gold: {
+      tier: 'gold', tierLabel: 'Gold',
+      creditsPerWeek: { individual: -1, 'small-group': -1, 'casual-shooting': -1, 'shooting-machine': -1, 'weight-room': -1 },
+      creditsUsed: {},
+    },
+    platinum: {
+      tier: 'platinum', tierLabel: 'Platinum',
+      creditsPerWeek: { individual: -1, 'small-group': -1, 'team-training': -1, 'casual-shooting': -1, 'shooting-machine': -1, 'weight-room': -1 },
+      creditsUsed: {},
+    },
+  }
+  return plans[plan] ?? null
 }
 
 // ─── Schedule Data (self-contained copy) ─────────────────────────────────────
@@ -617,6 +674,10 @@ export default function PortalPage() {
   const [bookerName, setBookerName]       = useState('')
   const [bookingConfirmed, setBookingConfirmed] = useState(false)
 
+  // ── Admin athlete selector state ────────────────────────────────────────────
+  const [selectedAthleteId, setSelectedAthleteId] = useState<string | null>(null)
+  const [athleteSearch, setAthleteSearch]         = useState('')
+
   // ── Programs + shared state ─────────────────────────────────────────────────
   const [portalTab, setPortalTab]         = useState<'sessions' | 'programs'>('sessions')
   const [toastMsg, setToastMsg]           = useState('')
@@ -752,6 +813,26 @@ export default function PortalPage() {
 
   const todayIso = new Date().toISOString().slice(0, 10)
 
+  // ── Admin derived values ────────────────────────────────────────────────────
+  const selectedAthlete = PORTAL_ATHLETES.find(a => a.id === selectedAthleteId) ?? null
+  const athleteMembership = selectedAthlete ? athleteMembershipToData(selectedAthlete.membershipPlan) : null
+  const adminCtx: AdminBookingContext | null = selectedAthlete ? {
+    athleteId: selectedAthlete.id,
+    athleteName: `${selectedAthlete.firstName} ${selectedAthlete.lastName}`,
+    initials: `${selectedAthlete.firstName[0]}${selectedAthlete.lastName[0]}`,
+    avatarColor: getAthleteAvatarColor(selectedAthlete.id),
+  } : null
+
+  const filteredAthletes = PORTAL_ATHLETES
+    .filter(a => {
+      const q = athleteSearch.toLowerCase().trim()
+      return q === '' || `${a.firstName} ${a.lastName}`.toLowerCase().includes(q)
+    })
+    .sort((a, b) => {
+      const last = a.lastName.localeCompare(b.lastName)
+      return last !== 0 ? last : a.firstName.localeCompare(b.firstName)
+    })
+
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#f4f6f9' }}>
 
@@ -765,6 +846,13 @@ export default function PortalPage() {
               Choose your session type, pick a time, and you're done.
             </p>
           </div>
+        </div>
+        {/* Admin booking mode banner */}
+        <div className="mx-6 mt-3 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+          <div className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
+          <p className="text-xs font-semibold text-amber-800">
+            You are booking as an admin — select an athlete to make a booking on their behalf.
+          </p>
         </div>
         <div className="mt-3 flex gap-0 px-6">
           {([
@@ -782,11 +870,57 @@ export default function PortalPage() {
         </div>
       </div>
 
-      {/* ── Sessions tab ──────────────────────────────────────────────────────── */}
-      {portalTab === 'sessions' && (
+      {/* ── Sessions tab — athlete selector ──────────────────────────────────── */}
+      {portalTab === 'sessions' && !selectedAthleteId && (
+        <div className="mx-auto w-full max-w-[960px] px-6 py-8">
+          <h2 className="mb-1 text-xl font-bold text-gray-900">Select an Athlete</h2>
+          <p className="mb-5 text-sm text-gray-500">Search and select the athlete you&apos;re booking for.</p>
+          <div className="relative mb-4">
+            <IconSearch size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              value={athleteSearch}
+              onChange={e => setAthleteSearch(e.target.value)}
+              placeholder="Search by name…"
+              className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-9 pr-4 text-sm outline-none focus:border-[#6BA3D6] focus:ring-2 focus:ring-[#6BA3D6]/10"
+            />
+          </div>
+          <div className="space-y-2">
+            {filteredAthletes.map(a => (
+              <button key={a.id} type="button"
+                onClick={() => { setSelectedAthleteId(a.id); setAthleteSearch('') }}
+                className="flex w-full items-center gap-4 rounded-xl border border-gray-200 bg-white px-5 py-4 text-left shadow-sm transition hover:border-[#6BA3D6] hover:shadow-md active:scale-[0.998]">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white"
+                  style={{ backgroundColor: getAthleteAvatarColor(a.id) }}>
+                  {a.firstName[0]}{a.lastName[0]}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-gray-900">{a.firstName} {a.lastName}</p>
+                  <p className="text-xs text-gray-400">
+                    {a.membershipPlan
+                      ? `${a.membershipPlan.charAt(0).toUpperCase()}${a.membershipPlan.slice(1)} membership`
+                      : 'No membership'}
+                  </p>
+                </div>
+                <IconChevronRight size={16} className="shrink-0 text-gray-300" />
+              </button>
+            ))}
+            {filteredAthletes.length === 0 && (
+              <div className="rounded-xl border border-dashed border-gray-200 bg-white px-6 py-8 text-center text-sm text-gray-400">
+                No athletes found
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Sessions tab — booking flow ───────────────────────────────────────── */}
+      {portalTab === 'sessions' && selectedAthleteId && (
         <BookASession
           onRequestPrograms={() => setPortalTab('programs')}
-          membership={DEMO_MEMBERSHIP}
+          membership={athleteMembership}
+          adminContext={adminCtx}
+          onChangeAthlete={() => setSelectedAthleteId(null)}
         />
       )}
 
