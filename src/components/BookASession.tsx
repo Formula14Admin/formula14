@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import {
   IconChevronLeft,
   IconChevronRight,
@@ -15,8 +15,20 @@ import {
 
 const ACCENT = '#6BA3D6'
 const TODAY_ISO = new Date().toISOString().slice(0, 10)
-const LS_BOOKINGS = 'f14_athlete_bookings'
+const LS_BOOKINGS         = 'f14_athlete_bookings'
+const LS_PRICING_CONFIGS  = 'f14_pricing_configs'
+const LS_BOOKING_SETTINGS = 'f14_booking_settings'
+const LS_PROGRAMME_CAT    = 'f14_program_catalogue'
 const SHARE_BASE = 'formula14.com.au/join'
+
+const PRICING_TYPE_MAP: Record<SessionTypeId, string> = {
+  'individual':       'individual',
+  'small-group':      'small-group',
+  'team-training':    'team-training',
+  'casual-shooting':  'casual-shooting',
+  'shooting-machine': 'shooting-machine-session',
+  'weight-room':      'weight-room-session',
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -74,6 +86,11 @@ interface SGSSession {
   skillRange: string
 }
 
+interface PricingTierData { min: number; max: number | null; pricePerAthlete: number }
+interface PricingConfigData { sessionType: string; tiers: PricingTierData[] }
+interface BookingToggleData { enabled: boolean; reason: string }
+interface ProgrammeItemData { pricePerSession: number; numSessions?: number; category: string }
+
 export interface Booking {
   id: string
   typeId: SessionTypeId
@@ -107,10 +124,9 @@ const SESSION_TYPES: SessionTypeDef[] = [
   {
     id: 'small-group', label: 'Small Group Session', emoji: '👥',
     description: 'Train alongside 2–6 athletes under expert coach guidance.',
-    durationMins: 90, price: 'membership', selfServe: false,
+    durationMins: 90, price: 0, selfServe: false,
     whoFor: '2–6 athletes + coach', availability: 'Subject to coach availability',
-    membershipTiers: 'Elite & Group membership plans',
-    accentColor: COLOR_MEMBER,
+    accentColor: COLOR_COACHED,
   },
   {
     id: 'team-training', label: 'Team Training', emoji: '🏆',
@@ -420,52 +436,86 @@ function TileDetail({ label, value }: { label: string; value: string }) {
   )
 }
 
-function SessionTypeTile({ type, onSelect }: { type: SessionTypeDef; onSelect: () => void }) {
-  const isMembership = type.price === 'membership'
-  const isSelfServe  = type.selfServe
+function SessionTypeTile({
+  type, onSelect, disabledReason, livePrice, sgsRange,
+}: {
+  type: SessionTypeDef
+  onSelect: () => void
+  disabledReason?: string
+  livePrice?: number | null
+  sgsRange?: { min: number; max: number }
+}) {
+  const isDisabled     = !!disabledReason
+  const isSGS          = type.id === 'small-group'
+  const isTeamTraining = type.id === 'team-training'
+  const displayPrice   = livePrice != null ? livePrice : (typeof type.price === 'number' && type.price > 0 ? type.price : null)
 
   return (
-    <button type="button" onClick={onSelect}
-      className="group relative flex w-full overflow-hidden rounded-xl border border-gray-200 bg-white text-left shadow-sm transition-all hover:border-[#6BA3D6] hover:shadow-md active:scale-[0.995]">
+    <button type="button" onClick={isDisabled ? undefined : onSelect} disabled={isDisabled}
+      className={`group relative flex w-full overflow-hidden rounded-xl border text-left shadow-sm transition-all
+        ${isDisabled
+          ? 'cursor-not-allowed border-gray-200 bg-gray-50 opacity-60'
+          : 'border-gray-200 bg-white hover:border-[#6BA3D6] hover:shadow-md active:scale-[0.995]'}`}>
       {/* Left accent bar */}
-      <div className="w-1 shrink-0 self-stretch" style={{ backgroundColor: type.accentColor }} />
+      <div className="w-1 shrink-0 self-stretch"
+        style={{ backgroundColor: isDisabled ? '#d1d5db' : type.accentColor }} />
 
       {/* Emoji + name + description */}
       <div className="flex flex-1 items-center gap-5 px-6 py-5">
         <span className="shrink-0 text-4xl leading-none">{type.emoji}</span>
         <div className="min-w-0">
-          <p className="text-lg font-bold text-gray-900 transition group-hover:text-[#6BA3D6]">{type.label}</p>
+          <p className={`text-lg font-bold transition ${isDisabled ? 'text-gray-400' : 'text-gray-900 group-hover:text-[#6BA3D6]'}`}>
+            {type.label}
+          </p>
           <p className="mt-0.5 text-sm leading-snug text-gray-500">{type.description}</p>
+          {disabledReason && (
+            <p className="mt-1.5 text-xs font-medium text-amber-700">{disabledReason}</p>
+          )}
         </div>
       </div>
 
-      {/* Middle: key details */}
-      <div className="hidden shrink-0 flex-col justify-center gap-3 border-l border-gray-100 px-6 py-5 md:flex" style={{ minWidth: 220 }}>
-        <TileDetail label="Duration" value={`${type.durationMins} min`} />
-        <TileDetail label="Who it's for" value={type.whoFor} />
-        <TileDetail label="Availability" value={type.availability} />
-        {type.membershipTiers && (
-          <TileDetail label="Included in" value={type.membershipTiers} />
-        )}
-      </div>
+      {/* Middle: key details (hidden when disabled) */}
+      {!isDisabled && (
+        <div className="hidden shrink-0 flex-col justify-center gap-3 border-l border-gray-100 px-6 py-5 md:flex" style={{ minWidth: 220 }}>
+          <TileDetail label="Duration" value={`${type.durationMins} min`} />
+          <TileDetail label="Who it's for" value={type.whoFor} />
+          <TileDetail label="Availability" value={type.availability} />
+          {type.membershipTiers && (
+            <TileDetail label="Included in" value={type.membershipTiers} />
+          )}
+        </div>
+      )}
 
       {/* Right: price + CTA */}
       <div className="flex shrink-0 flex-col items-center justify-center gap-3 border-l border-gray-100 px-6 py-5" style={{ minWidth: 148 }}>
-        {isMembership ? (
+        {isDisabled ? (
+          <p className="text-sm font-semibold text-gray-400">Unavailable</p>
+        ) : isSGS && sgsRange ? (
+          <div className="text-center leading-tight">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Price at lockout</p>
+            <p className="mt-1 text-xl font-bold" style={{ color: type.accentColor }}>
+              ${sgsRange.min}–${sgsRange.max}
+            </p>
+            <p className="text-[10px] text-gray-400">per athlete</p>
+          </div>
+        ) : displayPrice !== null ? (
+          <div className="text-center">
+            <p className="text-2xl font-bold" style={{ color: ACCENT }}>${displayPrice}</p>
+            {isTeamTraining && <p className="text-xs text-gray-400">/athlete</p>}
+            {type.selfServe && !isTeamTraining && <p className="text-xs text-gray-400">Self-serve</p>}
+          </div>
+        ) : (
           <div className="text-center leading-tight">
             <p className="text-base font-bold text-green-600">Membership</p>
             <p className="text-base font-bold text-green-600">credit</p>
           </div>
-        ) : (
-          <div className="text-center">
-            <p className="text-2xl font-bold" style={{ color: ACCENT }}>${type.price}</p>
-            {isSelfServe && <p className="text-xs text-gray-400">Self-serve</p>}
+        )}
+        {!isDisabled && (
+          <div className="flex items-center gap-1 rounded-lg px-4 py-2 text-sm font-bold text-white transition group-hover:opacity-90"
+            style={{ backgroundColor: ACCENT }}>
+            Book Now <span aria-hidden>→</span>
           </div>
         )}
-        <div className="flex items-center gap-1 rounded-lg px-4 py-2 text-sm font-bold text-white transition group-hover:opacity-90"
-          style={{ backgroundColor: ACCENT }}>
-          Book Now <span aria-hidden>→</span>
-        </div>
       </div>
     </button>
   )
@@ -720,6 +770,41 @@ export function BookASession({
   const [lastBooking, setLastBooking] = useState<Booking | null>(null)
   const [copied, setCopied]         = useState<'code' | 'link' | null>(null)
 
+  // ── Pricing config loaded from Pricing & Payments ─────────────────────────
+  const [pricingConfigs, setPricingConfigs] = useState<PricingConfigData[]>([])
+  const [bookingSettings, setBookingSettings] = useState<Record<string, BookingToggleData>>({})
+  const [programmes, setProgrammes] = useState<ProgrammeItemData[]>([])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      const raw = localStorage.getItem(LS_PRICING_CONFIGS)
+      if (raw) setPricingConfigs(JSON.parse(raw))
+    } catch {}
+    try {
+      const raw = localStorage.getItem(LS_BOOKING_SETTINGS)
+      if (raw) setBookingSettings(JSON.parse(raw))
+    } catch {}
+    try {
+      const raw = localStorage.getItem(LS_PROGRAMME_CAT)
+      if (raw) setProgrammes(JSON.parse(raw))
+    } catch {}
+  }, [])
+
+  const sgsRange = useMemo(() => {
+    const config = pricingConfigs.find(c => c.sessionType === 'small-group')
+    if (!config || config.tiers.length === 0) return { min: 35, max: 50 }
+    const prices = config.tiers.map(t => t.pricePerAthlete)
+    return { min: Math.min(...prices), max: Math.max(...prices) }
+  }, [pricingConfigs])
+
+  function getLivePrice(id: SessionTypeId): number | null {
+    const pricingTypeId = PRICING_TYPE_MAP[id]
+    const config = pricingConfigs.find(c => c.sessionType === pricingTypeId)
+    if (!config || config.tiers.length === 0) return null
+    return config.tiers[0].pricePerAthlete
+  }
+
   const selectedType = SESSION_TYPES.find(t => t.id === typeId) ?? null
   const isJoinFlow = sgsFlow === 'join'
 
@@ -858,28 +943,49 @@ export function BookASession({
             <div className="mx-auto w-full max-w-[960px] px-6 py-8">
 
               {/* ── Type selection ─────────────────────────────────────────── */}
-              {step === 'type' && (
-                <div>
-                  <h1 className="mb-2 text-2xl font-bold text-gray-900">Book a Session</h1>
-                  <p className="mb-6 text-sm text-gray-500">Choose the type of session you&apos;d like to book.</p>
-                  <div className="flex flex-col gap-3">
-                    {SESSION_TYPES.map(type => (
-                      <SessionTypeTile key={type.id} type={type} onSelect={() => selectType(type.id)} />
-                    ))}
+              {step === 'type' && (() => {
+                const progPrices = programmes.map(p => p.pricePerSession)
+                const progMinPrice = progPrices.length > 0 ? Math.min(...progPrices) : null
+                return (
+                  <div>
+                    <h1 className="mb-2 text-2xl font-bold text-gray-900">Book a Session</h1>
+                    <p className="mb-6 text-sm text-gray-500">Choose the type of session you&apos;d like to book.</p>
+                    <div className="flex flex-col gap-3">
+                      {SESSION_TYPES.flatMap(type => {
+                        const pricingTypeId = PRICING_TYPE_MAP[type.id]
+                        const toggle = bookingSettings[pricingTypeId]
+                        if (toggle && !toggle.enabled && !toggle.reason) return []
+                        const disabledReason = (toggle && !toggle.enabled && toggle.reason) ? toggle.reason : undefined
+                        return [(
+                          <SessionTypeTile
+                            key={type.id}
+                            type={type}
+                            onSelect={() => selectType(type.id)}
+                            disabledReason={disabledReason}
+                            livePrice={type.id === 'small-group' ? undefined : getLivePrice(type.id)}
+                            sgsRange={type.id === 'small-group' ? sgsRange : undefined}
+                          />
+                        )]
+                      })}
 
-                    {/* Programs tile */}
-                    {onRequestPrograms && (
-                      <ChoiceTile
-                        emoji="📚"
-                        title="Programs"
-                        description="Browse seasonal development and social programs and enrol your athlete."
-                        badge="View programs"
-                        onClick={onRequestPrograms}
-                      />
-                    )}
+                      {/* Programs tile */}
+                      {onRequestPrograms && (
+                        <ChoiceTile
+                          emoji="📚"
+                          title="Programs"
+                          description={
+                            progMinPrice !== null
+                              ? `Development & social programs from $${progMinPrice}/session — enrol or join the waitlist.`
+                              : "Browse seasonal development and social programs and enrol your athlete."
+                          }
+                          badge={progMinPrice !== null ? `From $${progMinPrice}/session` : "View programs"}
+                          onClick={onRequestPrograms}
+                        />
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
+                )
+              })()}
 
               {/* ── SGS: Book new vs Join ──────────────────────────────────── */}
               {step === 'sgs-choice' && (
@@ -1118,9 +1224,19 @@ export function BookASession({
                         <SummaryRow label="Duration" value={`${selectedType.durationMins} min`} />
                         <div className="flex items-center justify-between border-t border-gray-100 pt-3">
                           <span className="font-semibold text-gray-700">Cost</span>
-                          {selectedType.price === 'membership'
-                            ? <span className="font-bold text-green-600">Membership credit</span>
-                            : <span className="font-bold text-gray-900">${selectedType.price} — pay at venue</span>}
+                          {typeId === 'small-group'
+                            ? <span className="font-bold" style={{ color: ACCENT }}>
+                                ${sgsRange.min}–${sgsRange.max}/athlete · set at lockout
+                              </span>
+                            : (() => {
+                                const lp = getLivePrice(typeId!)
+                                const fallback = typeof selectedType.price === 'number' && selectedType.price > 0 ? selectedType.price : null
+                                const cost = lp ?? fallback
+                                return cost !== null
+                                  ? <span className="font-bold text-gray-900">${cost} — pay at venue</span>
+                                  : <span className="font-bold text-green-600">Membership credit</span>
+                              })()
+                          }
                         </div>
                       </div>
 

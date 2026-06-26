@@ -82,6 +82,7 @@ export interface ProgramCatalogueItem {
   name: string
   category: 'development' | 'social'
   pricePerSession: number
+  numSessions: number
   maxCapacity: number
   enrolmentType: 'instant' | 'approval'
   description: string
@@ -91,13 +92,13 @@ export interface ProgramCatalogueItem {
 const CATALOGUE_COLOURS = ['#6BA3D6','#6BAD6B','#D4A520','#A06BD6','#E57373','#4DB6AC','#F97316','#0EA5E9']
 
 const INIT_CATALOGUE: ProgramCatalogueItem[] = [
-  { id:'cat-perf-lab',      name:'Performance Lab',       category:'development', pricePerSession:20, maxCapacity:15, enrolmentType:'approval', description:'Elite performance training focused on skill development, conditioning, and game IQ.', colourTag:'#6BA3D6' },
-  { id:'cat-dom-academy',   name:'Domestic Academy',      category:'development', pricePerSession:20, maxCapacity:15, enrolmentType:'approval', description:'Structured academy program for athletes chasing domestic competition pathways.', colourTag:'#A06BD6' },
-  { id:'cat-snipers',       name:'Snipers Club',          category:'development', pricePerSession:20, maxCapacity:15, enrolmentType:'approval', description:'Shooting-specific program to level up range and accuracy from all areas.', colourTag:'#D4A520' },
-  { id:'cat-shooters-lab',  name:'Shooters Lab',          category:'development', pricePerSession:20, maxCapacity:15, enrolmentType:'approval', description:'Volume shooting and form correction for developing consistent shooters.', colourTag:'#0EA5E9' },
-  { id:'cat-walking-bball', name:'Walking Basketball',    category:'social',      pricePerSession:15, maxCapacity:20, enrolmentType:'instant',  description:'Low-impact basketball for all ages and abilities. Great social activity for the community.', colourTag:'#6BAD6B' },
-  { id:'cat-midday-ladies', name:'Mid Day Ladies Comp',   category:'social',      pricePerSession:15, maxCapacity:20, enrolmentType:'instant',  description:'Midday competition for women of all abilities. Inclusive, welcoming, and fun.', colourTag:'#E57373' },
-  { id:'cat-adult-beginner',name:'Adult Beginner School', category:'social',      pricePerSession:15, maxCapacity:20, enrolmentType:'instant',  description:'Introduction to basketball for adults new to the game. Relaxed and welcoming environment.', colourTag:'#4DB6AC' },
+  { id:'cat-perf-lab',      name:'Performance Lab',       category:'development', pricePerSession:20, numSessions:12, maxCapacity:15, enrolmentType:'approval', description:'Elite performance training focused on skill development, conditioning, and game IQ.', colourTag:'#6BA3D6' },
+  { id:'cat-dom-academy',   name:'Domestic Academy',      category:'development', pricePerSession:20, numSessions:12, maxCapacity:15, enrolmentType:'approval', description:'Structured academy program for athletes chasing domestic competition pathways.', colourTag:'#A06BD6' },
+  { id:'cat-snipers',       name:'Snipers Club',          category:'development', pricePerSession:20, numSessions:12, maxCapacity:15, enrolmentType:'approval', description:'Shooting-specific program to level up range and accuracy from all areas.', colourTag:'#D4A520' },
+  { id:'cat-shooters-lab',  name:'Shooters Lab',          category:'development', pricePerSession:20, numSessions:12, maxCapacity:15, enrolmentType:'approval', description:'Volume shooting and form correction for developing consistent shooters.', colourTag:'#0EA5E9' },
+  { id:'cat-walking-bball', name:'Walking Basketball',    category:'social',      pricePerSession:15, numSessions: 8, maxCapacity:20, enrolmentType:'instant',  description:'Low-impact basketball for all ages and abilities. Great social activity for the community.', colourTag:'#6BAD6B' },
+  { id:'cat-midday-ladies', name:'Mid Day Ladies Comp',   category:'social',      pricePerSession:15, numSessions: 8, maxCapacity:20, enrolmentType:'instant',  description:'Midday competition for women of all abilities. Inclusive, welcoming, and fun.', colourTag:'#E57373' },
+  { id:'cat-adult-beginner',name:'Adult Beginner School', category:'social',      pricePerSession:15, numSessions: 8, maxCapacity:20, enrolmentType:'instant',  description:'Introduction to basketball for adults new to the game. Relaxed and welcoming environment.', colourTag:'#4DB6AC' },
 ]
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -251,6 +252,23 @@ const INIT_SETTINGS: PricingSettings = {
   chargeNoShow: true,
   chargeExcusedAbsence: false,
 }
+
+// ─── Booking Settings (controls athlete-facing tile visibility) ───────────────
+
+interface BookingToggle { enabled: boolean; reason: string }
+type BookingSettingsState = Record<string, BookingToggle>
+
+const BOOKING_SETTINGS_LS = 'f14_booking_settings'
+const PRICING_CONFIGS_LS  = 'f14_pricing_configs'
+
+const BOOKING_SETTABLE_TYPES: SessionType[] = [
+  'individual', 'small-group', 'team-training',
+  'casual-shooting', 'shooting-machine-session', 'weight-room-session',
+]
+
+const INIT_BOOKING_SETTINGS: BookingSettingsState = Object.fromEntries(
+  BOOKING_SETTABLE_TYPES.map(t => [t, { enabled: true, reason: '' }])
+) as BookingSettingsState
 
 const INIT_SESSIONS: Session[] = [
   // Upcoming — Small Group, 2pm today. Lockout at noon (1h away at 11am).
@@ -434,6 +452,14 @@ export default function PricingPage() {
   const [editingProg,   setEditingProg]   = useState<ProgramCatalogueItem | null>(null)
   const [devCatOpen,    setDevCatOpen]    = useState(true)
   const [socialCatOpen, setSocialCatOpen] = useState(true)
+
+  const [bookingSettings, setBookingSettings] = useState<BookingSettingsState>(() => {
+    try {
+      const raw = typeof window !== 'undefined' ? localStorage.getItem(BOOKING_SETTINGS_LS) : null
+      if (raw) return { ...INIT_BOOKING_SETTINGS, ...JSON.parse(raw) }
+    } catch {}
+    return INIT_BOOKING_SETTINGS
+  })
 
   const now = DEMO_NOW
 
@@ -642,6 +668,16 @@ export default function PricingPage() {
     localStorage.setItem('f14_program_catalogue', JSON.stringify(catalogue))
   }, [catalogue])
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    localStorage.setItem(PRICING_CONFIGS_LS, JSON.stringify(pricingConfigs))
+  }, [pricingConfigs])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    localStorage.setItem(BOOKING_SETTINGS_LS, JSON.stringify(bookingSettings))
+  }, [bookingSettings])
+
   function saveProg(item: ProgramCatalogueItem) {
     setCatalogue(prev => {
       const exists = prev.some(p => p.id === item.id)
@@ -661,6 +697,7 @@ export default function PricingPage() {
       name: '',
       category,
       pricePerSession: category === 'development' ? 20 : 15,
+      numSessions: category === 'development' ? 12 : 8,
       maxCapacity: category === 'development' ? 15 : 20,
       enrolmentType: category === 'development' ? 'approval' : 'instant',
       description: '',
@@ -1179,6 +1216,55 @@ export default function PricingPage() {
             </div>
           </div>
 
+          {/* Booking Settings */}
+          <div className="rounded-xl border border-gray-200 bg-white p-5">
+            <h2 className="mb-1 flex items-center gap-2 text-base font-semibold text-gray-800">
+              <IconLockOpen size={17} style={{ color: ACCENT }} /> Booking Settings
+            </h2>
+            <p className="mb-4 text-xs text-gray-400">
+              Control which session types are available in the athlete booking portal. Turning a type off with no reason hides the tile; adding a reason shows it greyed out with a message.
+            </p>
+            <div className="space-y-2">
+              {BOOKING_SETTABLE_TYPES.map(st => {
+                const tog = bookingSettings[st] ?? { enabled: true, reason: '' }
+                return (
+                  <div key={st} className="rounded-xl border border-gray-100 p-3">
+                    <div className="flex items-center justify-between gap-4">
+                      <span className="rounded-full px-2.5 py-0.5 text-xs font-semibold"
+                        style={{ backgroundColor: SESSION_TYPE_COLORS[st].bg, color: SESSION_TYPE_COLORS[st].color }}>
+                        {SESSION_TYPE_LABELS[st]}
+                      </span>
+                      <div className="flex items-center gap-3">
+                        {!tog.enabled && (
+                          <span className="text-xs text-gray-400">
+                            {tog.reason ? 'Greyed out with reason' : 'Hidden from athletes'}
+                          </span>
+                        )}
+                        <Toggle on={tog.enabled} onToggle={() =>
+                          setBookingSettings(prev => ({
+                            ...prev,
+                            [st]: { ...(prev[st] ?? { enabled: true, reason: '' }), enabled: !tog.enabled },
+                          }))} />
+                      </div>
+                    </div>
+                    {!tog.enabled && (
+                      <input
+                        type="text"
+                        value={tog.reason}
+                        onChange={e => setBookingSettings(prev => ({
+                          ...prev,
+                          [st]: { ...prev[st]!, reason: e.target.value },
+                        }))}
+                        placeholder="Reason (optional) — e.g. Temporarily unavailable: closed for maintenance until 1 July"
+                        className={INPUT + ' mt-2 text-xs'}
+                      />
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
           {/* Pricing Structure — all session types × 1–20 athletes, read-only */}
           <div className="rounded-xl border border-gray-200 bg-white p-5">
             <div className="mb-1 flex items-center justify-between gap-2">
@@ -1530,7 +1616,7 @@ export default function PricingPage() {
                             </div>
                             <p className="mt-0.5 text-xs text-gray-500 leading-relaxed">{prog.description}</p>
                             <div className="mt-1.5 flex items-center gap-4 text-xs text-gray-400">
-                              <span>${prog.pricePerSession}/session</span>
+                              <span>${prog.pricePerSession}/session · {prog.numSessions ?? '—'} sessions → <strong className="text-gray-600">${((prog.pricePerSession) * (prog.numSessions ?? 0)).toFixed(0)} term fee</strong></span>
                               <span>Max {prog.maxCapacity} athletes</span>
                             </div>
                           </div>
@@ -1591,9 +1677,9 @@ export default function PricingPage() {
                       placeholder="Brief description shown in athlete portal…"
                     />
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-3 gap-3">
                     <div>
-                      <label className={LABEL}>Price per Session</label>
+                      <label className={LABEL}>Price / Session</label>
                       <div className="flex items-center gap-1">
                         <span className="text-sm text-gray-400">$</span>
                         <input
@@ -1605,6 +1691,15 @@ export default function PricingPage() {
                       </div>
                     </div>
                     <div>
+                      <label className={LABEL}>Sessions / Term</label>
+                      <input
+                        type="number" min={1} max={52}
+                        className={INPUT}
+                        value={editingProg.numSessions}
+                        onChange={e => setEditingProg(p => p && ({ ...p, numSessions: parseInt(e.target.value) || 1 }))}
+                      />
+                    </div>
+                    <div>
                       <label className={LABEL}>Max Capacity</label>
                       <input
                         type="number" min={1}
@@ -1614,6 +1709,11 @@ export default function PricingPage() {
                       />
                     </div>
                   </div>
+                  {editingProg.numSessions > 0 && (
+                    <p className="text-xs text-gray-400">
+                      Term fee: <strong className="text-gray-700">${(editingProg.pricePerSession * editingProg.numSessions).toFixed(0)}</strong> ({editingProg.numSessions} sessions × ${editingProg.pricePerSession})
+                    </p>
+                  )}
                   <div>
                     <label className={LABEL}>Enrolment Type</label>
                     <div className="flex gap-2">
