@@ -4383,9 +4383,8 @@ function BookingInformationTab() {
                     {/* Tile body */}
                     <div className="flex flex-1 min-w-0 items-stretch">
 
-                      {/* Emoji + name + description */}
-                      <div className="flex flex-1 items-center gap-5 px-6 py-5">
-                        <span className="shrink-0 text-4xl leading-none">{emoji}</span>
+                      {/* Name + description */}
+                      <div className="flex flex-1 items-center px-6 py-5">
                         <div className="min-w-0">
                           <p className="text-lg font-bold text-gray-900">{label}</p>
                           <p className="mt-0.5 text-sm leading-snug text-gray-500">{description}</p>
@@ -4469,8 +4468,7 @@ function BookingInformationTab() {
                           <div className={`flex w-full overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm transition-opacity ${tog.enabled ? '' : 'opacity-60'}`}>
                             <div className="w-1.5 shrink-0 self-stretch" style={{ backgroundColor: prog.colourTag }} />
                             <div className="flex flex-1 min-w-0 items-stretch">
-                              <div className="flex flex-1 items-center gap-5 px-6 py-5">
-                                <span className="shrink-0 text-4xl leading-none">{progEmoji}</span>
+                              <div className="flex flex-1 items-center px-6 py-5">
                                 <div className="min-w-0">
                                   <p className="text-lg font-bold text-gray-900">{prog.name}</p>
                                   <p className="mt-0.5 text-sm leading-snug text-gray-500">{prog.description || 'No description set'}</p>
