@@ -9,7 +9,7 @@ import {
   IconCalendarEvent,
   IconUser,
 } from '@tabler/icons-react'
-import { BookASession } from '@/components/BookASession'
+import { BookASession, type MembershipData } from '@/components/BookASession'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -64,6 +64,27 @@ const SELF_SERVE_COLOR = '#D4A520'
 const COACH_NAMES: Record<CoachId, string> = { matt: 'Matt', jade: 'Jade' }
 
 const SELF_SERVE_TYPES = ['Casual Shooting', 'Shooting Machine Session']
+
+// Scenario 1 (casual): null
+// Scenario 2 (included): individual, shooting-machine
+// Scenario 3 (over-limit): casual-shooting
+// Scenario 4 (not-in-membership): team-training, weight-room
+const DEMO_MEMBERSHIP: MembershipData = {
+  tier: 'silver',
+  tierLabel: 'Silver',
+  creditsPerWeek: {
+    individual:       2,
+    'small-group':    3,
+    'casual-shooting': 5,
+    'shooting-machine': 3,
+  },
+  creditsUsed: {
+    individual:       1,
+    'small-group':    1,
+    'casual-shooting': 5,
+    'shooting-machine': 1,
+  },
+}
 
 // ─── Schedule Data (self-contained copy) ─────────────────────────────────────
 
@@ -763,7 +784,10 @@ export default function PortalPage() {
 
       {/* ── Sessions tab ──────────────────────────────────────────────────────── */}
       {portalTab === 'sessions' && (
-        <BookASession onRequestPrograms={() => setPortalTab('programs')} />
+        <BookASession
+          onRequestPrograms={() => setPortalTab('programs')}
+          membership={DEMO_MEMBERSHIP}
+        />
       )}
 
             {portalTab === 'programs' && (

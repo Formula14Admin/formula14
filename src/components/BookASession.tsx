@@ -92,6 +92,16 @@ interface PricingConfigData { sessionType: string; tiers: PricingTierData[] }
 interface BookingToggleData { enabled: boolean; reason: string }
 interface ProgrammeItemData { pricePerSession: number; numSessions?: number; category: string }
 
+type PricingScenario = 'casual' | 'included' | 'over-limit' | 'not-in-membership'
+
+export interface MembershipData {
+  tier: string
+  tierLabel: string
+  // 0 = not in plan, -1 = unlimited, N = N credits per week
+  creditsPerWeek: Partial<Record<SessionTypeId, number>>
+  creditsUsed: Partial<Record<SessionTypeId, number>>
+}
+
 export interface Booking {
   id: string
   typeId: SessionTypeId
@@ -434,6 +444,17 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
   )
 }
 
+// ── Pricing scenario helper ───────────────────────────────────────────────────
+
+function getScenario(typeId: SessionTypeId, membership: MembershipData | null): PricingScenario {
+  if (!membership) return 'casual'
+  const perWeek = membership.creditsPerWeek[typeId] ?? 0
+  if (perWeek === 0) return 'not-in-membership'
+  const used = membership.creditsUsed[typeId] ?? 0
+  if (perWeek === -1 || used < perWeek) return 'included'
+  return 'over-limit'
+}
+
 // ── Session type tile (full-width horizontal) ─────────────────────────────────
 
 function TileDetail({ label, value }: { label: string; value: string }) {
@@ -446,13 +467,15 @@ function TileDetail({ label, value }: { label: string; value: string }) {
 }
 
 function SessionTypeTile({
-  type, onSelect, disabledReason, livePrice, sgsRange,
+  type, onSelect, disabledReason, livePrice, sgsRange, scenario = 'casual', membershipTierLabel,
 }: {
   type: SessionTypeDef
   onSelect: () => void
   disabledReason?: string
   livePrice?: number | null
   sgsRange?: { min: number; max: number }
+  scenario?: PricingScenario
+  membershipTierLabel?: string | null
 }) {
   const isDisabled     = !!disabledReason
   const isSGS          = type.id === 'small-group'
@@ -479,6 +502,12 @@ function SessionTypeTile({
           <p className="mt-0.5 text-sm leading-snug text-gray-500">{type.description}</p>
           {disabledReason && (
             <p className="mt-1.5 text-xs font-medium text-amber-700">{disabledReason}</p>
+          )}
+          {!isDisabled && scenario === 'over-limit' && (
+            <p className="mt-1.5 text-xs font-medium text-amber-600">Credit limit reached this week</p>
+          )}
+          {!isDisabled && scenario === 'not-in-membership' && membershipTierLabel && (
+            <p className="mt-1.5 text-xs text-gray-400">Not included in your {membershipTierLabel} membership</p>
           )}
         </div>
       </div>
@@ -507,11 +536,17 @@ function SessionTypeTile({
             </p>
             <p className="text-[10px] text-gray-400">per athlete</p>
           </div>
+        ) : scenario === 'included' ? (
+          <div className="text-center leading-tight">
+            <p className="text-sm font-bold text-green-600">Included in</p>
+            <p className="text-sm font-bold text-green-600">membership</p>
+          </div>
         ) : displayPrice !== null ? (
           <div className="text-center">
             <p className="text-2xl font-bold" style={{ color: ACCENT }}>${displayPrice}</p>
             {isTeamTraining && <p className="text-xs text-gray-400">/athlete</p>}
-            {type.selfServe && !isTeamTraining && <p className="text-xs text-gray-400">Self-serve</p>}
+            {scenario === 'over-limit' && <p className="text-[11px] font-semibold text-amber-600">Extra session</p>}
+            {type.selfServe && !isTeamTraining && scenario !== 'over-limit' && <p className="text-xs text-gray-400">Self-serve</p>}
           </div>
         ) : (
           <div className="text-center leading-tight">
@@ -750,13 +785,13 @@ function SuccessView({
 
 export interface BookASessionProps {
   isAdminPreview?: boolean
-  athleteCredits?: number
+  membership?: MembershipData | null
   onRequestPrograms?: () => void
 }
 
 export function BookASession({
   isAdminPreview = false,
-  athleteCredits = 3,
+  membership = null,
   onRequestPrograms,
 }: BookASessionProps) {
   // ── view: booking flow vs my bookings
@@ -972,6 +1007,7 @@ export function BookASession({
                         const toggle = bookingSettings[pricingTypeId]
                         if (toggle && !toggle.enabled && !toggle.reason) return []
                         const disabledReason = (toggle && !toggle.enabled && toggle.reason) ? toggle.reason : undefined
+                        const sc = getScenario(type.id, membership)
                         return [(
                           <SessionTypeTile
                             key={type.id}
@@ -980,6 +1016,8 @@ export function BookASession({
                             disabledReason={disabledReason}
                             livePrice={type.id === 'small-group' ? undefined : getLivePrice(type.id)}
                             sgsRange={type.id === 'small-group' ? sgsRange : undefined}
+                            scenario={sc}
+                            membershipTierLabel={membership?.tierLabel}
                           />
                         )]
                       })}
@@ -1245,9 +1283,13 @@ export function BookASession({
                                 ${sgsRange.min}–${sgsRange.max}/athlete · set at lockout
                               </span>
                             : (() => {
+                                const sc = getScenario(typeId!, membership)
                                 const lp = getLivePrice(typeId!)
                                 const fallback = typeof selectedType.price === 'number' && selectedType.price > 0 ? selectedType.price : null
                                 const cost = lp ?? fallback
+                                if (sc === 'included') {
+                                  return <span className="font-bold text-green-600">Membership credit</span>
+                                }
                                 return cost !== null
                                   ? <span className="font-bold text-gray-900">${cost} — pay at venue</span>
                                   : <span className="font-bold text-green-600">Membership credit</span>
@@ -1256,11 +1298,42 @@ export function BookASession({
                         </div>
                       </div>
 
-                      {selectedType.price === 'membership' && athleteCredits > 0 && (
-                        <div className="rounded-xl border border-green-100 bg-green-50 px-4 py-3 text-sm text-green-700">
-                          1 credit will be used — <strong>{athleteCredits - 1} remaining</strong> after this booking.
-                        </div>
-                      )}
+                      {typeId !== 'small-group' && (() => {
+                        const sc = getScenario(typeId!, membership)
+                        const lp = getLivePrice(typeId!)
+                        const fallback = typeof selectedType.price === 'number' && selectedType.price > 0 ? selectedType.price : null
+                        const cost = lp ?? fallback
+                        if (sc === 'included') {
+                          const perWeek = membership?.creditsPerWeek[typeId!] ?? 0
+                          const used = membership?.creditsUsed[typeId!] ?? 0
+                          const remaining = perWeek === -1 ? null : perWeek - used - 1
+                          return (
+                            <div className="rounded-xl border border-green-100 bg-green-50 px-4 py-3 text-sm text-green-700">
+                              1 {selectedType.label} credit will be used
+                              {remaining !== null && (
+                                <> — <strong>{remaining} remaining</strong> after this booking</>
+                              )}.
+                            </div>
+                          )
+                        }
+                        if (sc === 'over-limit') {
+                          return (
+                            <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                              Your weekly {selectedType.label.toLowerCase()} credits have been used.
+                              {cost !== null && <> This extra session will be charged at <strong>${cost}</strong>.</>}
+                              {' '}<span className="opacity-70">Credits reset Monday.</span>
+                            </div>
+                          )
+                        }
+                        if (sc === 'not-in-membership' && membership) {
+                          return (
+                            <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-500">
+                              {selectedType.label} is not included in your {membership.tierLabel} membership — charged at the casual rate.
+                            </div>
+                          )
+                        }
+                        return null
+                      })()}
 
                       {selectedSlot.isSgsExisting && (
                         <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
