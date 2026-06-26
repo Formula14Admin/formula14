@@ -5266,71 +5266,158 @@ function AvailabilityCalendar({
 
   // ── Month View ────────────────────────────────────────────────────────────────
   function MonthView() {
-    const year      = anchor.getFullYear()
-    const month     = anchor.getMonth()
-    const firstDay  = new Date(year, month, 1)
-    const daysInMon = new Date(year, month + 1, 0).getDate()
-    const firstDow  = jsDayToOurs(firstDay.getDay())
-    const cells     = Math.ceil((firstDow + daysInMon) / 7) * 7
-    const DAY_HDR   = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+    const containerRef    = useRef<HTMLDivElement>(null)
+    const sentinelTopRef  = useRef<HTMLDivElement>(null)
+    const sentinelBotRef  = useRef<HTMLDivElement>(null)
+
+    // Today's year/month as fixed reference for offsets
+    const todayYear  = TODAY.getFullYear()
+    const todayMonth = TODAY.getMonth()
+
+    // Range of month offsets rendered (relative to today's month)
+    const [offsets, setOffsets] = useState<number[]>(() => Array.from({ length: 25 }, (_, i) => i - 12))
+
+    // Scroll to today's month on mount
+    useEffect(() => {
+      requestAnimationFrame(() => {
+        document.getElementById('av-cal-month-today')?.scrollIntoView({ block: 'start' })
+      })
+    }, [])
+
+    // Infinite scroll via IntersectionObserver
+    useEffect(() => {
+      const container = containerRef.current
+      if (!container) return
+      const opts = { root: container, threshold: 0.01 }
+
+      const topObs = new IntersectionObserver(entries => {
+        if (!entries[0].isIntersecting) return
+        const scrollBefore  = container.scrollTop
+        const heightBefore  = container.scrollHeight
+        setOffsets(prev => {
+          const min = Math.min(...prev)
+          return [min - 6, min - 5, min - 4, min - 3, min - 2, min - 1, ...prev]
+        })
+        // Preserve scroll position after prepending
+        requestAnimationFrame(() => {
+          container.scrollTop = scrollBefore + (container.scrollHeight - heightBefore)
+        })
+      }, opts)
+
+      const botObs = new IntersectionObserver(entries => {
+        if (!entries[0].isIntersecting) return
+        setOffsets(prev => {
+          const max = Math.max(...prev)
+          return [...prev, max + 1, max + 2, max + 3, max + 4, max + 5, max + 6]
+        })
+      }, opts)
+
+      if (sentinelTopRef.current) topObs.observe(sentinelTopRef.current)
+      if (sentinelBotRef.current) botObs.observe(sentinelBotRef.current)
+      return () => { topObs.disconnect(); botObs.disconnect() }
+    }, [])
+
+    // Check if facility is open on a given ISO date
+    function facilityOpen(iso: string): boolean {
+      const d   = new Date(iso + 'T12:00:00')
+      const dow = jsDayToOurs(d.getDay()) as DayOfWeek
+      if (facilityOverrides.some(o => o.date === iso && o.type === 'block')) return false
+      if (facilityOverrides.some(o => o.date === iso && o.type === 'extra')) return true
+      return facilitySchedule[dow]?.available ?? false
+    }
 
     return (
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-        {/* Day-of-week headers */}
-        <div className="grid shrink-0 grid-cols-7 border-b border-gray-200 bg-white">
-          {DAY_HDR.map((d, i) => (
-            <div key={d} className={`border-l border-gray-100 py-2 text-center text-[10px] font-semibold uppercase tracking-wide first:border-l-0 ${i >= 5 ? 'text-gray-400' : 'text-gray-400'}`}>{d}</div>
+      <div ref={containerRef} className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+        {/* Sticky day-of-week headers */}
+        <div className="sticky top-0 z-10 grid shrink-0 grid-cols-7 border-b border-gray-200 bg-white shadow-sm">
+          {['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d => (
+            <div key={d} className="border-l border-gray-100 py-2 text-center text-[10px] font-semibold uppercase tracking-wide text-gray-400 first:border-l-0">{d}</div>
           ))}
         </div>
-        {/* Cells */}
-        <div className="grid flex-1 grid-cols-7" style={{ gridAutoRows: 'minmax(88px, auto)' }}>
-          {Array.from({ length: cells }, (_, idx) => {
-            const cellDay = idx - firstDow + 1
-            const inMon   = cellDay >= 1 && cellDay <= daysInMon
-            if (!inMon) return <div key={idx} className="border-b border-r border-gray-100 bg-gray-50/40" />
-            const d       = new Date(year, month, cellDay)
-            const iso     = isoOf(d)
-            const isToday = iso === todayIso
-            const isWknd  = idx % 7 >= 5
-            const ph      = pubHol(iso)
-            const dayBks  = bksForDate(iso)
-            const hasCoach = coaches.some(c => coachWins(c.id, d).length > 0)
 
-            return (
-              <div key={iso}
-                onClick={() => { setAnchor(d); setCalView('day') }}
-                className={`cursor-pointer border-b border-r border-gray-100 p-1.5 transition hover:bg-blue-50/30 ${isWknd ? 'bg-gray-50/30' : 'bg-white'}`}
-              >
-                <div className="mb-1 flex items-start justify-between gap-1">
-                  <span className="flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold"
-                    style={isToday ? { backgroundColor: '#6BA3D6', color: 'white' } : { color: isWknd ? '#9ca3af' : '#111827' }}>
-                    {cellDay}
+        <div ref={sentinelTopRef} className="h-px shrink-0" />
+
+        {offsets.map(offset => {
+          const d         = new Date(todayYear, todayMonth + offset, 1)
+          const year      = d.getFullYear()
+          const month     = d.getMonth()
+          const isThisMon = offset === 0
+          const firstDow  = jsDayToOurs(new Date(year, month, 1).getDay())
+          const daysInMon = new Date(year, month + 1, 0).getDate()
+          const cells     = Math.ceil((firstDow + daysInMon) / 7) * 7
+
+          return (
+            <div key={`${year}-${month}`} id={isThisMon ? 'av-cal-month-today' : undefined}>
+              {/* Month name header — sticky, each pushes the previous one up */}
+              <div className="sticky z-[9] flex items-center gap-2 border-b border-gray-200 bg-gray-50/95 px-4 py-2 backdrop-blur-sm"
+                style={{ top: '33px' }}>
+                <span className={`text-sm font-bold ${isThisMon ? 'text-[#6BA3D6]' : 'text-gray-700'}`}>
+                  {d.toLocaleDateString('en-AU', { month: 'long', year: 'numeric' })}
+                </span>
+                {isThisMon && (
+                  <span className="rounded-full bg-[#6BA3D6]/10 px-2 py-0.5 text-[10px] font-semibold text-[#6BA3D6]">
+                    This month
                   </span>
-                  {ph && <span className="mt-0.5 truncate text-[8px] font-medium text-red-500">{ph}</span>}
-                </div>
-                {/* Coach availability bars */}
-                {hasCoach && (
-                  <div className="mb-1 flex gap-0.5">
-                    {coaches.map(coach => coachWins(coach.id, d).length > 0 && (
-                      <div key={coach.id} className="h-1 w-5 rounded-full" style={{ backgroundColor: coach.color + 'aa' }} />
-                    ))}
-                  </div>
                 )}
-                {/* Booking pills */}
-                {dayBks.slice(0, 3).map(b => {
-                  const { c } = spCol(b.spaceId)
+              </div>
+
+              {/* Date cells */}
+              <div className="grid grid-cols-7" style={{ gridAutoRows: 'minmax(88px, auto)' }}>
+                {Array.from({ length: cells }, (_, idx) => {
+                  const cellDay = idx - firstDow + 1
+                  const inMon   = cellDay >= 1 && cellDay <= daysInMon
+                  if (!inMon) return <div key={idx} className="border-b border-r border-gray-100" style={{ backgroundColor: '#f3f4f6' }} />
+                  const date     = new Date(year, month, cellDay)
+                  const iso      = isoOf(date)
+                  const isToday  = iso === todayIso
+                  const isWknd   = idx % 7 >= 5
+                  const ph       = pubHol(iso)
+                  const dayBks   = bksForDate(iso)
+                  const hasCoach = coaches.some(c => coachWins(c.id, date).length > 0)
+                  const open     = facilityOpen(iso)
+                  const bgColor  = open ? '#d4edda' : '#fde8e8'
+
                   return (
-                    <div key={b.id} className="mb-0.5 truncate rounded px-1 py-0.5 text-[9px] font-semibold"
-                      style={{ backgroundColor: c + '22', color: c }}>
-                      {fmtTime(b.startMins).replace(' AM', 'a').replace(' PM', 'p')} {b.sessionType}
+                    <div key={iso}
+                      onClick={() => { setAnchor(date); setCalView('day') }}
+                      className="cursor-pointer border-b border-r border-gray-100 p-1.5 transition hover:brightness-[0.97]"
+                      style={{ backgroundColor: bgColor }}
+                    >
+                      <div className="mb-1 flex items-start justify-between gap-1">
+                        <span className="flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold"
+                          style={isToday
+                            ? { backgroundColor: '#6BA3D6', color: 'white' }
+                            : { color: isWknd ? '#9ca3af' : '#111827' }}>
+                          {cellDay}
+                        </span>
+                        {ph && <span className="mt-0.5 truncate text-[8px] font-medium text-red-500">{ph}</span>}
+                      </div>
+                      {hasCoach && (
+                        <div className="mb-1 flex gap-0.5">
+                          {coaches.map(coach => coachWins(coach.id, date).length > 0 && (
+                            <div key={coach.id} className="h-1 w-5 rounded-full" style={{ backgroundColor: coach.color + 'aa' }} />
+                          ))}
+                        </div>
+                      )}
+                      {dayBks.slice(0, 3).map(b => {
+                        const { c } = spCol(b.spaceId)
+                        return (
+                          <div key={b.id} className="mb-0.5 truncate rounded px-1 py-0.5 text-[9px] font-semibold"
+                            style={{ backgroundColor: c + '22', color: c }}>
+                            {fmtTime(b.startMins).replace(' AM', 'a').replace(' PM', 'p')} {b.sessionType}
+                          </div>
+                        )
+                      })}
+                      {dayBks.length > 3 && <p className="text-[9px] text-gray-400">+{dayBks.length - 3} more</p>}
                     </div>
                   )
                 })}
-                {dayBks.length > 3 && <p className="text-[9px] text-gray-400">+{dayBks.length - 3} more</p>}
               </div>
-            )
-          })}
-        </div>
+            </div>
+          )
+        })}
+
+        <div ref={sentinelBotRef} className="h-px shrink-0" />
       </div>
     )
   }
@@ -5413,22 +5500,68 @@ function AvailabilityCalendar({
     )
   }
 
+  function MonthLegend() {
+    return (
+      <div className="flex shrink-0 flex-wrap items-center gap-4 border-t border-gray-200 bg-white px-4 py-2">
+        <div className="flex items-center gap-1.5">
+          <div className="h-3.5 w-3.5 rounded-sm border border-green-300" style={{ backgroundColor: '#d4edda' }} />
+          <span className="text-xs text-gray-500">Facility open</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="h-3.5 w-3.5 rounded-sm border border-red-200" style={{ backgroundColor: '#fde8e8' }} />
+          <span className="text-xs text-gray-500">Facility closed</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold text-white" style={{ backgroundColor: '#6BA3D6' }}>
+            1
+          </div>
+          <span className="text-xs text-gray-500">Today</span>
+        </div>
+        {coaches.map(c => (
+          <div key={c.id} className="flex items-center gap-1.5">
+            <div className="h-1 w-5 rounded-full" style={{ backgroundColor: c.color + 'aa' }} />
+            <span className="text-xs text-gray-500">{c.name} available</span>
+          </div>
+        ))}
+        <button type="button" onClick={() => openEx(isoOf(anchor), [])}
+          className="ml-auto flex items-center gap-1 text-xs font-semibold text-[#6BA3D6] transition hover:underline">
+          <IconPlus size={11} /> Add exception
+        </button>
+      </div>
+    )
+  }
+
   // ── Render ────────────────────────────────────────────────────────────────────
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {/* Toolbar */}
       <div className="flex shrink-0 items-center gap-2 border-b border-gray-200 bg-white px-4 py-2.5">
-        <button onClick={() => setAnchor(new Date())}
-          className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 transition hover:bg-gray-50">
+        <button
+          onClick={() => {
+            if (calView === 'month') {
+              document.getElementById('av-cal-month-today')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+            } else {
+              setAnchor(new Date())
+            }
+          }}
+          className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 transition hover:bg-gray-50"
+        >
           Today
         </button>
-        <button onClick={() => nav(-1)} className="rounded-lg p-1.5 text-gray-500 transition hover:bg-gray-100">
-          <IconChevronLeft size={15} />
-        </button>
-        <button onClick={() => nav(1)} className="rounded-lg p-1.5 text-gray-500 transition hover:bg-gray-100">
-          <IconChevronRight size={15} />
-        </button>
-        <span className="min-w-0 flex-1 truncate text-sm font-bold text-gray-800">{navTitle}</span>
+        {calView !== 'month' && (
+          <>
+            <button onClick={() => nav(-1)} className="rounded-lg p-1.5 text-gray-500 transition hover:bg-gray-100">
+              <IconChevronLeft size={15} />
+            </button>
+            <button onClick={() => nav(1)} className="rounded-lg p-1.5 text-gray-500 transition hover:bg-gray-100">
+              <IconChevronRight size={15} />
+            </button>
+            <span className="min-w-0 flex-1 truncate text-sm font-bold text-gray-800">{navTitle}</span>
+          </>
+        )}
+        {calView === 'month' && (
+          <span className="min-w-0 flex-1 text-xs text-gray-400">Scroll to navigate months</span>
+        )}
         {/* View toggles — Apple Calendar style */}
         <div className="flex items-center gap-px rounded-lg border border-gray-200 bg-gray-50 p-0.5">
           {(['day', 'week', 'month', 'year'] as const).map(v => (
@@ -5449,6 +5582,7 @@ function AvailabilityCalendar({
 
       {/* Legend (shown on day/week views) */}
       {(calView === 'day' || calView === 'week') && <Legend />}
+      {calView === 'month' && <MonthLegend />}
 
       {/* Exception modal */}
       {exOpen && typeof document !== 'undefined' && createPortal(
