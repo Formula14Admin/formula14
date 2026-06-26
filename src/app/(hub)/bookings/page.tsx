@@ -2458,6 +2458,7 @@ function BookingModal({
   const [customAthlete,  setCustomAthlete]  = useState('')
   const [memberTier,            setMemberTier]            = useState<MemberTier | ''>('')
   const [machineRentalDuration, setMachineRentalDuration] = useState<30 | 45 | 60>(60)
+  const [pricingConfigsForDuration, setPricingConfigsForDuration] = useState<Array<{ sessionType: string; durationMins?: number }>>([])
   const [adminOverride, setAdminOverride] = useState(src?.adminOverride ?? false)
   const [capacity, setCapacity] = useState<number>(src?.capacity ?? 15)
   const [notes, setNotes] = useState(src?.notes ?? '')
@@ -2487,6 +2488,24 @@ function BookingModal({
 
   const modalRef  = useRef<HTMLDivElement>(null)
   const headerRef = useRef<HTMLDivElement>(null)
+
+  const SESSION_LABEL_TO_ID: Record<string, string> = {
+    'Individual Work Out': 'individual',
+    'Small Group Session': 'small-group',
+    'Team Training': 'team-training',
+    'Casual Shooting': 'casual-shooting',
+    'Volume Shooting': 'volume-shooting',
+    'Shooting Machine Rental': 'shooting-machine-session',
+    'Weight Room Session': 'weight-room-session',
+    'Film Room Session': 'film-room-session',
+  }
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('f14_pricing_configs')
+      if (raw) setPricingConfigsForDuration(JSON.parse(raw))
+    } catch {}
+  }, [])
 
   function handleReset() {
     modalRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
@@ -3133,9 +3152,13 @@ function BookingModal({
                         value={sessionType}
                         onChange={v => {
                           setSessionType(v)
+                          const configId = SESSION_LABEL_TO_ID[v]
+                          const config = configId ? pricingConfigsForDuration.find(c => c.sessionType === configId) : null
                           if (v === 'Shooting Machine Rental') {
                             setMachineRentalDuration(60)
                             setFinishMins(startMins + 60)
+                          } else if (config?.durationMins) {
+                            setFinishMins(startMins + config.durationMins)
                           }
                         }}
                         accentColor={accentColor}
@@ -3157,8 +3180,17 @@ function BookingModal({
                         value={startMins}
                         onChange={s => {
                           setStartMins(s)
-                          if (isMachineRental) setFinishMins(s + machineRentalDuration)
-                          else if (finishMins <= s) setFinishMins(s + 60)
+                          if (isMachineRental) {
+                            setFinishMins(s + machineRentalDuration)
+                          } else {
+                            const configId = SESSION_LABEL_TO_ID[sessionType]
+                            const config = configId ? pricingConfigsForDuration.find(c => c.sessionType === configId) : null
+                            if (config?.durationMins) {
+                              setFinishMins(s + config.durationMins)
+                            } else if (finishMins <= s) {
+                              setFinishMins(s + 60)
+                            }
+                          }
                         }}
                         options={Array.from({ length: 95 }, (_, i) => i * 15).filter(m => date !== today || m >= nowMins())}
                         accentColor={accentColor}
@@ -4178,7 +4210,7 @@ interface BITMeta {
 }
 
 interface BITPricingTier   { min: number; max: number | null; pricePerAthlete: number }
-interface BITPricingConfig { sessionType: string; tiers: BITPricingTier[] }
+interface BITPricingConfig { sessionType: string; tiers: BITPricingTier[]; durationMins?: number }
 
 // First 6 canonical types default ON; film-room-session and volume-shooting default OFF (new)
 const ON_BY_DEFAULT = new Set(['individual','small-group','team-training','casual-shooting','shooting-machine-session','weight-room-session'])
@@ -4309,7 +4341,15 @@ function BookingInformationTab() {
     ? pricingConfigs
         .map(c => c.sessionType)
         .filter(id => !EXCLUDED_FROM_BIT.has(id))
-        .map(id => CANONICAL_SESSION_TYPES.find(t => t.id === id))
+        .map(id => {
+          const canonical = CANONICAL_SESSION_TYPES.find(t => t.id === id)
+          if (!canonical) return null
+          const config = pricingConfigs.find(c => c.sessionType === id)
+          return {
+            ...canonical,
+            ...(config?.durationMins ? { durationMins: config.durationMins } : {}),
+          }
+        })
         .filter((t): t is typeof CANONICAL_SESSION_TYPES[0] => t !== null && t !== undefined)
     : CANONICAL_SESSION_TYPES
 

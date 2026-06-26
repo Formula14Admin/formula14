@@ -43,6 +43,7 @@ interface SessionPricingConfig {
   sessionType: string  // SessionType for built-in types; custom uid string for user-added cards
   label?: string       // display label for custom cards
   tiers: PricingTier[]
+  durationMins?: number
 }
 
 interface PricingSettings {
@@ -167,6 +168,7 @@ const ATHLETES: AthleteRecord[] = [
 const INIT_PRICING: SessionPricingConfig[] = [
   {
     sessionType: 'small-group',
+    durationMins: 90,
     tiers: [
       { id: 't1', min: 1, max: 1, pricePerAthlete: 50 },
       { id: 't2', min: 2, max: 2, pricePerAthlete: 45 },
@@ -176,25 +178,29 @@ const INIT_PRICING: SessionPricingConfig[] = [
   },
   {
     sessionType: 'individual',
+    durationMins: 60,
     tiers: [
       { id: 't5', min: 1, max: 1, pricePerAthlete: 75 },
     ],
   },
   {
     sessionType: 'team-training',
+    durationMins: 120,
     tiers: [
       { id: 't7', min: 7, max: 10, pricePerAthlete: 80 },
     ],
   },
   {
     sessionType: 'casual-shooting',
+    durationMins: 60,
     tiers: [
       { id: 't10', min: 1, max: null, pricePerAthlete: 10 },
     ],
   },
   {
     sessionType: 'volume-shooting',
-    tiers: [], // duration-based pricing — see VOLUME_SHOOTING_PRICES below
+    durationMins: 60,
+    tiers: [], // duration-based pricing — see DEFAULT_VOLUME_PRICES below
   },
   {
     sessionType: 'development-programs',
@@ -206,18 +212,21 @@ const INIT_PRICING: SessionPricingConfig[] = [
   },
   {
     sessionType: 'weight-room-session',
+    durationMins: 60,
     tiers: [
       { id: 'tw1', min: 1, max: null, pricePerAthlete: 15 },
     ],
   },
   {
     sessionType: 'film-room-session',
+    durationMins: 60,
     tiers: [
       { id: 'tf1', min: 1, max: null, pricePerAthlete: 20 },
     ],
   },
   {
     sessionType: 'shooting-machine-session',
+    durationMins: 60,
     tiers: [
       { id: 'tsm1', min: 1, max: null, pricePerAthlete: 15 },
     ],
@@ -225,11 +234,32 @@ const INIT_PRICING: SessionPricingConfig[] = [
 ]
 
 // Volume Shooting = Shooting Machine — priced by duration, not athlete count
-const VOLUME_SHOOTING_PRICES = [
+const DEFAULT_VOLUME_PRICES = [
   { duration: 30, label: '30 minutes', price: 30 },
   { duration: 45, label: '45 minutes', price: 40 },
   { duration: 60, label: '60 minutes', price: 50 },
 ]
+
+const DEFAULT_DURATIONS: Record<string, number> = {
+  'individual': 60,
+  'small-group': 90,
+  'team-training': 120,
+  'casual-shooting': 60,
+  'volume-shooting': 60,
+  'weight-room-session': 60,
+  'film-room-session': 60,
+  'shooting-machine-session': 60,
+}
+
+const DURATION_OPTIONS = Array.from({ length: 24 }, (_, i) => {
+  const mins = (i + 1) * 15
+  const h = Math.floor(mins / 60)
+  const m = mins % 60
+  const label = h > 0
+    ? (m > 0 ? `${h} hr ${m} min` : `${h} hr${h > 1 ? 's' : ''}`)
+    : `${m} min`
+  return { value: mins, label }
+})
 
 // Development & Social Programs — per-program flat pricing
 const PROGRAM_PRICING: Record<'development-programs' | 'social-programs', { name: string; price: number; max: number }[]> = {
@@ -414,6 +444,7 @@ export default function PricingPage() {
   const [pricingConfigs, setPricingConfigs] = useState<SessionPricingConfig[]>(INIT_PRICING)
   const [editingPricing, setEditingPricing] = useState<string | null>(null)
   const [editTiers, setEditTiers] = useState<PricingTier[]>([])
+  const [editDurationMins, setEditDurationMins] = useState<number>(60)
   const [addCardOpen, setAddCardOpen] = useState(false)
   const [newCardLabel, setNewCardLabel] = useState('')
   const [settings, setSettings] = useState<PricingSettings>(INIT_SETTINGS)
@@ -613,12 +644,19 @@ export default function PricingPage() {
   function startEditPricing(sessionType: string) {
     const config = pricingConfigs.find(c => c.sessionType === sessionType)
     if (!config) return
-    setEditTiers(config.tiers.map(t => ({ ...t })))
+    let initialTiers = config.tiers.map(t => ({ ...t }))
+    if (sessionType === 'volume-shooting' && initialTiers.length === 0) {
+      initialTiers = DEFAULT_VOLUME_PRICES.map((row, i) => ({
+        id: `vs${i}`, min: row.duration, max: row.duration, pricePerAthlete: row.price,
+      }))
+    }
+    setEditTiers(initialTiers)
+    setEditDurationMins(config.durationMins ?? DEFAULT_DURATIONS[sessionType] ?? 60)
     setEditingPricing(sessionType)
   }
   function saveEditPricing() {
     setPricingConfigs(prev => prev.map(c =>
-      c.sessionType === editingPricing ? { ...c, tiers: editTiers } : c
+      c.sessionType === editingPricing ? { ...c, tiers: editTiers, durationMins: editDurationMins } : c
     ))
     setEditingPricing(null)
     setEditTiers([])
@@ -1344,11 +1382,71 @@ export default function PricingPage() {
                   {/* Edit mode */}
                   {isEditing ? (
                     isSpecial ? (
-                      <p className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2.5 text-xs text-amber-700">
-                        This session type uses duration-based pricing. Tier editing is not applicable.
-                      </p>
+                      <div className="space-y-2">
+                        <div className="overflow-hidden rounded-lg border border-gray-200">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="border-b border-gray-100 bg-gray-50">
+                                <th className="px-3 py-1.5 text-left text-[10px] font-semibold uppercase tracking-wide text-gray-400">Duration</th>
+                                <th className="px-3 py-1.5 text-left text-[10px] font-semibold uppercase tracking-wide text-gray-400">Flat Price</th>
+                                <th className="w-8" />
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {editTiers.map(tier => (
+                                <tr key={tier.id} className="border-b border-gray-100 last:border-0">
+                                  <td className="px-3 py-1.5">
+                                    <select
+                                      value={tier.min}
+                                      onChange={e => updateTierField(tier.id, { min: parseInt(e.target.value), max: parseInt(e.target.value) })}
+                                      className="rounded border border-gray-200 px-2 py-1 text-sm text-gray-900 outline-none focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/30"
+                                    >
+                                      {[15,30,45,60,75,90,105,120].map(m => (
+                                        <option key={m} value={m}>{m} min</option>
+                                      ))}
+                                    </select>
+                                  </td>
+                                  <td className="px-3 py-1.5">
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-sm text-gray-400">$</span>
+                                      <input type="number" min={0} step={1} value={tier.pricePerAthlete}
+                                        onChange={e => updateTierField(tier.id, { pricePerAthlete: parseFloat(e.target.value) || 0 })}
+                                        className="w-16 rounded border border-gray-200 px-2 py-1 text-sm text-gray-900 outline-none focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/30" />
+                                    </div>
+                                  </td>
+                                  <td className="pr-2">
+                                    <button type="button" onClick={() => removeTierRow(tier.id)}
+                                      className="rounded p-1 text-gray-300 transition hover:bg-red-50 hover:text-red-400">
+                                      <IconX size={13} />
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                        {editTiers.length === 0 && (
+                          <p className="text-xs text-gray-400 italic">No duration tiers yet — add one below.</p>
+                        )}
+                        <button type="button" onClick={addTierRow}
+                          className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-gray-300 py-2 text-xs font-semibold text-gray-500 transition hover:border-gray-400 hover:text-gray-700">
+                          <IconPlus size={13} /> Add Duration
+                        </button>
+                      </div>
                     ) : (
                       <div className="space-y-2">
+                        <div className="flex items-center gap-3">
+                          <label className="shrink-0 text-xs font-semibold text-gray-600">Duration</label>
+                          <select
+                            value={editDurationMins}
+                            onChange={e => setEditDurationMins(parseInt(e.target.value))}
+                            className="flex-1 rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-900 outline-none focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/30"
+                          >
+                            {DURATION_OPTIONS.map(opt => (
+                              <option key={opt.value} value={opt.value}>{opt.label}</option>
+                            ))}
+                          </select>
+                        </div>
                         {editTiers.length > 0 && (
                           <div className="overflow-hidden rounded-lg border border-gray-200">
                             <table className="w-full text-sm">
@@ -1414,7 +1512,10 @@ export default function PricingPage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {VOLUME_SHOOTING_PRICES.map(row => (
+                          {(config.tiers.length > 0
+                            ? config.tiers.map(t => ({ duration: t.min, label: `${t.min} minutes`, price: t.pricePerAthlete }))
+                            : DEFAULT_VOLUME_PRICES
+                          ).map(row => (
                             <tr key={row.duration} className="border-b border-gray-100">
                               <td className="py-2 text-gray-700">{row.label}</td>
                               <td className="py-2 font-semibold text-gray-900">${row.price}.00</td>
@@ -1426,33 +1527,47 @@ export default function PricingPage() {
                         </tfoot>
                       </table>
                     ) : (
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b border-gray-100">
-                            <th className="pb-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Athletes</th>
-                            <th className="pb-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Price / Athlete</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {config.tiers.map(tier => (
-                            <tr key={tier.id} className="border-b border-gray-100">
-                              <td className="py-2 text-gray-700">
-                                {tier.max === null
-                                  ? `${tier.min}+ athletes`
-                                  : tier.min === tier.max
-                                  ? `${tier.min} athlete`
-                                  : `${tier.min}–${tier.max} athletes`}
-                              </td>
-                              <td className="py-2 font-semibold text-gray-900">${tier.pricePerAthlete.toFixed(0)} / each</td>
+                      <>
+                        {/* Duration badge */}
+                        <div className="mb-3 flex items-center gap-2">
+                          <span className="text-xs text-gray-500">Duration:</span>
+                          <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-semibold text-gray-700">
+                            {(() => {
+                              const d = config.durationMins ?? DEFAULT_DURATIONS[config.sessionType] ?? 60
+                              const h = Math.floor(d / 60)
+                              const m = d % 60
+                              return h > 0 ? (m > 0 ? `${h} hr ${m} min` : `${h} hr${h > 1 ? 's' : ''}`) : `${m} min`
+                            })()}
+                          </span>
+                        </div>
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b border-gray-100">
+                              <th className="pb-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Athletes</th>
+                              <th className="pb-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Price / Athlete</th>
                             </tr>
-                          ))}
-                          {config.tiers.length === 0 && (
-                            <tr>
-                              <td colSpan={2} className="py-4 text-center text-xs text-gray-400">No tiers — click edit to add pricing</td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
+                          </thead>
+                          <tbody>
+                            {config.tiers.map(tier => (
+                              <tr key={tier.id} className="border-b border-gray-100">
+                                <td className="py-2 text-gray-700">
+                                  {tier.max === null
+                                    ? `${tier.min}+ athletes`
+                                    : tier.min === tier.max
+                                    ? `${tier.min} athlete`
+                                    : `${tier.min}–${tier.max} athletes`}
+                                </td>
+                                <td className="py-2 font-semibold text-gray-900">${tier.pricePerAthlete.toFixed(0)} / each</td>
+                              </tr>
+                            ))}
+                            {config.tiers.length === 0 && (
+                              <tr>
+                                <td colSpan={2} className="py-4 text-center text-xs text-gray-400">No tiers — click edit to add pricing</td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </>
                     )
                   )}
                 </div>

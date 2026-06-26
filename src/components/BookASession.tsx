@@ -831,9 +831,11 @@ export function BookASession({
       .map(id => {
         const base = CANONICAL_SESSION_TYPES.find(t => t.id === id)
         if (!base) return null
+        const config = pricingConfigs.find(c => c.sessionType === id) as (PricingConfigData & { durationMins?: number }) | undefined
         const m = sessionMeta[id] ?? {}
         return {
           ...base,
+          ...(config?.durationMins ? { durationMins: config.durationMins } : {}),
           ...(m.label        ? { label: m.label }               : {}),
           ...(m.description  ? { description: m.description }   : {}),
           ...(m.durationMins ? { durationMins: m.durationMins } : {}),
