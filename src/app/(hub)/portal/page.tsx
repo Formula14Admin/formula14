@@ -471,6 +471,82 @@ function getCoachesForDate(dateStr: string): CoachId[] {
   return available
 }
 
+// ─── Session Type Config ─────────────────────────────────────────────────────
+
+interface SessionTypeConfig {
+  id: string
+  label: string
+  description: string
+  durationMins: number
+  price: number | 'membership'
+  emoji: string
+  needsCoach: boolean
+  maxSpots?: number
+}
+
+const SESSION_TYPE_CARDS: SessionTypeConfig[] = [
+  { id: 'individual',      label: 'Individual Work Out',  description: '1-on-1 coached session tailored to your development goals.', durationMins: 60, price: 35,           emoji: '🏋️', needsCoach: true },
+  { id: 'small-group',     label: 'Small Group Session',  description: 'Train alongside 2–6 athletes under expert coach guidance.',  durationMins: 90, price: 'membership',  emoji: '👥', needsCoach: true, maxSpots: 6 },
+  { id: 'casual-shooting', label: 'Casual Shooting',      description: 'Open gym practice at your own pace. No coach required.',     durationMins: 60, price: 10,           emoji: '🏀', needsCoach: false },
+  { id: 'shooting-machine',label: 'Shooting Machine',     description: 'High-volume reps with the rebounder machine. Self-serve.',   durationMins: 60, price: 15,           emoji: '⚡', needsCoach: false },
+  { id: 'weight-room',     label: 'Weight Room',          description: 'Strength & conditioning in the dedicated weight room.',      durationMins: 60, price: 15,           emoji: '💪', needsCoach: false },
+]
+
+// ─── Per-date slot generator ──────────────────────────────────────────────────
+
+function getSlotsForDate(dateStr: string, typeId: string): Array<{ startMins: number; endMins: number; spotsLeft?: number }> {
+  const dow = jsDayToOurs(new Date(dateStr + 'T00:00:00').getDay()) as DayOfWeek
+
+  if (typeId === 'individual' || typeId === 'small-group') {
+    const dur = typeId === 'individual' ? 60 : 90
+    const seen = new Set<number>()
+    const slots: Array<{ startMins: number; endMins: number; spotsLeft?: number }> = []
+    for (const [cid, sched] of Object.entries(SCHEDULES) as [CoachId, CoachSchedule][]) {
+      const dayOvs  = OVERRIDES.filter(o => o.coachId === cid && o.date === dateStr)
+      const blocked = dayOvs.some(o => o.type === 'block')
+      const extras  = dayOvs.filter(o => o.type === 'extra' && o.startMins != null)
+      const wins: { start: number; end: number }[] = []
+      if (!blocked && sched.days[dow].available) wins.push({ start: sched.days[dow].startMins, end: sched.days[dow].endMins })
+      extras.forEach(ex => wins.push({ start: ex.startMins!, end: ex.endMins! }))
+      for (const win of wins) {
+        let cur = win.start
+        while (cur + dur <= win.end) {
+          if (!seen.has(cur)) {
+            seen.add(cur)
+            const seed = parseInt(dateStr.replace(/-/g, '')) + cur
+            const rand = Math.abs(Math.sin(seed))
+            const spotsLeft = typeId === 'small-group' ? Math.max(1, 6 - Math.floor(rand * 5)) : undefined
+            slots.push({ startMins: cur, endMins: cur + dur, spotsLeft })
+          }
+          cur += 60
+        }
+      }
+    }
+    return slots.sort((a, b) => a.startMins - b.startMins)
+  }
+
+  if (!FACILITY_SCHEDULE[dow].available) return []
+  if (FACILITY_OVERRIDES.some(o => o.date === dateStr && o.type === 'block')) return []
+
+  if (typeId === 'casual-shooting') {
+    if (anyCoachAvailableOn(dateStr)) return []
+    return [540, 660, 780].map(t => ({ startMins: t, endMins: t + 60 }))
+  }
+  if (typeId === 'shooting-machine') {
+    return [540, 660, 780, 900].map(t => ({ startMins: t, endMins: t + 60 }))
+  }
+  if (typeId === 'weight-room') {
+    return [480, 570, 660, 750, 840].map(t => ({ startMins: t, endMins: t + 60 }))
+  }
+  return []
+}
+
+function hasAvailabilityForDate(dateStr: string, typeId: string): boolean {
+  const todayIso = new Date().toISOString().slice(0, 10)
+  if (dateStr < todayIso) return false
+  return getSlotsForDate(dateStr, typeId).length > 0
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 function buildPortalPrograms(catalogue: CatalogueEntry[], schedules: ScheduleEntry[]): PortalProgram[] {
@@ -510,21 +586,27 @@ function buildPortalPrograms(catalogue: CatalogueEntry[], schedules: ScheduleEnt
 }
 
 export default function PortalPage() {
-  // Start on the week of 2026-06-23 (Monday after demo date)
-  const [weekStart, setWeekStart] = useState<string>(getMondayOf('2026-06-23'))
-  const [bookingSlot, setBookingSlot] = useState<SessionSlot | null>(null)
-  const [bookerName, setBookerName] = useState('')
-  const [toastMsg, setToastMsg] = useState('')
-  const [bookedIds, setBookedIds] = useState<Set<string>>(new Set())
-  const [portalTab,          setPortalTab]          = useState<'sessions' | 'programs'>('sessions')
-  const [enrolledPrograms,   setEnrolledPrograms]   = useState<Set<string>>(new Set())
-  const [waitlistPrograms,   setWaitlistPrograms]   = useState<Set<string>>(new Set())
-  const [pendingPrograms,    setPendingPrograms]    = useState<Set<string>>(new Set())
-  const [enrolStep,          setEnrolStep]          = useState<'confirm' | 'payment' | null>(null)
-  const [enrolModal,         setEnrolModal]         = useState<PortalProgram | null>(null)
+  // ── Wizard state ────────────────────────────────────────────────────────────
+  const [step, setStep]                   = useState<0 | 1 | 2>(0)
+  const [selectedTypeId, setSelectedTypeId] = useState<string | null>(null)
+  const [calMonth, setCalMonth]           = useState(() => new Date(2026, 5, 1))
+  const [selectedDate, setSelectedDate]   = useState<string | null>(null)
+  const [selectedSlotMins, setSelectedSlotMins] = useState<number | null>(null)
+  const [bookerName, setBookerName]       = useState('')
+  const [bookingConfirmed, setBookingConfirmed] = useState(false)
 
-  // Live programme data from localStorage (written by pricing + bookings pages)
+  // ── Programs + shared state ─────────────────────────────────────────────────
+  const [portalTab, setPortalTab]         = useState<'sessions' | 'programs'>('sessions')
+  const [toastMsg, setToastMsg]           = useState('')
+  const [enrolledPrograms, setEnrolledPrograms] = useState<Set<string>>(new Set())
+  const [waitlistPrograms, setWaitlistPrograms] = useState<Set<string>>(new Set())
+  const [pendingPrograms,  setPendingPrograms]  = useState<Set<string>>(new Set())
+  const [enrolStep, setEnrolStep]         = useState<'confirm' | 'payment' | null>(null)
+  const [enrolModal, setEnrolModal]       = useState<PortalProgram | null>(null)
+  const [enrolName, setEnrolName]         = useState('')
+  const [shareModal, setShareModal]       = useState<{ url: string; sessionType: string } | null>(null)
   const [portalPrograms, setPortalPrograms] = useState<PortalProgram[]>(PORTAL_PROGRAMS)
+
   useEffect(() => {
     if (typeof window === 'undefined') return
     try {
@@ -534,66 +616,69 @@ export default function PortalPage() {
       if (built.length) setPortalPrograms(built)
     } catch {}
   }, [])
-  const [enrolName,          setEnrolName]          = useState('')
-  const [shareModal,         setShareModal]         = useState<{ url: string; sessionType: string } | null>(null)
 
-  const weekDates = useMemo(() => {
-    return Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
-  }, [weekStart])
+  // ── Derived ─────────────────────────────────────────────────────────────────
+  const selectedType = SESSION_TYPE_CARDS.find(t => t.id === selectedTypeId) ?? null
 
-  const allSlots = useMemo(() => buildSlotsForWeek(weekStart), [weekStart])
+  const slotsForDate = useMemo(() => {
+    if (!selectedDate || !selectedTypeId) return []
+    return getSlotsForDate(selectedDate, selectedTypeId)
+  }, [selectedDate, selectedTypeId])
 
-  function prevWeek() { setWeekStart((d) => addDays(d, -7)) }
-  function nextWeek() { setWeekStart((d) => addDays(d, 7)) }
+  const selectedSlot = useMemo(
+    () => slotsForDate.find(s => s.startMins === selectedSlotMins) ?? null,
+    [slotsForDate, selectedSlotMins],
+  )
 
-  function openBooking(slot: SessionSlot) {
-    setBookingSlot(slot)
-    setBookerName('')
+  const monthDates = useMemo(() => {
+    const year  = calMonth.getFullYear()
+    const month = calMonth.getMonth()
+    const firstDow    = jsDayToOurs(new Date(year, month, 1).getDay())
+    const daysInMonth = new Date(year, month + 1, 0).getDate()
+    const cells = Math.ceil((firstDow + daysInMonth) / 7) * 7
+    return Array.from({ length: cells }, (_, i) => {
+      const day = i - firstDow + 1
+      if (day < 1 || day > daysInMonth) return null
+      return new Date(year, month, day).toISOString().slice(0, 10)
+    })
+  }, [calMonth])
+
+  // ── Wizard handlers ─────────────────────────────────────────────────────────
+  function selectType(typeId: string) {
+    setSelectedTypeId(typeId)
+    setSelectedDate(null)
+    setSelectedSlotMins(null)
+    setStep(1)
   }
 
-  function confirmBooking() {
-    if (!bookingSlot) return
-    const slot = bookingSlot
-    setBookedIds((prev) => new Set([...prev, slot.id]))
-    setBookingSlot(null)
-
-    // For Small Group / Team Training: look up the join link from the admin hub registry
-    const JOIN_TYPES = ['Small Group Session', 'Team Training']
-    if (JOIN_TYPES.includes(slot.sessionType)) {
-      try {
-        const registry: Record<string, { code: string; sessionType: string; date: string; startMins: number }> =
-          JSON.parse(localStorage.getItem('f14_joinLinks') || '{}')
-        const entry = Object.values(registry).find(
-          e => e.sessionType === slot.sessionType && e.date === slot.date && e.startMins === slot.startMins
-        )
-        if (entry) {
-          const url = `${window.location.origin}/join/${entry.code}`
-          setShareModal({ url, sessionType: slot.sessionType })
-          return // skip generic toast; share modal takes over
-        }
-      } catch {}
-    }
-
-    setToastMsg('Booking confirmed!')
-    setTimeout(() => setToastMsg(''), 3000)
+  function goBack() {
+    if (step === 1) { setStep(0); setSelectedTypeId(null) }
+    else if (step === 2) { setStep(1); setSelectedSlotMins(null) }
   }
 
-  function getCoachColor(coach: SessionSlot['coach']): string {
-    if (coach === 'matt') return COACH_MATT_COLOR
-    if (coach === 'jade') return COACH_JADE_COLOR
-    return SELF_SERVE_COLOR
+  function selectSlot(startMins: number) {
+    setSelectedSlotMins(startMins)
+    setTimeout(() => setStep(2), 120)
   }
 
-  function getCoachLabel(coach: SessionSlot['coach']): string {
-    if (coach === 'self-serve') return 'Self-Serve'
-    return COACH_NAMES[coach]
+  function handleConfirm() {
+    if (!bookerName.trim()) return
+    setBookingConfirmed(true)
+    setTimeout(() => {
+      setBookingConfirmed(false)
+      setStep(0)
+      setSelectedTypeId(null)
+      setSelectedDate(null)
+      setSelectedSlotMins(null)
+      setBookerName('')
+    }, 3500)
   }
 
-  function getPriceLabel(price: number | 'membership'): string {
-    if (price === 'membership') return 'Included in membership'
-    return `$${price} casual rate`
+  function navigateMonth(dir: -1 | 1) {
+    setCalMonth(prev => { const d = new Date(prev); d.setMonth(d.getMonth() + dir); return d })
   }
 
+  // ── Program handlers ────────────────────────────────────────────────────────
   function openEnrolModal(prog: PortalProgram) {
     setEnrolModal(prog)
     setEnrolName('')
@@ -643,6 +728,8 @@ export default function PortalPage() {
     setTimeout(() => setToastMsg(''), 4000)
   }
 
+  const todayIso = new Date().toISOString().slice(0, 10)
+
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#f4f6f9' }}>
 
@@ -653,24 +740,18 @@ export default function PortalPage() {
           <div>
             <h1 className="text-xl font-bold text-gray-900">Book a Session</h1>
             <p className="text-sm text-gray-500">
-              Available sessions this week · Members use your weekly credits · Casual rates apply otherwise
+              Choose your session type, pick a time, and you're done.
             </p>
           </div>
         </div>
-        {/* Tab nav */}
         <div className="mt-3 flex gap-0 px-6">
           {([
             { id: 'sessions' as const, label: 'Sessions' },
             { id: 'programs' as const, label: 'Programs' },
           ]).map(t => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setPortalTab(t.id)}
+            <button key={t.id} type="button" onClick={() => setPortalTab(t.id)}
               className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition ${
-                portalTab === t.id
-                  ? 'border-[#6BA3D6] text-[#6BA3D6]'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
+                portalTab === t.id ? 'border-[#6BA3D6] text-[#6BA3D6]' : 'border-transparent text-gray-500 hover:text-gray-700'
               }`}
             >
               {t.label}
@@ -679,146 +760,276 @@ export default function PortalPage() {
         </div>
       </div>
 
-      <div className="mx-auto max-w-[1200px] p-6">
+      {/* ── Sessions tab: Calendly-style wizard ─────────────────────────────── */}
+      {portalTab === 'sessions' && (
+        <div className="mx-auto max-w-[960px] px-6 py-8">
 
-        {portalTab === 'sessions' && (
-        <>
-        {/* ── Week navigation ───────────────────────────────────────────────── */}
-        <div className="mb-5 flex items-center justify-between">
-          <button
-            type="button"
-            onClick={prevWeek}
-            className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50"
-          >
-            <IconChevronLeft size={16} /> Prev Week
-          </button>
-          <span className="text-sm font-semibold text-gray-700">{formatWeekRange(weekStart)}</span>
-          <button
-            type="button"
-            onClick={nextWeek}
-            className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50"
-          >
-            Next Week <IconChevronRight size={16} />
-          </button>
-        </div>
-
-        {/* ── Legend ───────────────────────────────────────────────────────── */}
-        <div className="mb-4 flex items-center gap-4">
-          {[
-            { color: COACH_MATT_COLOR, label: 'Matt' },
-            { color: COACH_JADE_COLOR, label: 'Jade' },
-            { color: SELF_SERVE_COLOR, label: 'Self-Serve' },
-          ].map(({ color, label }) => (
-            <div key={label} className="flex items-center gap-1.5">
-              <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color }} />
-              <span className="text-xs text-gray-500">{label}</span>
+          {/* Step 0 — Session type selection */}
+          {step === 0 && (
+            <div>
+              <p className="mb-6 text-sm text-gray-500">Select a session type to see available times.</p>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {SESSION_TYPE_CARDS.map(type => (
+                  <button key={type.id} type="button" onClick={() => selectType(type.id)}
+                    className="group flex flex-col rounded-2xl border border-gray-200 bg-white p-5 text-left shadow-sm transition hover:border-[#6BA3D6] hover:shadow-md"
+                  >
+                    <div className="mb-3 text-2xl">{type.emoji}</div>
+                    <p className="text-base font-bold text-gray-900 transition group-hover:text-[#6BA3D6]">{type.label}</p>
+                    <p className="mt-1 text-xs leading-relaxed text-gray-500">{type.description}</p>
+                    <div className="mt-4 flex flex-wrap items-center gap-2">
+                      <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600">
+                        {type.durationMins} min
+                      </span>
+                      <span className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold"
+                        style={type.price === 'membership'
+                          ? { backgroundColor: '#f0fdf4', color: '#16a34a' }
+                          : { backgroundColor: '#eff6ff', color: '#2563eb' }}
+                      >
+                        {type.price === 'membership' ? 'Included in membership' : `$${type.price}/session`}
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </div>
             </div>
-          ))}
-        </div>
+          )}
 
-        {/* ── Weekly grid ──────────────────────────────────────────────────── */}
-        <div className="grid grid-cols-7 gap-2">
-          {weekDates.map((dateStr) => {
-            const { dayShort, dayNum, monthShort } = formatDay(dateStr)
-            const daySlots = allSlots.filter((s) => s.date === dateStr)
-            const coaches = getCoachesForDate(dateStr)
+          {/* Step 1 — Date & Time */}
+          {step === 1 && selectedType && (
+            <div>
+              <div className="mb-6 flex items-center gap-3">
+                <button type="button" onClick={goBack}
+                  className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50"
+                >
+                  <IconChevronLeft size={16} /> Back
+                </button>
+                <div>
+                  <span className="text-sm font-bold text-gray-900">{selectedType.label}</span>
+                  <span className="ml-2 text-sm text-gray-400">· {selectedType.durationMins} min</span>
+                </div>
+              </div>
 
-            return (
-              <div key={dateStr} className="flex flex-col gap-2">
-                {/* Day header */}
-                <div className="rounded-xl border border-gray-200 bg-white p-3 text-center shadow-sm">
-                  <div className="text-[10px] font-bold uppercase tracking-wide text-gray-400">{dayShort}</div>
-                  <div className="text-lg font-bold text-gray-900 leading-none mt-0.5">{dayNum}</div>
-                  <div className="text-[10px] text-gray-400">{monthShort}</div>
-                  {/* Coach dots */}
-                  <div className="mt-1.5 flex items-center justify-center gap-1">
-                    {coaches.map((c) => (
-                      <div
-                        key={c}
-                        className="h-2 w-2 rounded-full"
-                        style={{ backgroundColor: c === 'matt' ? COACH_MATT_COLOR : COACH_JADE_COLOR }}
-                        title={COACH_NAMES[c]}
-                      />
+              <div className="flex gap-5">
+                {/* Left: Monthly calendar */}
+                <div className="flex-1 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+                  {/* Month nav */}
+                  <div className="mb-4 flex items-center justify-between">
+                    <button type="button" onClick={() => navigateMonth(-1)}
+                      className="rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+                    >
+                      <IconChevronLeft size={18} />
+                    </button>
+                    <span className="text-sm font-bold text-gray-900">
+                      {calMonth.toLocaleDateString('en-AU', { month: 'long', year: 'numeric' })}
+                    </span>
+                    <button type="button" onClick={() => navigateMonth(1)}
+                      className="rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+                    >
+                      <IconChevronRight size={18} />
+                    </button>
+                  </div>
+
+                  {/* Day-of-week headers */}
+                  <div className="mb-1 grid grid-cols-7 text-center">
+                    {['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d => (
+                      <div key={d} className="text-[11px] font-bold uppercase tracking-wide text-gray-400">{d}</div>
                     ))}
-                    {coaches.length === 0 && (
-                      <div className="h-2 w-2 rounded-full bg-gray-200" title="No coaches" />
-                    )}
+                  </div>
+
+                  {/* Date cells */}
+                  <div className="grid grid-cols-7 gap-y-1">
+                    {monthDates.map((dateStr, i) => {
+                      if (!dateStr) return <div key={i} />
+                      const isPast     = dateStr < todayIso
+                      const hasSlots   = !isPast && hasAvailabilityForDate(dateStr, selectedType.id)
+                      const isSelected = dateStr === selectedDate
+                      const isToday    = dateStr === todayIso
+                      const day        = parseInt(dateStr.slice(-2))
+                      return (
+                        <button key={dateStr} type="button"
+                          disabled={isPast || !hasSlots}
+                          onClick={() => { setSelectedDate(dateStr); setSelectedSlotMins(null) }}
+                          className={`mx-auto flex h-9 w-9 items-center justify-center rounded-full text-sm font-medium transition ${
+                            isSelected
+                              ? 'text-white'
+                              : hasSlots
+                              ? 'text-gray-800 hover:bg-[#6BA3D6]/10'
+                              : 'cursor-not-allowed text-gray-300'
+                          }`}
+                          style={isSelected ? { backgroundColor: '#6BA3D6' } : undefined}
+                        >
+                          <span className={isToday && !isSelected ? 'underline decoration-2 underline-offset-2' : undefined}>
+                            {day}
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  {/* Legend */}
+                  <div className="mt-4 flex items-center gap-4 border-t border-gray-100 pt-4">
+                    <div className="flex items-center gap-1.5">
+                      <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: '#6BA3D6' }} />
+                      <span className="text-xs text-gray-500">Available</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <div className="h-2.5 w-2.5 rounded-full bg-gray-200" />
+                      <span className="text-xs text-gray-500">Unavailable</span>
+                    </div>
                   </div>
                 </div>
 
-                {/* Slot cards */}
-                {daySlots.length === 0 ? (
-                  <div className="rounded-xl border border-dashed border-gray-200 bg-white p-3 text-center">
-                    <p className="text-[10px] text-gray-400">No sessions</p>
+                {/* Right: Time slots */}
+                <div className="w-60 flex-shrink-0">
+                  {!selectedDate ? (
+                    <div className="flex h-full min-h-[200px] items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white p-6 text-center">
+                      <p className="text-sm text-gray-400">Select a date to see available times</p>
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+                      <p className="mb-4 text-sm font-bold text-gray-900">
+                        {new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'short' })}
+                      </p>
+                      {slotsForDate.length === 0 ? (
+                        <p className="text-sm text-gray-400">No times available.</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {slotsForDate.map(slot => {
+                            const isSelected = slot.startMins === selectedSlotMins
+                            const isFull     = slot.spotsLeft === 0
+                            return (
+                              <button key={slot.startMins} type="button"
+                                disabled={isFull}
+                                onClick={() => !isFull && selectSlot(slot.startMins)}
+                                className={`flex w-full items-center justify-between rounded-xl px-4 py-2.5 text-sm font-semibold transition ${
+                                  isSelected
+                                    ? 'text-white'
+                                    : isFull
+                                    ? 'cursor-not-allowed bg-gray-100 text-gray-400'
+                                    : 'bg-gray-50 text-gray-800 hover:bg-[#6BA3D6]/10 hover:text-[#6BA3D6]'
+                                }`}
+                                style={isSelected ? { backgroundColor: '#6BA3D6' } : undefined}
+                              >
+                                <span>{minsToLabel(slot.startMins)}</span>
+                                {isFull ? (
+                                  <span className="text-xs font-normal">Full</span>
+                                ) : slot.spotsLeft !== undefined ? (
+                                  <span className={`text-xs font-normal ${isSelected ? 'text-white/80' : 'text-gray-400'}`}>
+                                    {slot.spotsLeft} spot{slot.spotsLeft !== 1 ? 's' : ''} left
+                                  </span>
+                                ) : null}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Step 2 — Confirmation */}
+          {step === 2 && selectedType && selectedDate && selectedSlot && (
+            <div className="mx-auto max-w-md">
+              {!bookingConfirmed ? (
+                <>
+                  <div className="mb-6 flex items-center gap-3">
+                    <button type="button" onClick={goBack}
+                      className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50"
+                    >
+                      <IconChevronLeft size={16} /> Back
+                    </button>
+                    <span className="text-sm text-gray-500">Confirm your booking</span>
                   </div>
-                ) : (
-                  daySlots.map((slot) => {
-                    const isBooked = bookedIds.has(slot.id)
-                    const coachColor = getCoachColor(slot.coach)
-                    return (
-                      <div
-                        key={slot.id}
-                        className="rounded-xl border bg-white p-2.5 shadow-sm transition"
-                        style={{
-                          borderColor: isBooked ? '#86efac' : '#e5e7eb',
-                          backgroundColor: isBooked ? '#f0fdf4' : 'white',
-                          opacity: isBooked ? 0.7 : 1,
-                        }}
-                      >
-                        {/* Time */}
-                        <p className="text-[10px] font-bold text-gray-700">
-                          {minsToLabel(slot.startMins)} – {minsToLabel(slot.endMins)}
-                        </p>
 
-                        {/* Session type badge */}
-                        <div
-                          className="mt-1 inline-block rounded-full px-1.5 py-0.5 text-[9px] font-bold leading-none"
-                          style={{ backgroundColor: coachColor + '20', color: coachColor }}
-                        >
-                          {slot.sessionType}
+                  <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm space-y-5">
+                    <h2 className="text-base font-bold text-gray-900">Booking Summary</h2>
+
+                    <div className="space-y-3 text-sm">
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-500">Session</span>
+                        <span className="font-semibold text-gray-900">{selectedType.label}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-500">Date</span>
+                        <span className="font-semibold text-gray-900">
+                          {new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' })}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-500">Time</span>
+                        <span className="font-semibold text-gray-900">
+                          {minsToLabel(selectedSlot.startMins)} – {minsToLabel(selectedSlot.endMins)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-500">Duration</span>
+                        <span className="font-semibold text-gray-900">{selectedType.durationMins} min</span>
+                      </div>
+                      {selectedSlot.spotsLeft !== undefined && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-gray-500">Spots remaining</span>
+                          <span className="font-semibold text-gray-900">{selectedSlot.spotsLeft} of {selectedType.maxSpots}</span>
                         </div>
-
-                        {/* Coach */}
-                        <div className="mt-1 flex items-center gap-1">
-                          <div className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: coachColor }} />
-                          <span className="text-[10px] text-gray-500">{getCoachLabel(slot.coach)}</span>
-                        </div>
-
-                        {/* Space */}
-                        <p className="text-[10px] text-gray-400">{slot.space}</p>
-
-                        {/* Price */}
-                        <p className="mt-1 text-[10px] font-medium" style={{ color: slot.price === 'membership' ? '#6BAD6B' : '#6b7280' }}>
-                          {getPriceLabel(slot.price)}
-                        </p>
-
-                        {/* Book button */}
-                        {isBooked ? (
-                          <div className="mt-2 flex items-center gap-1 text-[10px] font-semibold text-green-600">
-                            <IconCheck size={11} strokeWidth={2.5} /> Booked
-                          </div>
+                      )}
+                      <div className="flex items-center justify-between border-t border-gray-100 pt-3">
+                        <span className="font-semibold text-gray-700">Cost</span>
+                        {selectedType.price === 'membership' ? (
+                          <span className="font-bold text-green-600">Included in membership</span>
                         ) : (
-                          <button
-                            type="button"
-                            onClick={() => openBooking(slot)}
-                            className="mt-2 w-full rounded-lg py-1.5 text-[11px] font-bold text-white transition hover:opacity-90"
-                            style={{ backgroundColor: coachColor }}
-                          >
-                            Book
-                          </button>
+                          <span className="font-bold text-gray-900">${selectedType.price} — pay at venue</span>
                         )}
                       </div>
-                    )
-                  })
-                )}
-              </div>
-            )
-          })}
-        </div>
-        </>
-        )}
+                    </div>
 
-        {portalTab === 'programs' && (
+                    {selectedType.price === 'membership' && (
+                      <div className="rounded-xl border border-green-100 bg-green-50 px-4 py-3 text-sm text-green-700">
+                        1 credit will be used from your membership allowance.
+                      </div>
+                    )}
+
+                    <div>
+                      <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500">
+                        Your Name
+                      </label>
+                      <input type="text" value={bookerName} onChange={e => setBookerName(e.target.value)}
+                        placeholder="e.g. Jordan Mitchell" autoFocus
+                        className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-[#6BA3D6] focus:ring-2 focus:ring-[#6BA3D6]/10"
+                      />
+                    </div>
+
+                    <button type="button" onClick={handleConfirm} disabled={!bookerName.trim()}
+                      className="w-full rounded-xl py-3 text-sm font-bold text-white transition hover:opacity-90 disabled:opacity-40"
+                      style={{ backgroundColor: '#6BA3D6' }}
+                    >
+                      Confirm Booking
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="flex flex-col items-center justify-center rounded-2xl border border-green-200 bg-green-50 p-12 text-center shadow-sm">
+                  <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-green-100">
+                    <IconCheck size={28} strokeWidth={2.5} className="text-green-600" />
+                  </div>
+                  <h2 className="text-xl font-bold text-gray-900">You're booked!</h2>
+                  <p className="mt-2 text-sm text-gray-600">
+                    {selectedType.label} on{' '}
+                    {new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })}{' '}
+                    at {minsToLabel(selectedSlot.startMins)}
+                  </p>
+                  <p className="mt-5 text-xs text-gray-400">Returning to session selection…</p>
+                </div>
+              )}
+            </div>
+          )}
+
+        </div>
+      )}
+
+      {portalTab === 'programs' && (
+        <div className="mx-auto max-w-[1200px] p-6">
           <div className="space-y-6">
             {(['Development Program', 'Social Program'] as ProgramCategory[]).map(cat => {
               const catPrograms = portalPrograms.filter(p => p.category === cat)
@@ -997,8 +1208,8 @@ export default function PortalPage() {
               </div>
             )}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* ── Toast notification ───────────────────────────────────────────────── */}
       {toastMsg && (
@@ -1127,100 +1338,6 @@ export default function PortalPage() {
         </div>
       )}
 
-      {/* ── Booking Modal ─────────────────────────────────────────────────────── */}
-      {bookingSlot && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl">
-            {/* Header */}
-            <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
-              <h2 className="text-base font-bold text-gray-900">Confirm Booking</h2>
-              <button
-                type="button"
-                onClick={() => setBookingSlot(null)}
-                className="rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100"
-              >
-                <IconX size={18} />
-              </button>
-            </div>
-
-            {/* Slot details */}
-            <div className="px-6 py-5 space-y-4">
-              <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-500">Session</span>
-                  <span className="text-sm font-semibold text-gray-800">{bookingSlot.sessionType}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-500">Date</span>
-                  <span className="text-sm font-semibold text-gray-800">
-                    {new Date(bookingSlot.date + 'T00:00:00').toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-500">Time</span>
-                  <span className="text-sm font-semibold text-gray-800">
-                    {minsToLabel(bookingSlot.startMins)} – {minsToLabel(bookingSlot.endMins)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-500">Space</span>
-                  <span className="text-sm font-semibold text-gray-800">{bookingSlot.space}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-500">Coach</span>
-                  <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold text-white"
-                    style={{ backgroundColor: getCoachColor(bookingSlot.coach) }}
-                  >
-                    <IconUser size={11} />
-                    {getCoachLabel(bookingSlot.coach)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-500">Price</span>
-                  <span className="text-sm font-semibold" style={{ color: bookingSlot.price === 'membership' ? '#16a34a' : '#374151' }}>
-                    {getPriceLabel(bookingSlot.price)}
-                  </span>
-                </div>
-              </div>
-
-              {/* Name input */}
-              <div>
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">
-                  Your Name
-                </label>
-                <input
-                  type="text"
-                  value={bookerName}
-                  onChange={(e) => setBookerName(e.target.value)}
-                  placeholder="e.g. Jordan Mitchell"
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-[#6BA3D6] focus:ring-2 focus:ring-[#6BA3D6]/10"
-                  autoFocus
-                />
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div className="flex justify-end gap-2 border-t border-gray-100 px-6 py-4">
-              <button
-                type="button"
-                onClick={() => setBookingSlot(null)}
-                className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={confirmBooking}
-                disabled={!bookerName.trim()}
-                className="rounded-xl px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-40"
-                style={{ backgroundColor: '#6BA3D6' }}
-              >
-                Confirm Booking
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ── Share link modal (after booking a Small Group / Team Training) ───── */}
       {shareModal && (
