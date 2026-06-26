@@ -616,7 +616,7 @@ export default function BookingsPage() {
   const [conflictMsg, setConflictMsg] = useState<string | null>(null)
 
   // ── Module tab state ──────────────────────────────────────────────────────────
-  const [pageTab, setPageTab] = useState<'calendar' | 'availability' | 'join-requests'>('calendar')
+  const [pageTab, setPageTab] = useState<'calendar' | 'book-session' | 'join-requests'>('calendar')
 
   // Coach Availability state (merged from old availability page)
   const [coaches, setCoaches] = useState<Coach[]>(DEFAULT_COACHES)
@@ -1338,9 +1338,9 @@ export default function BookingsPage() {
 
   const hours = Array.from({ length: END_H - START_H }, (_, i) => START_H + i)
 
-  const TABS: { id: 'calendar' | 'availability' | 'join-requests'; label: string; badge?: number }[] = [
-    { id: 'calendar',      label: 'Bookings' },
-    { id: 'availability',  label: 'Availability' },
+  const TABS: { id: 'calendar' | 'book-session' | 'join-requests'; label: string; badge?: number }[] = [
+    { id: 'calendar',      label: 'Calendar' },
+    { id: 'book-session',  label: 'Book a Session' },
     { id: 'join-requests', label: 'Join Requests', badge: totalPendingCount },
   ]
 
@@ -1368,34 +1368,8 @@ export default function BookingsPage() {
         ))}
       </div>
 
-      {pageTab === 'availability' && (
-        <AvailabilityTab
-          coaches={coaches} addCoach={addCoach} removeCoach={removeCoach}
-          coachSchedules={coachSchedules}
-          setDayAvailable={setDayAvailable} addWindow={addWindow} removeWindow={removeWindow}
-          updateWindow={updateWindow} toggleWindowSessionType={toggleWindowSessionType}
-          dateOverrides={dateOverrides}
-          ovDate={ovDate} setOvDate={setOvDate} ovType={ovType} setOvType={setOvType}
-          ovStart={ovStart} setOvStart={setOvStart} ovEnd={ovEnd} setOvEnd={setOvEnd}
-          ovNote={ovNote} setOvNote={setOvNote} ovError={ovError} editingOvId={editingOvId}
-          ovCoach={ovCoach} setOvCoach={setOvCoach}
-          resetOvForm={resetOvForm} startEditOverride={startEditOverride}
-          addOverride={addOverride} deleteOverride={deleteOverride}
-          facilitySchedule={facilitySchedule}
-          setFacilityDayAvailable={setFacilityDayAvailable}
-          addFacilityWindow={addFacilityWindow}
-          removeFacilityWindow={removeFacilityWindow}
-          updateFacilityWindow={updateFacilityWindow}
-          toggleFacilityWindowSessionType={toggleFacilityWindowSessionType}
-          facilityOverrides={facilityOverrides}
-          fovDate={fovDate} setFovDate={setFovDate} fovType={fovType} setFovType={setFovType}
-          fovStart={fovStart} setFovStart={setFovStart} fovEnd={fovEnd} setFovEnd={setFovEnd}
-          fovNote={fovNote} setFovNote={setFovNote} fovError={fovError} editingFovId={editingFovId}
-          resetFovForm={resetFovForm} startEditFacilityOverride={startEditFacilityOverride}
-          addFacilityOverride={addFacilityOverride} deleteFacilityOverride={deleteFacilityOverride}
-          addFacilityOverrideDirect={addFacilityOverrideDirect} addCoachOverrideDirect={addCoachOverrideDirect}
-          bookings={bookings}
-        />
+      {pageTab === 'book-session' && (
+        <BookSessionPreview />
       )}
 
       {pageTab === 'join-requests' && (
@@ -4162,6 +4136,256 @@ function FacilityBlockSelect({ blocked, onChange }: { blocked: string[]; onChang
 function AvTimeSelect({ value, onChange, minMins }: { value: number; onChange: (v: number) => void; minMins?: number }) {
   const opts = (minMins != null ? AV_TIME_OPTIONS.filter(o => o.mins > minMins) : AV_TIME_OPTIONS).map(o => o.mins)
   return <TimePicker value={value} onChange={onChange} options={opts} />
+}
+
+// ── Book a Session Preview (admin view of athlete booking flow) ───────────────
+
+const PREVIEW_SESSION_TYPES = [
+  { id: 'individual',       label: 'Individual Work Out', description: '1-on-1 coached session tailored to your development goals.', durationMins: 60, price: 35,          emoji: '🏋️' },
+  { id: 'small-group',      label: 'Small Group Session', description: 'Train alongside 2–6 athletes under expert coach guidance.',  durationMins: 90, price: 'membership' as const, emoji: '👥' },
+  { id: 'casual-shooting',  label: 'Casual Shooting',     description: 'Open gym practice at your own pace. No coach required.',    durationMins: 60, price: 10,          emoji: '🏀' },
+  { id: 'shooting-machine', label: 'Shooting Machine',    description: 'High-volume reps with the rebounder machine. Self-serve.',  durationMins: 60, price: 15,          emoji: '⚡' },
+  { id: 'weight-room',      label: 'Weight Room',         description: 'Strength & conditioning in the dedicated weight room.',     durationMins: 60, price: 15,          emoji: '💪' },
+]
+
+function previewMinsToLabel(mins: number): string {
+  const h = Math.floor(mins / 60), m = mins % 60
+  const ap = h >= 12 ? 'pm' : 'am'
+  const h12 = h > 12 ? h - 12 : h === 0 ? 12 : h
+  return `${h12}:${m.toString().padStart(2, '0')} ${ap}`
+}
+
+function BookSessionPreview() {
+  const [step, setStep]                     = useState<0 | 1 | 2>(0)
+  const [selectedTypeId, setSelectedTypeId] = useState<string | null>(null)
+  const [calMonth, setCalMonth]             = useState(() => new Date())
+  const [selectedDate, setSelectedDate]     = useState<string | null>(null)
+  const [selectedSlotMins, setSelectedSlotMins] = useState<number | null>(null)
+  const [bookerName, setBookerName]         = useState('')
+  const [confirmed, setConfirmed]           = useState(false)
+
+  const selectedType = PREVIEW_SESSION_TYPES.find(t => t.id === selectedTypeId) ?? null
+
+  // Simple slot generator (uses approximate availability logic for demo)
+  const slotsForDate = useMemo((): Array<{startMins: number; endMins: number; spotsLeft?: number}> => {
+    if (!selectedDate || !selectedTypeId) return []
+    const d   = new Date(selectedDate + 'T12:00:00')
+    const dow = ((d.getDay() + 6) % 7) as 0|1|2|3|4|5|6
+    const OPEN_DAYS: Record<number, boolean> = {0:true,1:true,2:true,3:true,4:true,5:true,6:false}
+    if (!OPEN_DAYS[dow]) return []
+    if (selectedTypeId === 'individual' || selectedTypeId === 'small-group') {
+      const dur = selectedTypeId === 'individual' ? 60 : 90
+      const times = dow === 0 || dow === 2 || dow === 4 ? [540, 600, 660] : [600, 660, 720, 780, 840]
+      const seed = parseInt(selectedDate.replace(/-/g,''))
+      return times.map(t => ({
+        startMins: t, endMins: t + dur,
+        spotsLeft: selectedTypeId === 'small-group' ? Math.max(1, 6 - Math.floor(Math.abs(Math.sin(seed + t)) * 5)) : undefined,
+      }))
+    }
+    if (selectedTypeId === 'casual-shooting') return [540,660,780].map(t => ({startMins:t, endMins:t+60}))
+    if (selectedTypeId === 'shooting-machine') return [540,660,780,900].map(t => ({startMins:t, endMins:t+60}))
+    if (selectedTypeId === 'weight-room') return [480,570,660,750].map(t => ({startMins:t, endMins:t+60}))
+    return []
+  }, [selectedDate, selectedTypeId])
+
+  const selectedSlot = slotsForDate.find(s => s.startMins === selectedSlotMins) ?? null
+
+  const monthDates = useMemo(() => {
+    const year  = calMonth.getFullYear()
+    const month = calMonth.getMonth()
+    const firstDow  = ((new Date(year, month, 1).getDay() + 6) % 7)
+    const daysInMon = new Date(year, month + 1, 0).getDate()
+    const cells = Math.ceil((firstDow + daysInMon) / 7) * 7
+    const todayIso = new Date().toISOString().slice(0, 10)
+    return Array.from({ length: cells }, (_, i) => {
+      const day = i - firstDow + 1
+      if (day < 1 || day > daysInMon) return null
+      const iso = new Date(year, month, day).toISOString().slice(0, 10)
+      const dow = ((new Date(iso + 'T12:00:00').getDay() + 6) % 7)
+      const OPEN_DAYS: Record<number, boolean> = {0:true,1:true,2:true,3:true,4:true,5:true,6:false}
+      const hasSlots = iso >= todayIso && OPEN_DAYS[dow] && selectedTypeId != null
+      return { iso, day, hasSlots }
+    })
+  }, [calMonth, selectedTypeId])
+
+  const todayIso = new Date().toISOString().slice(0, 10)
+
+  function navMonth(dir: -1 | 1) {
+    setCalMonth(prev => { const d = new Date(prev); d.setMonth(d.getMonth() + dir); return d })
+  }
+
+  function handleConfirm() {
+    setConfirmed(true)
+    setTimeout(() => {
+      setConfirmed(false); setStep(0); setSelectedTypeId(null)
+      setSelectedDate(null); setSelectedSlotMins(null); setBookerName('')
+    }, 3000)
+  }
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto" style={{ backgroundColor: '#f4f6f9' }}>
+      {/* Admin banner */}
+      <div className="flex shrink-0 items-center gap-2 border-b border-blue-200 bg-blue-50 px-4 py-2.5">
+        <div className="h-2 w-2 rounded-full bg-[#6BA3D6]" />
+        <p className="text-xs font-semibold text-[#4a7fb5]">
+          This is the athlete-facing booking experience — you are viewing it as an admin.
+        </p>
+      </div>
+
+      <div className="mx-auto w-full max-w-[960px] px-6 py-8">
+
+        {/* Step 0 — Session type selection */}
+        {step === 0 && (
+          <div>
+            <p className="mb-6 text-sm text-gray-500">Select a session type to see available times.</p>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {PREVIEW_SESSION_TYPES.map(type => (
+                <button key={type.id} type="button"
+                  onClick={() => { setSelectedTypeId(type.id); setSelectedDate(null); setSelectedSlotMins(null); setStep(1) }}
+                  className="group flex flex-col rounded-2xl border border-gray-200 bg-white p-5 text-left shadow-sm transition hover:border-[#6BA3D6] hover:shadow-md"
+                >
+                  <div className="mb-3 text-2xl">{type.emoji}</div>
+                  <p className="text-base font-bold text-gray-900 transition group-hover:text-[#6BA3D6]">{type.label}</p>
+                  <p className="mt-1 text-xs leading-relaxed text-gray-500">{type.description}</p>
+                  <div className="mt-4 flex flex-wrap items-center gap-2">
+                    <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600">{type.durationMins} min</span>
+                    <span className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold"
+                      style={type.price === 'membership' ? { backgroundColor: '#f0fdf4', color: '#16a34a' } : { backgroundColor: '#eff6ff', color: '#2563eb' }}>
+                      {type.price === 'membership' ? 'Included in membership' : `$${type.price}/session`}
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Step 1 — Date & Time */}
+        {step === 1 && selectedType && (
+          <div>
+            <div className="mb-6 flex items-center gap-3">
+              <button type="button" onClick={() => { setStep(0); setSelectedTypeId(null) }}
+                className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50">
+                <IconChevronLeft size={16} /> Back
+              </button>
+              <div><span className="text-sm font-bold text-gray-900">{selectedType.label}</span><span className="ml-2 text-sm text-gray-400">· {selectedType.durationMins} min</span></div>
+            </div>
+            <div className="flex gap-5">
+              {/* Calendar */}
+              <div className="flex-1 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+                <div className="mb-4 flex items-center justify-between">
+                  <button type="button" onClick={() => navMonth(-1)} className="rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100"><IconChevronLeft size={18} /></button>
+                  <span className="text-sm font-bold text-gray-900">{calMonth.toLocaleDateString('en-AU', { month: 'long', year: 'numeric' })}</span>
+                  <button type="button" onClick={() => navMonth(1)} className="rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100"><IconChevronRight size={18} /></button>
+                </div>
+                <div className="mb-1 grid grid-cols-7 text-center">
+                  {['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d => <div key={d} className="text-[11px] font-bold uppercase tracking-wide text-gray-400">{d}</div>)}
+                </div>
+                <div className="grid grid-cols-7 gap-y-1">
+                  {monthDates.map((cell, i) => {
+                    if (!cell) return <div key={i} />
+                    const { iso, day, hasSlots } = cell
+                    const isSelected = iso === selectedDate
+                    const isToday    = iso === todayIso
+                    return (
+                      <button key={iso} type="button" disabled={!hasSlots}
+                        onClick={() => { setSelectedDate(iso); setSelectedSlotMins(null) }}
+                        className={`mx-auto flex h-9 w-9 items-center justify-center rounded-full text-sm font-medium transition ${isSelected ? 'text-white' : hasSlots ? 'text-gray-800 hover:bg-[#6BA3D6]/10' : 'cursor-not-allowed text-gray-300'}`}
+                        style={isSelected ? { backgroundColor: '#6BA3D6' } : undefined}>
+                        <span className={isToday && !isSelected ? 'underline decoration-2 underline-offset-2' : undefined}>{day}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+              {/* Slots */}
+              <div className="w-60 flex-shrink-0">
+                {!selectedDate ? (
+                  <div className="flex h-full min-h-[200px] items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white p-6 text-center">
+                    <p className="text-sm text-gray-400">Select a date to see available times</p>
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+                    <p className="mb-4 text-sm font-bold text-gray-900">
+                      {new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'short' })}
+                    </p>
+                    <div className="space-y-2">
+                      {slotsForDate.map(slot => {
+                        const isSel = slot.startMins === selectedSlotMins
+                        return (
+                          <button key={slot.startMins} type="button"
+                            onClick={() => { setSelectedSlotMins(slot.startMins); setTimeout(() => setStep(2), 120) }}
+                            className={`flex w-full items-center justify-between rounded-xl px-4 py-2.5 text-sm font-semibold transition ${isSel ? 'text-white' : 'bg-gray-50 text-gray-800 hover:bg-[#6BA3D6]/10 hover:text-[#6BA3D6]'}`}
+                            style={isSel ? { backgroundColor: '#6BA3D6' } : undefined}>
+                            <span>{previewMinsToLabel(slot.startMins)}</span>
+                            {slot.spotsLeft !== undefined && (
+                              <span className={`text-xs font-normal ${isSel ? 'text-white/80' : 'text-gray-400'}`}>{slot.spotsLeft} spots left</span>
+                            )}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Step 2 — Confirmation */}
+        {step === 2 && selectedType && selectedDate && selectedSlot && (
+          <div className="mx-auto max-w-md">
+            {!confirmed ? (
+              <>
+                <div className="mb-6 flex items-center gap-3">
+                  <button type="button" onClick={() => { setStep(1); setSelectedSlotMins(null) }}
+                    className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50">
+                    <IconChevronLeft size={16} /> Back
+                  </button>
+                  <span className="text-sm text-gray-500">Confirm your booking</span>
+                </div>
+                <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm space-y-5">
+                  <h2 className="text-base font-bold text-gray-900">Booking Summary</h2>
+                  <div className="space-y-3 text-sm">
+                    <div className="flex items-center justify-between"><span className="text-gray-500">Session</span><span className="font-semibold text-gray-900">{selectedType.label}</span></div>
+                    <div className="flex items-center justify-between"><span className="text-gray-500">Date</span><span className="font-semibold text-gray-900">{new Date(selectedDate+'T00:00:00').toLocaleDateString('en-AU',{weekday:'short',day:'numeric',month:'long',year:'numeric'})}</span></div>
+                    <div className="flex items-center justify-between"><span className="text-gray-500">Time</span><span className="font-semibold text-gray-900">{previewMinsToLabel(selectedSlot.startMins)} – {previewMinsToLabel(selectedSlot.endMins)}</span></div>
+                    <div className="flex items-center justify-between"><span className="text-gray-500">Duration</span><span className="font-semibold text-gray-900">{selectedType.durationMins} min</span></div>
+                    <div className="flex items-center justify-between border-t border-gray-100 pt-3">
+                      <span className="font-semibold text-gray-700">Cost</span>
+                      {selectedType.price === 'membership' ? <span className="font-bold text-green-600">Included in membership</span> : <span className="font-bold text-gray-900">${selectedType.price} — pay at venue</span>}
+                    </div>
+                  </div>
+                  {selectedType.price === 'membership' && (
+                    <div className="rounded-xl border border-green-100 bg-green-50 px-4 py-3 text-sm text-green-700">1 credit will be used from your membership allowance.</div>
+                  )}
+                  <div>
+                    <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500">Your Name</label>
+                    <input type="text" value={bookerName} onChange={e => setBookerName(e.target.value)} placeholder="e.g. Jordan Mitchell" autoFocus
+                      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-[#6BA3D6] focus:ring-2 focus:ring-[#6BA3D6]/10" />
+                  </div>
+                  <button type="button" onClick={handleConfirm} disabled={!bookerName.trim()}
+                    className="w-full rounded-xl py-3 text-sm font-bold text-white transition hover:opacity-90 disabled:opacity-40" style={{ backgroundColor: '#6BA3D6' }}>
+                    Confirm Booking
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="flex flex-col items-center justify-center rounded-2xl border border-green-200 bg-green-50 p-12 text-center shadow-sm">
+                <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-green-100">
+                  <IconCheck size={28} strokeWidth={2.5} className="text-green-600" />
+                </div>
+                <h2 className="text-xl font-bold text-gray-900">You&apos;re booked!</h2>
+                <p className="mt-2 text-sm text-gray-600">{selectedType.label} on {new Date(selectedDate+'T00:00:00').toLocaleDateString('en-AU',{weekday:'long',day:'numeric',month:'long'})} at {previewMinsToLabel(selectedSlot.startMins)}</p>
+                <p className="mt-5 text-xs text-gray-400">Returning to session selection…</p>
+              </div>
+            )}
+          </div>
+        )}
+
+      </div>
+    </div>
+  )
 }
 
 // ── Availability Tab ────────────────────────────────────────────────────────────

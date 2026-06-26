@@ -27,7 +27,7 @@ import {
   IconCash,
   IconSettings,
   IconChecklist,
-  IconUsersGroup,
+  IconBriefcase,
   IconTrophy,
 } from '@tabler/icons-react'
 
@@ -63,9 +63,10 @@ const NAV: NavSection[] = [
       { label: 'Dashboard',                   href: '/dashboard',           icon: IconLayoutDashboard },
       { label: 'Athletes',                    href: '/athletes',            icon: IconUsers },
       { label: 'Boards',                      href: '/boards',              icon: IconLayoutKanban },
-      { label: 'Bookings & Availability',     href: '/bookings',            icon: IconCalendar },
+      { label: 'Bookings',                    href: '/bookings',            icon: IconCalendar },
       { label: 'Finances',                    href: '/finances',            icon: IconCash },
       { label: 'Forms',                       href: '/forms',               icon: IconForms },
+      { label: 'HR',                          href: '/hr',                  icon: IconBriefcase },
       { label: 'Memberships',                 href: '/memberships',         icon: IconId },
       {
         label: 'Policies & Procedures',
@@ -79,7 +80,6 @@ const NAV: NavSection[] = [
       { label: 'Pricing & Payments',          href: '/pricing',             icon: IconCreditCard },
       { label: 'Settings',                    href: '/settings',            icon: IconSettings },
       { label: 'Social Media & Advertising',  href: '/social-media',        icon: IconSpeakerphone },
-      { label: 'Team',                        href: '/team',                icon: IconUsersGroup },
       { label: 'To Do',                       href: '/todo',                icon: IconChecklist },
     ],
   },
@@ -120,7 +120,7 @@ export default function Sidebar() {
     const today = new Date().toISOString().split('T')[0]
     const b: Record<string, number> = {}
 
-    // Join requests → Dashboard + Bookings & Availability
+    // Join requests → Dashboard + Bookings
     const joinCount = parseInt(localStorage.getItem('f14_pendingJoinCount') ?? '0', 10) || 0
     if (joinCount > 0) { b['/dashboard'] = joinCount; b['/bookings'] = joinCount }
 
@@ -128,11 +128,11 @@ export default function Sidebar() {
     const payCount = parseInt(localStorage.getItem('f14_pendingPaymentCount') ?? '0', 10) || 0
     if (payCount > 0) b['/pricing'] = payCount
 
-    // Pending pay runs → Team
+    // Pending pay runs → HR
     try {
       const runs = JSON.parse(localStorage.getItem('f14_team_pay_runs') ?? '[]') as { status: string }[]
       const n = runs.filter(r => r.status === 'pending').length
-      if (n > 0) b['/team'] = n
+      if (n > 0) b['/hr'] = n
     } catch { /* ignore parse errors */ }
 
     // Overdue + due-today incomplete tasks → To Do
