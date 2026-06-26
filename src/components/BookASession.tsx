@@ -503,9 +503,8 @@ function SessionTypeTile({
       <div className="w-1 shrink-0 self-stretch"
         style={{ backgroundColor: isDisabled ? '#d1d5db' : type.accentColor }} />
 
-      {/* Emoji + name + description */}
-      <div className="flex flex-1 items-center gap-5 px-6 py-5">
-        <span className="shrink-0 text-4xl leading-none">{type.emoji}</span>
+      {/* Name + description */}
+      <div className="flex flex-1 items-center px-6 py-5">
         <div className="min-w-0">
           <p className={`text-lg font-bold transition ${isDisabled ? 'text-gray-400' : 'text-gray-900 group-hover:text-[#6BA3D6]'}`}>
             {type.label}
@@ -579,12 +578,12 @@ function SessionTypeTile({
 // ── SGS choice tile (horizontal, full-width) ──────────────────────────────────
 
 function ChoiceTile({ emoji, title, description, badge, onClick }: {
-  emoji: string; title: string; description: string; badge?: string; onClick: () => void
+  emoji?: string; title: string; description: string; badge?: string; onClick: () => void
 }) {
   return (
     <button type="button" onClick={onClick}
       className="group flex w-full items-center gap-5 overflow-hidden rounded-xl border border-gray-200 bg-white px-6 py-5 text-left shadow-sm transition-all hover:border-[#6BA3D6] hover:shadow-md active:scale-[0.995]">
-      <span className="shrink-0 text-3xl leading-none">{emoji}</span>
+      {emoji && <span className="shrink-0 text-3xl leading-none">{emoji}</span>}
       <div className="flex-1 min-w-0">
         <p className="text-base font-bold text-gray-900 transition group-hover:text-[#6BA3D6]">{title}</p>
         <p className="mt-0.5 text-sm leading-snug text-gray-500">{description}</p>
@@ -1056,7 +1055,6 @@ export function BookASession({
                       {/* Programs tile */}
                       {onRequestPrograms && (
                         <ChoiceTile
-                          emoji="📚"
                           title="Programs"
                           description={
                             progMinPrice !== null
