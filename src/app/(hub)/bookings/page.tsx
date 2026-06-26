@@ -2,7 +2,6 @@
 
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
-import { BookASession } from '@/components/BookASession'
 import {
   IconChevronLeft,
   IconChevronRight,
@@ -23,6 +22,10 @@ import {
   IconChevronDown,
   IconLink,
   IconCopy,
+  IconDotsVertical,
+  IconExternalLink,
+  IconSearch,
+  IconSettings,
 } from '@tabler/icons-react'
 
 // ── Grid constants ─────────────────────────────────────────────────────────────
@@ -1370,7 +1373,7 @@ export default function BookingsPage() {
       </div>
 
       {pageTab === 'book-session' && (
-        <BookSessionPreview />
+        <SessionTypeManagement />
       )}
 
       {pageTab === 'join-requests' && (
@@ -4139,10 +4142,509 @@ function AvTimeSelect({ value, onChange, minMins }: { value: number; onChange: (
   return <TimePicker value={value} onChange={onChange} options={opts} />
 }
 
-// ── Book a Session Preview (admin view of athlete booking flow) ───────────────
+// ── Session Type Management ────────────────────────────────────────────────────
 
-function BookSessionPreview() {
-  return <BookASession isAdminPreview />
+const STM_ACCENT             = '#6BA3D6'
+const STM_SHARE_BASE         = 'formula14.com.au/book'
+const STM_LS_BOOKING_SETTINGS = 'f14_booking_settings'
+const STM_LS_PROGRAMME_CAT   = 'f14_program_catalogue'
+const STM_LS_META            = 'f14_stm_meta'
+
+interface STMBuiltIn {
+  id: string; label: string; emoji: string; durationMins: number
+  location: string; style: string; availability: string; accentColor: string; slug: string
+}
+
+const STM_BUILT_IN: STMBuiltIn[] = [
+  { id: 'individual',               label: 'Individual Work Out', emoji: '🏀', durationMins:  60, location: 'Primary Station',             style: 'Coached',    availability: 'Mon–Fri, hours vary', accentColor: '#6BA3D6', slug: 'individual-workout'   },
+  { id: 'small-group',              label: 'Small Group Session', emoji: '👥', durationMins:  90, location: 'Primary / Secondary Station',  style: 'Coached',    availability: 'Hours vary',          accentColor: '#6BA3D6', slug: 'small-group-session'  },
+  { id: 'team-training',            label: 'Team Training',       emoji: '🏆', durationMins: 120, location: 'Primary Station',             style: 'Coached',    availability: 'Hours vary',          accentColor: '#6BA3D6', slug: 'team-training'        },
+  { id: 'casual-shooting',          label: 'Casual Shooting',     emoji: '🎯', durationMins:  60, location: 'Shooting Bay',                style: 'Self-serve', availability: 'Mon–Sat, open hours', accentColor: '#f59e0b', slug: 'casual-shooting'      },
+  { id: 'shooting-machine-session', label: 'Shooting Machine',    emoji: '⚡', durationMins:  60, location: 'Shooting Bay',                style: 'Self-serve', availability: 'Mon–Sat, open hours', accentColor: '#f59e0b', slug: 'shooting-machine'     },
+  { id: 'weight-room-session',      label: 'Weight Room',         emoji: '💪', durationMins:  60, location: 'Weight Room',                 style: 'Self-serve', availability: 'Mon–Sat, open hours', accentColor: '#9B2335', slug: 'weight-room'          },
+]
+
+function SessionTypeManagement() {
+  const [bookingSettings, setBookingSettings] = useState<Record<string, { enabled: boolean; reason: string }>>({})
+  const [catalogue, setCatalogue] = useState<ProgramCatalogueItem[]>(INIT_CATALOGUE_FALLBACK)
+  const [meta, setMeta] = useState<Record<string, { description?: string; location?: string }>>({})
+  const [search, setSearch] = useState('')
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
+  const [turnOffId, setTurnOffId] = useState<string | null>(null)
+  const [turnOffReason, setTurnOffReason] = useState('')
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editDesc, setEditDesc] = useState('')
+  const [editLoc, setEditLoc] = useState('')
+  const [copied, setCopied] = useState<string | null>(null)
+  const [toast, setToast] = useState<string | null>(null)
+
+  // ── Load / persist ──────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    try { const r = localStorage.getItem(STM_LS_BOOKING_SETTINGS); if (r) setBookingSettings(JSON.parse(r)) } catch {}
+    try { const r = localStorage.getItem(STM_LS_PROGRAMME_CAT); if (r) { const p = JSON.parse(r); if (p.length > 0) setCatalogue(p) } } catch {}
+    try { const r = localStorage.getItem(STM_LS_META); if (r) setMeta(JSON.parse(r)) } catch {}
+  }, [])
+
+  useEffect(() => {
+    if (Object.keys(bookingSettings).length === 0) return
+    localStorage.setItem(STM_LS_BOOKING_SETTINGS, JSON.stringify(bookingSettings))
+  }, [bookingSettings])
+
+  useEffect(() => {
+    if (Object.keys(meta).length === 0) return
+    localStorage.setItem(STM_LS_META, JSON.stringify(meta))
+  }, [meta])
+
+  // ── Helpers ─────────────────────────────────────────────────────────────────
+
+  const isOn    = (id: string) => bookingSettings[id]?.enabled !== false
+  const getReason = (id: string) => bookingSettings[id]?.reason ?? ''
+
+  function doTurnOn(id: string) {
+    setBookingSettings(prev => ({ ...prev, [id]: { ...(prev[id] ?? { enabled: true, reason: '' }), enabled: true } }))
+    setMenuOpenId(null)
+  }
+
+  function openTurnOff(id: string) {
+    setTurnOffId(id)
+    setTurnOffReason(getReason(id))
+    setMenuOpenId(null)
+  }
+
+  function confirmTurnOff() {
+    if (!turnOffId) return
+    setBookingSettings(prev => ({ ...prev, [turnOffId]: { enabled: false, reason: turnOffReason.trim() } }))
+    setTurnOffId(null)
+    setTurnOffReason('')
+  }
+
+  function showToast(msg: string) {
+    setToast(msg)
+    setTimeout(() => setToast(null), 2500)
+  }
+
+  function copyLink(slug: string, id: string) {
+    navigator.clipboard.writeText(`${STM_SHARE_BASE}/${slug}`).catch(() => {})
+    setCopied(id)
+    setTimeout(() => setCopied(null), 2000)
+    showToast('Booking link copied to clipboard')
+  }
+
+  function openEdit(id: string) {
+    const builtin = STM_BUILT_IN.find(t => t.id === id)
+    const prog = catalogue.find(p => p.id === id)
+    setEditDesc(meta[id]?.description ?? builtin?.location ?? prog?.description ?? '')
+    setEditLoc(meta[id]?.location ?? builtin?.location ?? '')
+    setEditingId(id)
+    setMenuOpenId(null)
+  }
+
+  function saveEdit() {
+    if (!editingId) return
+    setMeta(prev => ({ ...prev, [editingId]: { description: editDesc, location: editLoc } }))
+    setEditingId(null)
+  }
+
+  // ── Search / selection ──────────────────────────────────────────────────────
+
+  const sq = search.toLowerCase()
+  const matchSearch = (label: string, extra = '') => !sq || label.toLowerCase().includes(sq) || extra.toLowerCase().includes(sq)
+
+  const devProgs    = catalogue.filter(p => p.category === 'development')
+  const socialProgs = catalogue.filter(p => p.category === 'social')
+
+  const builtinVisible = STM_BUILT_IN.filter(t => matchSearch(t.label, t.location))
+  const devVisible     = devProgs.filter(p => matchSearch(p.name, p.description))
+  const socialVisible  = socialProgs.filter(p => matchSearch(p.name, p.description))
+
+  const allIds = [...STM_BUILT_IN.map(t => t.id), ...catalogue.map(p => p.id)]
+  const allSelected  = allIds.length > 0 && allIds.every(id => selected.has(id))
+  const someSelected = allIds.some(id => selected.has(id)) && !allSelected
+
+  function toggleAll() { setSelected(allSelected ? new Set() : new Set(allIds)) }
+  function toggleOne(id: string) {
+    setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
+  }
+
+  // ── Row renderer ────────────────────────────────────────────────────────────
+
+  function STMRow({
+    id, emoji, label, durationMins, location, style, availability, accentColor, slug, isLast, isProg, pricePerSession,
+  }: {
+    id: string; emoji: string; label: string; durationMins: number; location: string
+    style: string; availability: string; accentColor: string; slug: string
+    isLast: boolean; isProg?: boolean; pricePerSession?: number
+  }) {
+    const on        = isOn(id)
+    const rowReason = getReason(id)
+    const isMenuOpen = menuOpenId === id
+    const isCopied  = copied === id
+    const displayLoc = meta[id]?.location ?? location
+
+    return (
+      <div className={`relative flex items-center gap-3 px-5 py-4 transition-colors
+        ${isLast ? '' : 'border-b border-gray-100'}
+        ${on ? 'bg-white hover:bg-gray-50/50' : 'bg-gray-50/70'}`}>
+
+        {/* Colour accent bar */}
+        <div className="absolute inset-y-0 left-0 w-[3px]"
+          style={{ backgroundColor: on ? accentColor : '#d1d5db' }} />
+
+        {/* Checkbox */}
+        <div className="pl-3 shrink-0">
+          <input type="checkbox" checked={selected.has(id)} onChange={() => toggleOne(id)}
+            className="h-4 w-4 cursor-pointer rounded border-gray-300 accent-[#6BA3D6]" />
+        </div>
+
+        {/* Emoji + name + meta */}
+        <div className="flex-1 min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xl leading-none">{emoji}</span>
+            <p className={`text-sm font-bold ${on ? 'text-gray-900' : 'text-gray-400'}`}>{label}</p>
+            {!on && (
+              <span className="rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-gray-500">Off</span>
+            )}
+          </div>
+          <p className={`mt-0.5 text-xs ${on ? 'text-gray-500' : 'text-gray-400'}`}>
+            {durationMins} min
+            <span className="mx-1.5 text-gray-300">·</span>
+            {displayLoc}
+            <span className="mx-1.5 text-gray-300">·</span>
+            {style}
+            {isProg && pricePerSession !== undefined && (
+              <><span className="mx-1.5 text-gray-300">·</span>${pricePerSession}/session</>
+            )}
+          </p>
+          {!on && rowReason && (
+            <p className="mt-1 text-xs italic" style={{ color: '#d97706' }}>{rowReason}</p>
+          )}
+        </div>
+
+        {/* Availability */}
+        <div className="hidden w-44 shrink-0 xl:block">
+          <p className={`text-xs ${on ? 'text-gray-500' : 'text-gray-400'}`}>{availability}</p>
+        </div>
+
+        {/* Actions */}
+        <div className="flex shrink-0 items-center gap-1.5">
+          {on ? (
+            <>
+              <button onClick={() => copyLink(slug, id)}
+                className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 transition hover:bg-gray-50 hover:border-gray-300">
+                <IconCopy size={12} />
+                {isCopied ? 'Copied!' : 'Copy Link'}
+              </button>
+              <a href={`/portal`} target="_blank" rel="noopener noreferrer" title="Preview athlete booking page"
+                className="rounded-lg border border-gray-200 bg-white p-1.5 text-gray-400 transition hover:bg-gray-50 hover:text-gray-600">
+                <IconExternalLink size={14} />
+              </a>
+            </>
+          ) : (
+            <button onClick={() => doTurnOn(id)}
+              className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition hover:opacity-90"
+              style={{ borderColor: accentColor + '55', color: accentColor, backgroundColor: accentColor + '12' }}>
+              Turn On
+            </button>
+          )}
+
+          {/* Three-dot menu */}
+          <div className="relative">
+            <button onClick={() => setMenuOpenId(isMenuOpen ? null : id)}
+              className="rounded-lg border border-gray-200 bg-white p-1.5 text-gray-400 transition hover:bg-gray-50 hover:text-gray-600">
+              <IconDotsVertical size={14} />
+            </button>
+            {isMenuOpen && (
+              <div className="absolute right-0 top-full z-30 mt-1 min-w-[168px] rounded-xl border border-gray-200 bg-white py-1 shadow-xl">
+                <button onClick={() => openEdit(id)}
+                  className="flex w-full items-center gap-2.5 px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                  <IconPencil size={14} className="text-gray-400" /> Edit details
+                </button>
+                {on ? (
+                  <button onClick={() => openTurnOff(id)}
+                    className="flex w-full items-center gap-2.5 px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                    <IconX size={14} className="text-gray-400" /> Turn Off
+                  </button>
+                ) : (
+                  <button onClick={() => doTurnOn(id)}
+                    className="flex w-full items-center gap-2.5 px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                    <IconCheck size={14} className="text-gray-400" /> Turn On
+                  </button>
+                )}
+                {isProg && (
+                  <button className="flex w-full items-center gap-2.5 px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                    <IconUsers size={14} className="text-gray-400" /> Manage Enrolments
+                  </button>
+                )}
+                <div className="mx-3 my-1 border-t border-gray-100" />
+                <button className="flex w-full items-center gap-2.5 px-3.5 py-2 text-sm text-red-500 hover:bg-red-50">
+                  <IconTrash size={14} /> Delete
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Edit modal ──────────────────────────────────────────────────────────────
+
+  const editingBuiltin = STM_BUILT_IN.find(t => t.id === editingId)
+  const editingProg    = catalogue.find(p => p.id === editingId)
+
+  // ── Render ──────────────────────────────────────────────────────────────────
+
+  return (
+    <div className="flex flex-1 min-h-0 flex-col overflow-y-auto" style={{ backgroundColor: '#f4f6f9' }}>
+      <div className="px-6 pt-6 pb-4">
+        {/* Page header */}
+        <div className="mb-5 flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Book a Session</h1>
+            <p className="mt-0.5 text-sm text-gray-500">Manage which session types athletes can book</p>
+          </div>
+          <button className="flex shrink-0 items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white transition hover:opacity-90"
+            style={{ backgroundColor: STM_ACCENT }}>
+            <IconPlus size={16} /> Create Session Type
+          </button>
+        </div>
+        {/* Search */}
+        <div className="relative max-w-sm">
+          <IconSearch size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Search session types…"
+            className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-4 text-sm outline-none transition focus:border-[#6BA3D6] focus:ring-2 focus:ring-[#6BA3D6]/10" />
+        </div>
+      </div>
+
+      <div className="px-6 pb-10 space-y-4">
+        {/* Org header (Calendly-style) */}
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white text-[11px] font-black"
+            style={{ backgroundColor: STM_ACCENT }}>F14</div>
+          <div>
+            <p className="text-sm font-bold text-gray-800">Formula14</p>
+            <p className="text-xs text-gray-400">{allIds.length} session types</p>
+          </div>
+        </div>
+
+        {/* Main list */}
+        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+          {/* Column header */}
+          <div className="flex items-center gap-3 border-b border-gray-100 bg-gray-50 px-5 py-3">
+            <div className="pl-3 shrink-0">
+              <input type="checkbox" checked={allSelected}
+                ref={r => { if (r) r.indeterminate = someSelected }}
+                onChange={toggleAll}
+                className="h-4 w-4 cursor-pointer rounded border-gray-300 accent-[#6BA3D6]" />
+            </div>
+            <span className="flex-1 text-[11px] font-bold uppercase tracking-wide text-gray-400">Session Type</span>
+            <span className="hidden w-44 text-[11px] font-bold uppercase tracking-wide text-gray-400 xl:block">Availability</span>
+            <span className="w-36" />
+          </div>
+
+          {/* Built-in session type rows */}
+          {builtinVisible.map((type, i) => (
+            <STMRow key={type.id}
+              id={type.id} emoji={type.emoji} label={type.label} durationMins={type.durationMins}
+              location={type.location} style={type.style} availability={type.availability}
+              accentColor={type.accentColor} slug={type.slug}
+              isLast={i === builtinVisible.length - 1 && devVisible.length === 0 && socialVisible.length === 0} />
+          ))}
+
+          {/* Development Programs */}
+          {devVisible.length > 0 && (
+            <>
+              <div className="flex items-center gap-2 border-t border-gray-100 bg-blue-50/50 px-6 py-2.5">
+                <span className="text-[11px] font-bold uppercase tracking-wide" style={{ color: '#1d4ed8' }}>Development Programs</span>
+                <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ backgroundColor: '#dbeafe', color: '#1d4ed8' }}>
+                  {devVisible.length}
+                </span>
+              </div>
+              {devVisible.map((prog, i) => (
+                <STMRow key={prog.id}
+                  id={prog.id} emoji="🎓" label={prog.name} durationMins={60}
+                  location="Primary Station" style="Program" availability="Term-based schedule"
+                  accentColor={prog.colourTag} slug={`prog-${prog.id}`}
+                  isLast={i === devVisible.length - 1 && socialVisible.length === 0}
+                  isProg pricePerSession={prog.pricePerSession} />
+              ))}
+            </>
+          )}
+
+          {/* Social Programs */}
+          {socialVisible.length > 0 && (
+            <>
+              <div className="flex items-center gap-2 border-t border-gray-100 bg-green-50/50 px-6 py-2.5">
+                <span className="text-[11px] font-bold uppercase tracking-wide" style={{ color: '#15803d' }}>Social Programs</span>
+                <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ backgroundColor: '#dcfce7', color: '#15803d' }}>
+                  {socialVisible.length}
+                </span>
+              </div>
+              {socialVisible.map((prog, i) => (
+                <STMRow key={prog.id}
+                  id={prog.id} emoji="🤝" label={prog.name} durationMins={60}
+                  location="Primary Station" style="Program" availability="Term-based schedule"
+                  accentColor={prog.colourTag} slug={`prog-${prog.id}`}
+                  isLast={i === socialVisible.length - 1}
+                  isProg pricePerSession={prog.pricePerSession} />
+              ))}
+            </>
+          )}
+
+          {/* Empty state */}
+          {builtinVisible.length === 0 && devVisible.length === 0 && socialVisible.length === 0 && (
+            <div className="px-6 py-12 text-center text-sm text-gray-400">
+              No session types match &ldquo;{search}&rdquo;
+            </div>
+          )}
+        </div>
+
+        {/* Sync note */}
+        <div className="flex items-start gap-2 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
+          <IconSettings size={14} className="mt-0.5 shrink-0 text-blue-400" />
+          <p className="text-xs text-blue-600">
+            Toggles here sync with <strong>Pricing Config → Booking Settings</strong>. Changes apply instantly in the athlete portal.
+          </p>
+        </div>
+      </div>
+
+      {/* Bulk action bar */}
+      {selected.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 z-40 flex -translate-x-1/2 items-center gap-3 rounded-2xl border border-gray-200 bg-white px-5 py-3 shadow-xl">
+          <span className="text-sm font-semibold text-gray-700">{selected.size} selected</span>
+          <div className="h-4 w-px bg-gray-200" />
+          <button onClick={() => { selected.forEach(id => openTurnOff(id)) }}
+            className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50">
+            Turn Off
+          </button>
+          <button className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-500 hover:bg-red-50">
+            Delete
+          </button>
+          <button onClick={() => setSelected(new Set())}
+            className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100">
+            <IconX size={14} />
+          </button>
+        </div>
+      )}
+
+      {/* Click-away dismiss for menus */}
+      {menuOpenId && (
+        <div className="fixed inset-0 z-20" onClick={() => setMenuOpenId(null)} />
+      )}
+
+      {/* Turn Off modal */}
+      {turnOffId !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
+            <h3 className="text-base font-bold text-gray-900">Turn Off Session Type</h3>
+            <p className="mt-1.5 text-sm text-gray-500">
+              Athletes won&apos;t be able to book this. Add a reason to show them why it&apos;s unavailable.
+            </p>
+            <div className="mt-4 space-y-1.5">
+              <label className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Reason (optional)
+              </label>
+              <input
+                type="text"
+                value={turnOffReason}
+                onChange={e => setTurnOffReason(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && confirmTurnOff()}
+                placeholder="e.g. Closed for maintenance until 1 July"
+                autoFocus
+                className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-[#6BA3D6] focus:ring-2 focus:ring-[#6BA3D6]/10"
+              />
+              <p className="text-[11px] text-gray-400">
+                Leave blank to hide the tile entirely. Add a reason to show it greyed out with an explanation.
+              </p>
+            </div>
+            <div className="mt-5 flex gap-3">
+              <button onClick={() => { setTurnOffId(null); setTurnOffReason('') }}
+                className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-50">
+                Cancel
+              </button>
+              <button onClick={confirmTurnOff}
+                className="flex-1 rounded-xl py-2.5 text-sm font-bold text-white hover:opacity-90"
+                style={{ backgroundColor: '#ef4444' }}>
+                Turn Off
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit modal */}
+      {editingId !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+              <h3 className="text-base font-bold text-gray-900">
+                Edit — {editingBuiltin?.label ?? editingProg?.name ?? ''}
+              </h3>
+              <button onClick={() => setEditingId(null)}
+                className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100">
+                <IconX size={16} />
+              </button>
+            </div>
+            <div className="space-y-4 px-6 py-5">
+              {editingBuiltin && (
+                <>
+                  <div>
+                    <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500">Location / Space</label>
+                    <input
+                      value={editLoc || editingBuiltin.location}
+                      onChange={e => setEditLoc(e.target.value)}
+                      className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-[#6BA3D6] focus:ring-2 focus:ring-[#6BA3D6]/10"
+                    />
+                  </div>
+                  <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+                    <p className="text-xs font-semibold text-gray-500">Duration: {editingBuiltin.durationMins} min</p>
+                    <p className="mt-0.5 text-xs text-gray-400">Duration is set in session configuration.</p>
+                  </div>
+                </>
+              )}
+              {editingProg && (
+                <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 text-sm text-gray-600">
+                  <p className="font-semibold text-gray-700">{editingProg.name}</p>
+                  <p className="mt-0.5 text-xs text-gray-500">{editingProg.description}</p>
+                  <p className="mt-1 text-xs text-gray-400">${editingProg.pricePerSession}/session · Max {editingProg.maxCapacity} athletes</p>
+                </div>
+              )}
+              <div className="flex items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2.5">
+                <IconLink size={13} className="shrink-0 text-blue-400" />
+                <p className="text-xs text-blue-600">
+                  Pricing managed in <strong>Pricing &amp; Payments → Pricing Config</strong>
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-3 border-t border-gray-100 px-6 py-4">
+              <button onClick={() => setEditingId(null)}
+                className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50">
+                Cancel
+              </button>
+              {editingBuiltin && (
+                <button onClick={saveEdit}
+                  className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-bold text-white hover:opacity-90"
+                  style={{ backgroundColor: STM_ACCENT }}>
+                  <IconCheck size={14} /> Save
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast notification */}
+      {toast && (
+        <div className="fixed bottom-8 right-8 z-50 flex items-center gap-2 rounded-xl bg-gray-900 px-4 py-3 text-sm font-semibold text-white shadow-lg">
+          <IconCheck size={15} className="text-green-400" />
+          {toast}
+        </div>
+      )}
+    </div>
+  )
 }
 
 // ── Availability Tab ────────────────────────────────────────────────────────────
