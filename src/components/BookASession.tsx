@@ -15,6 +15,7 @@ import {
 
 const ACCENT = '#6BA3D6'
 const TODAY_ISO = new Date().toISOString().slice(0, 10)
+const NOW_MINS  = (() => { const n = new Date(); return n.getHours() * 60 + n.getMinutes() })()
 const LS_BOOKINGS         = 'f14_athlete_bookings'
 const LS_PRICING_CONFIGS  = 'f14_pricing_configs'
 const LS_BOOKING_SETTINGS = 'f14_booking_settings'
@@ -208,10 +209,12 @@ function getSlotsForDate(iso: string, typeId: SessionTypeId): TimeSlot[] {
   const dow = (new Date(iso + 'T12:00:00').getDay() + 6) % 7 // 0=Mon…6=Sun
   if (dow === 6) return [] // closed Sunday
   const seed = parseInt(iso.replace(/-/g, ''), 10)
+  const isToday = iso === TODAY_ISO
 
   if (typeId === 'individual') {
     return [540, 600, 660, 720, 780, 840]
       .filter((_, i) => (seed + i) % 4 !== 0)
+      .filter(t => !isToday || t > NOW_MINS)
       .map(t => ({ startMins: t, endMins: t + 60 }))
   }
 
@@ -226,11 +229,15 @@ function getSlotsForDate(iso: string, typeId: SessionTypeId): TimeSlot[] {
     const newSlots: TimeSlot[] = [600, 720].map(t => ({
       startMins: t, endMins: t + 90, isSgsExisting: false,
     }))
-    return [...existing, ...newSlots].sort((a, b) => a.startMins - b.startMins)
+    return [...existing, ...newSlots]
+      .filter(s => !isToday || s.startMins > NOW_MINS)
+      .sort((a, b) => a.startMins - b.startMins)
   }
 
   if (typeId === 'team-training') {
-    return [540, 720].map(t => ({ startMins: t, endMins: t + 120 }))
+    return [540, 720]
+      .filter(t => !isToday || t > NOW_MINS)
+      .map(t => ({ startMins: t, endMins: t + 120 }))
   }
 
   const bases: Partial<Record<SessionTypeId, number[]>> = {
@@ -238,7 +245,9 @@ function getSlotsForDate(iso: string, typeId: SessionTypeId): TimeSlot[] {
     'shooting-machine': [480, 540, 600, 660, 720, 780, 840, 900],
     'weight-room':      [480, 540, 600, 660, 720, 780, 840],
   }
-  return (bases[typeId] ?? []).map(t => ({ startMins: t, endMins: t + 60 }))
+  return (bases[typeId] ?? [])
+    .filter(t => !isToday || t > NOW_MINS)
+    .map(t => ({ startMins: t, endMins: t + 60 }))
 }
 
 function dateHasSlots(iso: string, typeId: SessionTypeId): boolean {
@@ -808,6 +817,13 @@ export function BookASession({
   const selectedType = SESSION_TYPES.find(t => t.id === typeId) ?? null
   const isJoinFlow = sgsFlow === 'join'
 
+  const isPastBooking = !!(
+    selectedDate && selectedSlot && (
+      selectedDate < TODAY_ISO ||
+      (selectedDate === TODAY_ISO && selectedSlot.startMins <= NOW_MINS)
+    )
+  )
+
   const slotsForDate = useMemo((): TimeSlot[] => {
     if (!selectedDate || !typeId) return []
     return getSlotsForDate(selectedDate, typeId)
@@ -1262,7 +1278,9 @@ export function BookASession({
                       </div>
 
                       <button type="button" onClick={handleConfirm}
-                        className="w-full rounded-xl py-3 text-sm font-bold text-white transition hover:opacity-90"
+                        disabled={isPastBooking}
+                        title={isPastBooking ? 'Cannot book a session in the past' : undefined}
+                        className={`w-full rounded-xl py-3 text-sm font-bold text-white transition ${isPastBooking ? 'cursor-not-allowed opacity-50' : 'hover:opacity-90'}`}
                         style={{ backgroundColor: ACCENT }}>
                         Confirm Booking
                       </button>

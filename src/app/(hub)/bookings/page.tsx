@@ -1900,7 +1900,7 @@ const MONTH_NAMES = [
   'July','August','September','October','November','December',
 ]
 
-function DatePicker({ value, onChange, accentColor = '#6BA3D6' }: { value: string; onChange: (v: string) => void; accentColor?: string }) {
+function DatePicker({ value, onChange, accentColor = '#6BA3D6', minDate }: { value: string; onChange: (v: string) => void; accentColor?: string; minDate?: string }) {
   const [open, setOpen] = useState(false)
   const [view, setView] = useState<'days' | 'months'>('days')
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -1977,6 +1977,7 @@ function DatePicker({ value, onChange, accentColor = '#6BA3D6' }: { value: strin
       String(date.getMonth() + 1).padStart(2, '0'),
       String(date.getDate()).padStart(2, '0'),
     ].join('-')
+    if (minDate && iso < minDate) return
     onChange(iso)
     setOpen(false)
     setView('days')
@@ -2051,16 +2052,25 @@ function DatePicker({ value, onChange, accentColor = '#6BA3D6' }: { value: strin
               {/* Day cells */}
               <div className="grid grid-cols-7 px-1 pb-2">
                 {cells.map((cell, i) => {
+                  const cellIso = [
+                    cell.date.getFullYear(),
+                    String(cell.date.getMonth() + 1).padStart(2, '0'),
+                    String(cell.date.getDate()).padStart(2, '0'),
+                  ].join('-')
+                  const isPast = !!(minDate && cellIso < minDate)
                   const sel = isSel(cell.date)
                   return (
                     <button
                       key={i}
                       type="button"
                       onClick={() => pickDate(cell.date)}
+                      disabled={isPast}
                       className={[
                         'mx-auto flex h-6 w-6 items-center justify-center rounded-full text-[11px] transition',
                         sel
                           ? 'font-semibold text-white'
+                          : isPast
+                          ? 'cursor-not-allowed text-gray-200'
                           : cell.current
                           ? 'text-gray-700 hover:bg-gray-100'
                           : 'text-gray-300 hover:bg-gray-50',
@@ -2426,6 +2436,7 @@ function BookingModal({
 }) {
   const isView          = modal.kind === 'view'
   const editSeriesFuture = modal.kind === 'editSeries'
+  const isNewBooking    = modal.kind === 'add' && !editSeriesFuture
   const src = (modal.kind === 'edit' || modal.kind === 'view' || modal.kind === 'editSeries')
     ? modal.booking : null
 
@@ -2821,7 +2832,7 @@ function BookingModal({
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className={LABEL}>Date</label>
-                      <DatePicker value={date} onChange={setDate} accentColor={accentColor} />
+                      <DatePicker value={date} onChange={setDate} accentColor={accentColor} minDate={isNewBooking ? today : undefined} />
                     </div>
                     <div>
                       <label className={LABEL}>Repeat</label>
@@ -2847,7 +2858,7 @@ function BookingModal({
                       <TimePicker
                         value={startMins}
                         onChange={s => { setStartMins(s); if (finishMins <= s) setFinishMins(s + 60) }}
-                        options={Array.from({ length: 95 }, (_, i) => i * 15)}
+                        options={Array.from({ length: 95 }, (_, i) => i * 15).filter(m => date !== today || m >= nowMins())}
                         accentColor={accentColor}
                       />
                     </div>
@@ -2867,7 +2878,7 @@ function BookingModal({
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <label className={LABEL}>Ends on</label>
-                        <DatePicker value={repeatUntil} onChange={setRepeatUntil} accentColor={accentColor} />
+                        <DatePicker value={repeatUntil} onChange={setRepeatUntil} accentColor={accentColor} minDate={today} />
                       </div>
                       <div>
                         <label className={LABEL}>Sessions</label>
@@ -2937,7 +2948,7 @@ function BookingModal({
                     </div>
                     <div>
                       <label className={LABEL}>Date</label>
-                      <DatePicker value={date} onChange={setDate} accentColor={accentColor} />
+                      <DatePicker value={date} onChange={setDate} accentColor={accentColor} minDate={isNewBooking ? today : undefined} />
                     </div>
                   </div>
 
@@ -2948,7 +2959,7 @@ function BookingModal({
                       <TimePicker
                         value={startMins}
                         onChange={s => { setStartMins(s); if (finishMins <= s) setFinishMins(s + 60) }}
-                        options={Array.from({ length: 95 }, (_, i) => i * 15)}
+                        options={Array.from({ length: 95 }, (_, i) => i * 15).filter(m => date !== today || m >= nowMins())}
                         accentColor={accentColor}
                       />
                     </div>
@@ -3001,7 +3012,7 @@ function BookingModal({
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <label className={LABEL}>Ends on</label>
-                        <DatePicker value={repeatUntil} onChange={setRepeatUntil} accentColor={accentColor} />
+                        <DatePicker value={repeatUntil} onChange={setRepeatUntil} accentColor={accentColor} minDate={today} />
                       </div>
                       <div>
                         <label className={LABEL}>Sessions</label>
@@ -3136,7 +3147,7 @@ function BookingModal({
                     </div>
                     <div>
                       <label className={LABEL}>Date</label>
-                      <DatePicker value={date} onChange={setDate} accentColor={accentColor} />
+                      <DatePicker value={date} onChange={setDate} accentColor={accentColor} minDate={isNewBooking ? today : undefined} />
                     </div>
                   </div>
 
@@ -3151,7 +3162,7 @@ function BookingModal({
                           if (isMachineRental) setFinishMins(s + machineRentalDuration)
                           else if (finishMins <= s) setFinishMins(s + 60)
                         }}
-                        options={Array.from({ length: 95 }, (_, i) => i * 15)}
+                        options={Array.from({ length: 95 }, (_, i) => i * 15).filter(m => date !== today || m >= nowMins())}
                         accentColor={accentColor}
                       />
                     </div>
@@ -3311,7 +3322,7 @@ function BookingModal({
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <label className={LABEL}>Ends on</label>
-                        <DatePicker value={repeatUntil} onChange={setRepeatUntil} accentColor={accentColor} />
+                        <DatePicker value={repeatUntil} onChange={setRepeatUntil} accentColor={accentColor} minDate={today} />
                       </div>
                       <div>
                         <label className={LABEL}>Sessions</label>
@@ -3832,6 +3843,11 @@ function BookingModal({
                 />
               </div>
 
+              {/* Past-date validation error (new bookings only) */}
+              {isNewBooking && date < today && (
+                <p className="pb-1 text-xs font-medium text-red-500">You cannot create a booking in the past</p>
+              )}
+
               {/* Actions */}
               {bookingType === 'casual' ? (
                 <div className="flex items-center justify-between pt-1">
@@ -3839,7 +3855,9 @@ function BookingModal({
                     <button
                       type="button"
                       onClick={handleSave}
-                      className="rounded-lg px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+                      disabled={isNewBooking && date < today}
+                      title={isNewBooking && date < today ? 'Cannot book a session in the past' : undefined}
+                      className={`rounded-lg px-5 py-2 text-sm font-semibold text-white transition ${isNewBooking && date < today ? 'cursor-not-allowed opacity-50' : 'hover:opacity-90'}`}
                       style={{ backgroundColor: accentColor }}
                     >
                       {(modal.kind === 'edit' || editSeriesFuture) ? 'Save Changes' : 'Create Booking'}
@@ -3875,7 +3893,9 @@ function BookingModal({
                   <button
                     type="button"
                     onClick={handleSave}
-                    className="rounded-lg px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+                    disabled={isNewBooking && date < today}
+                    title={isNewBooking && date < today ? 'Cannot book a session in the past' : undefined}
+                    className={`rounded-lg px-5 py-2 text-sm font-semibold text-white transition ${isNewBooking && date < today ? 'cursor-not-allowed opacity-50' : 'hover:opacity-90'}`}
                     style={{ backgroundColor: accentColor }}
                   >
                     {(modal.kind === 'edit' || editSeriesFuture) ? 'Save Changes' : bookingType === 'unavailable' ? 'Mark Unavailability' : bookingType === 'program' ? 'Save Program' : 'Create Booking'}
