@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import {
   IconPlus, IconSearch, IconX, IconTrash, IconCheck, IconUser,
   IconForms, IconClipboard, IconFileText, IconStar, IconAlertTriangle,
@@ -984,13 +984,20 @@ const CAT_PILLS = [
 
 export default function FormsPage() {
   const [forms, setForms] = useState<AppForm[]>(FORMS_DATA)
-  const [submissions, setSubmissions] = useState<Submission[]>(INIT_SUBMISSIONS)
+  const [submissions, setSubmissions] = useState<Submission[]>(() => {
+    if (typeof window === 'undefined') return []
+    try { const r = localStorage.getItem('f14_form_submissions'); return r ? JSON.parse(r) : [] } catch { return [] }
+  })
   const [selected, setSelected] = useState<AppForm | null>(null)
   const [fillTarget, setFillTarget] = useState<AppForm | null>(null)
   const [showNew, setShowNew] = useState(false)
   const [catFilter, setCatFilter] = useState<string>('all')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [search, setSearch] = useState('')
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') localStorage.setItem('f14_form_submissions', JSON.stringify(submissions))
+  }, [submissions])
 
   const filtered = useMemo(() =>
     forms.filter(f => {

@@ -453,7 +453,7 @@ function dbToMember(row: any): Member {
 export default function MembershipsPage() {
   const [members, setMembers] = useState<Member[]>([])
   const [loading, setLoading] = useState(true)
-  const [creditUsage, setCreditUsage] = useState<Record<string, number>>(INIT_CREDIT_USAGE)
+  const [creditUsage, setCreditUsage] = useState<Record<string, number>>({})
   const [filter, setFilter] = useState('all')
   const [search, setSearch] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -496,14 +496,11 @@ export default function MembershipsPage() {
           .select('*')
           .order('last_name')
         if (error) console.error('[members] Supabase error:', error)
-        if (!error && data && data.length > 0) {
+        if (!error && data) {
           setMembers(data.map(dbToMember))
-        } else if (!hasCache) {
-          setMembers(INIT_MEMBERS)
         }
       } catch (err) {
         console.error('[members] fetch failed:', err)
-        if (!hasCache) setMembers(INIT_MEMBERS)
       } finally {
         setLoading(false)
       }

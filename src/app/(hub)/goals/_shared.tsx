@@ -361,13 +361,13 @@ const GOALS_KEY  = 'f14_goals'
 const HABITS_KEY = 'f14_habits'
 
 export function loadGoals(): Goal[] {
-  if (typeof window === 'undefined') return INIT_GOALS
-  try { const r = localStorage.getItem(GOALS_KEY);  return r ? JSON.parse(r) : INIT_GOALS } catch { return INIT_GOALS }
+  if (typeof window === 'undefined') return []
+  try { const r = localStorage.getItem(GOALS_KEY); return r ? JSON.parse(r) : [] } catch { return [] }
 }
 export function saveGoals(g: Goal[]): void { localStorage.setItem(GOALS_KEY, JSON.stringify(g)) }
 
 export function loadHabits(): Habit[] {
-  if (typeof window === 'undefined') return INIT_HABITS
-  try { const r = localStorage.getItem(HABITS_KEY); return r ? JSON.parse(r) : INIT_HABITS } catch { return INIT_HABITS }
+  if (typeof window === 'undefined') return []
+  try { const r = localStorage.getItem(HABITS_KEY); return r ? JSON.parse(r) : [] } catch { return [] }
 }
 export function saveHabits(h: Habit[]): void { localStorage.setItem(HABITS_KEY, JSON.stringify(h)) }

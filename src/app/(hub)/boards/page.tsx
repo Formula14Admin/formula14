@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import {
   IconPlus, IconX, IconTrash, IconCheck, IconTag,
   IconCalendar, IconDotsVertical, IconArrowLeft,
@@ -800,9 +800,17 @@ function BoardCard({ board, onClick }: { board: KanbanBoard; onClick: () => void
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function BoardsPage() {
-  const [boards, setBoards]           = useState<KanbanBoard[]>(INIT_BOARDS)
+  const [boards, setBoards]           = useState<KanbanBoard[]>(() => {
+    if (typeof window === 'undefined') return []
+    try { const r = localStorage.getItem('f14_boards'); return r ? JSON.parse(r) : [] } catch { return [] }
+  })
   const [currentBoardId, setBoard]    = useState<string | null>(null)
   const [showNew, setShowNew]         = useState(false)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    localStorage.setItem('f14_boards', JSON.stringify(boards))
+  }, [boards])
 
   const currentBoard = boards.find(b => b.id === currentBoardId) ?? null
 

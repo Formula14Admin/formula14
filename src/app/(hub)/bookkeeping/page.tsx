@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import {
   IconArrowUpRight,
   IconArrowDownLeft,
@@ -459,11 +459,19 @@ const PERIOD_OPTIONS = [
 ]
 
 export default function BookkeepingPage() {
-  const [transactions, setTransactions] = useState<Transaction[]>(INIT_TRANSACTIONS)
+  const [transactions, setTransactions] = useState<Transaction[]>(() => {
+    if (typeof window === 'undefined') return []
+    try { const r = localStorage.getItem('f14_transactions'); return r ? JSON.parse(r) : [] } catch { return [] }
+  })
   const [period, setPeriod] = useState('2026-06')
   const [typeFilter, setTypeFilter] = useState<'all' | 'income' | 'expense'>('all')
   const [search, setSearch] = useState('')
   const [showAddModal, setShowAddModal] = useState(false)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    localStorage.setItem('f14_transactions', JSON.stringify(transactions))
+  }, [transactions])
 
   // ── Derived data ──────────────────────────────────────────────────────────
 

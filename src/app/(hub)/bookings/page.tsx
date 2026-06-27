@@ -595,22 +595,8 @@ function makeSamples(today: string): Booking[] {
 export default function BookingsPage() {
   const today = ds(new Date())
 
-  const [bookings,   setBookings]   = useState<Booking[]>(() => makeSamples(today))
-  const bookingsLoadedFromDb = useRef(false)
-  const [creditUsage, setCreditUsage] = useState<Record<string, number>>(() => {
-    const wk = getMondayKey(new Date())
-    return {
-      [`Jordan Williams:small-group:${wk}`]: 1,
-      [`Aisha Thompson:small-group:${wk}`]: 1,
-      [`Aisha Thompson:casual-shooting:${wk}`]: 2,
-      [`Sam Liu:small-group:${wk}`]: 2,
-      [`Sam Liu:casual-shooting:${wk}`]: 3,
-      [`Sam Liu:shooting-machine:${wk}`]: 2,
-      [`Tyler Ross:casual-shooting:${wk}`]: 1,
-      [`Liam Carter:casual-shooting:${wk}`]: 1,
-      [`Zara Obi:casual-shooting:${wk}`]: 1,
-    }
-  })
+  const [bookings,   setBookings]   = useState<Booking[]>([])
+  const [creditUsage, setCreditUsage] = useState<Record<string, number>>({})
   const [anchor,     setAnchor]     = useState<Date>(() => new Date())
   const [view,       setView]       = useState<'day' | 'week'>('day')
   const [modal,      setModal]      = useState<Modal>(null)
@@ -658,15 +644,43 @@ export default function BookingsPage() {
     if (raw) { try { const p = JSON.parse(raw); if (p.length) setCatalogue(p) } catch {} }
   }, [])
 
-  // Load bookings from Supabase on mount (use DB data if available; otherwise keep sample data)
+  // Persist / restore availability settings in localStorage
   useEffect(() => {
-    supabase
-      .from('bookings')
-      .select('*')
-      .order('date')
-      .then(({ data, error }) => {
-        if (!error && data && data.length > 0 && !bookingsLoadedFromDb.current) {
-          bookingsLoadedFromDb.current = true
+    if (typeof window === 'undefined') return
+    try {
+      const cs = localStorage.getItem('f14_coach_schedules')
+      if (cs) setCoachSchedules(JSON.parse(cs))
+      const dov = localStorage.getItem('f14_date_overrides')
+      if (dov) setDateOverrides(JSON.parse(dov))
+      const fs = localStorage.getItem('f14_facility_schedule')
+      if (fs) setFacilitySchedule(JSON.parse(fs))
+      const fov = localStorage.getItem('f14_facility_overrides')
+      if (fov) setFacilityOverrides(JSON.parse(fov))
+    } catch {}
+  }, [])
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    localStorage.setItem('f14_coach_schedules', JSON.stringify(coachSchedules))
+  }, [coachSchedules])
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    localStorage.setItem('f14_date_overrides', JSON.stringify(dateOverrides))
+  }, [dateOverrides])
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    localStorage.setItem('f14_facility_schedule', JSON.stringify(facilitySchedule))
+  }, [facilitySchedule])
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    localStorage.setItem('f14_facility_overrides', JSON.stringify(facilityOverrides))
+  }, [facilityOverrides])
+
+  // Load bookings from Supabase on mount — always replace state (empty DB = empty calendar)
+  useEffect(() => {
+    void (async () => {
+      try {
+        const { data, error } = await supabase.from('bookings').select('*').order('date')
+        if (!error && data) {
           setBookings(data.map(row => ({
             id:          row.id,
             date:        row.date,
@@ -685,7 +699,10 @@ export default function BookingsPage() {
             ...(row.meta ?? {}),
           })))
         }
-      })
+      } catch (err) {
+        console.error('[bookings] fetch failed:', err)
+      }
+    })()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

@@ -555,14 +555,11 @@ export default function AthletesPage() {
           .select('*')
           .order('last_name')
         if (error) console.error('[athletes] Supabase error:', error)
-        if (!error && data && data.length > 0) {
+        if (!error && data) {
           setAthletes(data.map(dbToAthlete))
-        } else if (!hasCache) {
-          setAthletes(INIT_ATHLETES)
         }
       } catch (err) {
         console.error('[athletes] fetch failed:', err)
-        if (!hasCache) setAthletes(INIT_ATHLETES)
       } finally {
         setLoading(false)
       }

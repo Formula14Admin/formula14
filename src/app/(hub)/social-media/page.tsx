@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import {
   IconBrandInstagram, IconBrandFacebook, IconBrandTiktok,
   IconPlus, IconChevronLeft, IconChevronRight,
@@ -449,15 +449,24 @@ export default function SocialMediaPage() {
   const [tab, setTab] = useState<'social' | 'advertising' | 'sponsorships'>('social')
 
   // ── Social state ──────────────────────────────────────────────────────────
-  const [posts,        setPosts]       = useState<SocialPost[]>(INIT_POSTS)
+  const [posts,        setPosts]       = useState<SocialPost[]>(() => {
+    if (typeof window === 'undefined') return []
+    try { const r = localStorage.getItem('f14_social_posts'); return r ? JSON.parse(r) : [] } catch { return [] }
+  })
   const [viewMode,     setViewMode]    = useState<'calendar' | 'list'>('calendar')
   const [calYear,      setCalYear]     = useState(2026)
   const [calMonth,     setCalMonth]    = useState(5) // June 0-indexed
   const [postModal,    setPostModal]   = useState<{ post: SocialPost | null; date?: string } | null>(null)
 
   // ── Sponsorship state ─────────────────────────────────────────────────────
-  const [tiers,          setTiers]         = useState<SponsorTier[]>(INIT_TIERS)
-  const [sponsors,       setSponsors]      = useState<Sponsor[]>(INIT_SPONSORS)
+  const [tiers,          setTiers]         = useState<SponsorTier[]>(() => {
+    if (typeof window === 'undefined') return INIT_TIERS
+    try { const r = localStorage.getItem('f14_sponsor_tiers'); return r ? JSON.parse(r) : INIT_TIERS } catch { return INIT_TIERS }
+  })
+  const [sponsors,       setSponsors]      = useState<Sponsor[]>(() => {
+    if (typeof window === 'undefined') return []
+    try { const r = localStorage.getItem('f14_sponsors'); return r ? JSON.parse(r) : [] } catch { return [] }
+  })
   const [activeTier,     setActiveTier]    = useState('platinum')
   const [editingPkg,     setEditingPkg]    = useState<string | null>(null)
   const [pkgDraft,       setPkgDraft]      = useState('')
@@ -468,6 +477,10 @@ export default function SocialMediaPage() {
   const [newTierLabel,   setNewTierLabel]  = useState('')
   const [confirmDeleteTier, setConfirmDeleteTier] = useState<string | null>(null)
   const [uploadNotice,   setUploadNotice]  = useState(false)
+
+  useEffect(() => { if (typeof window !== 'undefined') localStorage.setItem('f14_social_posts', JSON.stringify(posts)) }, [posts])
+  useEffect(() => { if (typeof window !== 'undefined') localStorage.setItem('f14_sponsor_tiers', JSON.stringify(tiers)) }, [tiers])
+  useEffect(() => { if (typeof window !== 'undefined') localStorage.setItem('f14_sponsors', JSON.stringify(sponsors)) }, [sponsors])
 
   // ── Calendar derived state ─────────────────────────────────────────────────
   const postsByDate = useMemo(() => {

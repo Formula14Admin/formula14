@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import {
   IconPlus,
   IconTrash,
@@ -114,13 +114,16 @@ const QUICK_PROMPTS = [
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export default function PoliciesPage() {
-  const [docs, setDocs] = useState<PolicyDoc[]>(INIT_POLICIES)
-  const [selectedId, setSelectedId] = useState<string | null>('p1')
+  const [docs, setDocs] = useState<PolicyDoc[]>(() => {
+    if (typeof window === 'undefined') return []
+    try { const r = localStorage.getItem('f14_policies'); return r ? JSON.parse(r) : [] } catch { return [] }
+  })
+  const [selectedId, setSelectedId] = useState<string | null>(null)
 
-  // Editor state
-  const [editTitle, setEditTitle] = useState(INIT_POLICIES[0].title)
-  const [editContent, setEditContent] = useState(INIT_POLICIES[0].content)
-  const [editStatus, setEditStatus] = useState<'draft' | 'final'>(INIT_POLICIES[0].status)
+  // Editor state — initialised from selected doc or blank
+  const [editTitle, setEditTitle] = useState('')
+  const [editContent, setEditContent] = useState('')
+  const [editStatus, setEditStatus] = useState<'draft' | 'final'>('draft')
   const [saved, setSaved] = useState(false)
 
   // AI state
@@ -131,6 +134,15 @@ export default function PoliciesPage() {
   const [copied, setCopied] = useState(false)
 
   const contentRef = useRef<HTMLTextAreaElement>(null)
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') localStorage.setItem('f14_policies', JSON.stringify(docs))
+    if (docs.length > 0 && !selectedId) {
+      const d = docs[0]
+      setSelectedId(d.id); setEditTitle(d.title); setEditContent(d.content); setEditStatus(d.status)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [docs])
 
   // ── Doc management ──────────────────────────────────────────────────────────
 
