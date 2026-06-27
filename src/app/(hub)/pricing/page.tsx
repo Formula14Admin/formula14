@@ -701,25 +701,56 @@ export default function PricingPage() {
     localStorage.setItem('f14_program_catalogue', JSON.stringify(catalogue))
   }, [catalogue])
 
-  // On mount: load pricing configs from Supabase if available
+  // On mount: load programmes from Supabase (overrides localStorage/INIT_CATALOGUE)
   useEffect(() => {
-    supabase
-      .from('session_types')
-      .select('*')
-      .then(({ data, error }) => {
-        if (!error && data && data.length > 0 && !pricingInitialisedFromDb.current) {
-          pricingInitialisedFromDb.current = true
-          const configs: SessionPricingConfig[] = data.map(row => ({
-            sessionType:  row.session_type_id,
-            tiers:        (row.tiers as PricingTier[]) ?? [],
-            durationMins: row.duration_minutes ?? 60,
-          }))
-          setPricingConfigs(configs)
-          if (typeof window !== 'undefined') {
-            localStorage.setItem(PRICING_CONFIGS_LS, JSON.stringify(configs))
-          }
-        }
-      })
+    void (async () => {
+      const { data, error } = await supabase.from('programs').select('*').order('created_at')
+      if (error) { console.error('programs load error:', error); return }
+      if (data && data.length > 0) {
+        const items: ProgramCatalogueItem[] = data.map(row => ({
+          id:              row.id as string,
+          name:            row.name as string,
+          category:        row.category as 'development' | 'social',
+          pricePerSession: Number(row.price_per_session ?? 0),
+          numSessions:     (row.num_sessions as number) ?? 8,
+          maxCapacity:     (row.max_capacity as number) ?? 15,
+          enrolmentType:   row.enrolment_type as 'instant' | 'approval',
+          description:     (row.description as string) ?? '',
+          colourTag:       (row.colour_tag as string) ?? CATALOGUE_COLOURS[0],
+        }))
+        setCatalogue(items)
+        localStorage.setItem('f14_program_catalogue', JSON.stringify(items))
+      }
+    })()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // On mount: load pricing configs from Supabase if available; seed if empty
+  useEffect(() => {
+    void (async () => {
+      const { data, error } = await supabase.from('session_types').select('*')
+      if (error) { console.error('session_types load error:', error); return }
+      if (data && data.length > 0 && !pricingInitialisedFromDb.current) {
+        pricingInitialisedFromDb.current = true
+        const configs: SessionPricingConfig[] = data.map(row => ({
+          sessionType:  row.session_type_id as string,
+          tiers:        (row.tiers as PricingTier[]) ?? [],
+          durationMins: (row.duration_minutes as number) ?? 60,
+        }))
+        setPricingConfigs(configs)
+        localStorage.setItem(PRICING_CONFIGS_LS, JSON.stringify(configs))
+      } else if (data && data.length === 0) {
+        // Table is empty — seed from INIT_PRICING and mark as DB-initialised
+        pricingInitialisedFromDb.current = true
+        const rows = INIT_PRICING.map(config => ({
+          session_type_id:  config.sessionType,
+          name:             (SESSION_TYPE_LABELS as Record<string, string>)[config.sessionType] ?? config.sessionType,
+          tiers:            config.tiers,
+          duration_minutes: config.durationMins ?? 60,
+        }))
+        await supabase.from('session_types').upsert(rows, { onConflict: 'session_type_id' })
+      }
+    })()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -755,16 +786,60 @@ export default function PricingPage() {
     }
   }, [pricingConfigs])
 
-  function saveProg(item: ProgramCatalogueItem) {
-    setCatalogue(prev => {
-      const exists = prev.some(p => p.id === item.id)
-      return exists ? prev.map(p => p.id === item.id ? item : p) : [...prev, item]
-    })
+  async function saveProg(item: ProgramCatalogueItem) {
+    const existsInCatalogue = catalogue.some(p => p.id === item.id)
+    const isLocalId = item.id.startsWith('cat-') || item.id.startsWith('custom_')
+
+    if (!existsInCatalogue || isLocalId) {
+      // Insert — either brand new or a local-only INIT_CATALOGUE item being saved for first time
+      const { data, error } = await supabase
+        .from('programs')
+        .insert({
+          name:              item.name,
+          category:          item.category,
+          price_per_session: item.pricePerSession,
+          num_sessions:      item.numSessions,
+          max_capacity:      item.maxCapacity,
+          enrolment_type:    item.enrolmentType,
+          description:       item.description,
+          colour_tag:        item.colourTag,
+        })
+        .select('id')
+        .single()
+      if (error) { console.error('saveProg insert error:', error); return }
+      const savedItem: ProgramCatalogueItem = { ...item, id: data.id as string }
+      setCatalogue(prev => {
+        const exists = prev.some(p => p.id === item.id)
+        return exists ? prev.map(p => p.id === item.id ? savedItem : p) : [...prev, savedItem]
+      })
+    } else {
+      // Update existing DB record
+      const { error } = await supabase
+        .from('programs')
+        .update({
+          name:              item.name,
+          category:          item.category,
+          price_per_session: item.pricePerSession,
+          num_sessions:      item.numSessions,
+          max_capacity:      item.maxCapacity,
+          enrolment_type:    item.enrolmentType,
+          description:       item.description,
+          colour_tag:        item.colourTag,
+        })
+        .eq('id', item.id)
+      if (error) { console.error('saveProg update error:', error); return }
+      setCatalogue(prev => prev.map(p => p.id === item.id ? item : p))
+    }
     setProgModalOpen(false)
     setEditingProg(null)
   }
 
-  function deleteProg(id: string) {
+  async function deleteProg(id: string) {
+    const isLocalId = id.startsWith('cat-') || id.startsWith('custom_')
+    if (!isLocalId) {
+      const { error } = await supabase.from('programs').delete().eq('id', id)
+      if (error) { console.error('deleteProg error:', error); return }
+    }
     setCatalogue(prev => prev.filter(p => p.id !== id))
   }
 
