@@ -4353,8 +4353,14 @@ function BookingInformationTab() {
         .filter((t): t is typeof CANONICAL_SESSION_TYPES[0] => t !== null && t !== undefined)
     : CANONICAL_SESSION_TYPES
 
-  const FIELD_CLS = 'w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-[#6BA3D6] focus:ring-2 focus:ring-[#6BA3D6]/10'
-  const LBL_CLS   = 'mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500'
+  const FIELD_CLS  = 'h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-center text-sm text-gray-800 outline-none transition focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/40'
+  const FIELD_AREA = 'w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-800 outline-none transition resize-none focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/40'
+  const LBL_CLS    = 'mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-400 text-center'
+  const DURATION_OPTIONS_BIT = Array.from({ length: 24 }, (_, i) => {
+    const mins = (i + 1) * 15
+    const h = Math.floor(mins / 60), m = mins % 60
+    return { value: mins, label: h > 0 ? (m > 0 ? `${h} hr ${m} min` : `${h} hr${h > 1 ? 's' : ''}`) : `${m} min` }
+  })
 
   // ── Shared admin right-column (toggle + edit button)
   function AdminCol({ id, accentColor, isProg }: { id: string; accentColor: string; isProg?: boolean }) {
@@ -4572,7 +4578,7 @@ function BookingInformationTab() {
       {editingId !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl">
-            <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+            <div className="flex items-center justify-between border-b border-gray-100 bg-white px-6 py-4">
               <h3 className="text-base font-bold text-gray-900">
                 Edit — {editIsProg
                   ? catalogue.find(p => p.id === editingId)?.name
@@ -4580,40 +4586,38 @@ function BookingInformationTab() {
                 }
               </h3>
               <button onClick={() => setEditingId(null)}
-                className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100">
-                <IconX size={16} />
+                className="rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100">
+                <IconX size={18} />
               </button>
             </div>
 
             <div className="max-h-[70vh] space-y-4 overflow-y-auto px-6 py-5">
               {!editIsProg ? (
                 <>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="col-span-2">
+                  <div className="space-y-4">
+                    <div>
                       <label className={LBL_CLS}>Session Name</label>
                       <input value={editDraft.label}
                         onChange={e => setEditDraft(d => ({ ...d, label: e.target.value }))}
                         className={FIELD_CLS} />
                     </div>
-                    <div className="col-span-2">
+                    <div>
                       <label className={LBL_CLS}>Description</label>
-                      <input value={editDraft.description}
+                      <textarea rows={2} value={editDraft.description}
                         onChange={e => setEditDraft(d => ({ ...d, description: e.target.value }))}
-                        className={FIELD_CLS} />
+                        className={FIELD_AREA} />
                     </div>
                     <div>
-                      <label className={LBL_CLS}>Duration (min)</label>
-                      <input type="number" min={5} step={5} value={editDraft.durationMins}
+                      <label className={LBL_CLS}>Duration</label>
+                      <select value={editDraft.durationMins}
                         onChange={e => setEditDraft(d => ({ ...d, durationMins: e.target.value }))}
-                        className={FIELD_CLS} />
+                        className={FIELD_CLS + ' cursor-pointer'}>
+                        {DURATION_OPTIONS_BIT.map(opt => (
+                          <option key={opt.value} value={String(opt.value)}>{opt.label}</option>
+                        ))}
+                      </select>
                     </div>
                     <div>
-                      <label className={LBL_CLS}>Icon (emoji)</label>
-                      <input value={editDraft.emoji}
-                        onChange={e => setEditDraft(d => ({ ...d, emoji: e.target.value }))}
-                        className={FIELD_CLS} />
-                    </div>
-                    <div className="col-span-2">
                       <label className={LBL_CLS}>Session Style</label>
                       <select value={editDraft.style}
                         onChange={e => setEditDraft(d => ({ ...d, style: e.target.value }))}
@@ -4641,7 +4645,7 @@ function BookingInformationTab() {
                     <label className={LBL_CLS}>Description</label>
                     <textarea rows={3} value={progDraft.description}
                       onChange={e => setProgDraft(d => ({ ...d, description: e.target.value }))}
-                      className={FIELD_CLS + ' resize-none'} />
+                      className={FIELD_AREA} />
                   </div>
                   <div>
                     <label className={LBL_CLS}>Colour Tag</label>
@@ -4662,16 +4666,16 @@ function BookingInformationTab() {
               )}
             </div>
 
-            <div className="flex items-center justify-end gap-3 border-t border-gray-100 px-6 py-4">
+            <div className="flex items-center justify-between border-t border-gray-100 px-6 py-4">
               <button onClick={() => setEditingId(null)}
-                className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50">
+                className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50">
                 Cancel
               </button>
               <button
                 onClick={editIsProg ? saveProgEdit : saveSessionEdit}
-                className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-bold text-white transition hover:opacity-90"
+                className="rounded-lg px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90"
                 style={{ backgroundColor: BIT_ACCENT }}>
-                <IconCheck size={14} /> Save changes
+                Save Changes
               </button>
             </div>
           </div>
