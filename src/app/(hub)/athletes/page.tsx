@@ -619,6 +619,7 @@ export default function AthletesPage() {
     }
     if (Object.keys(dbPatch).length > 0) {
       supabase.from('athletes').update(dbPatch).eq('id', id)
+        .then(({ error }) => { if (error) console.error('[athletes] update failed:', error) })
     }
   }
 

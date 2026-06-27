@@ -1197,7 +1197,7 @@ export default function BookingsPage() {
     showToast('Marked as enrolled and paid.')
   }
 
-  function handleSave(items: (Omit<Booking, 'id'> & { id?: string })[]) {
+  async function handleSave(items: (Omit<Booking, 'id'> & { id?: string })[]) {
     // ── Check 1 & 2: Facility + Coach availability (admin override bypasses) ──────
     for (const data of items) {
       if (data.adminOverride) continue  // admin override skips availability checks
@@ -1314,88 +1314,90 @@ export default function BookingsPage() {
     const newIdMap = new Map<object, string>()
     itemsWithCodes.forEach(item => { if (!item.id) newIdMap.set(item, uid()) })
 
+    // Compute new state and bump list synchronously against current `bookings` value
+    // (avoids mutating inside setBookings callback which can run multiple times in strict mode)
     const bumpedIdsForDeletion: string[] = []
     let bumpMsg: string | null = null
-    setBookings(prev => {
-      let next = [...prev]
-      for (const data of itemsWithCodes) {
-        const assignedId = data.id ?? newIdMap.get(data)!
-        // Bump logic for new Casual Shooting bookings
-        if (data.sessionType === 'Casual Shooting' && !data.id) {
-          const existing = next.filter(b =>
-            b.spaceId === data.spaceId &&
-            b.date === data.date &&
-            b.sessionType === 'Casual Shooting'
-          )
-          if (existing.length >= CASUAL_SHOOTING_MAX) {
-            const newPri = data.memberTier ? TIER_PRIORITY[data.memberTier] : TIER_PRIORITY.casual
-            const sorted = [...existing].sort((a, b_) => {
-              const pa = a.memberTier ? TIER_PRIORITY[a.memberTier] : TIER_PRIORITY.casual
-              const pb = b_.memberTier ? TIER_PRIORITY[b_.memberTier] : TIER_PRIORITY.casual
-              return pa - pb
-            })
-            const lowest = sorted[0]
-            const lowestPri = lowest.memberTier ? TIER_PRIORITY[lowest.memberTier] : TIER_PRIORITY.casual
-            if (newPri > lowestPri) {
-              next = next.filter(b => b.id !== lowest.id)
-              bumpedIdsForDeletion.push(lowest.id)
-              const athleteName = lowest.athletes[0] ?? 'A booking'
-              const fromLabel = lowest.memberTier
-                ? lowest.memberTier.charAt(0).toUpperCase() + lowest.memberTier.slice(1)
-                : 'Casual'
-              const toLabel = data.memberTier
-                ? data.memberTier.charAt(0).toUpperCase() + data.memberTier.slice(1)
-                : 'Casual'
-              bumpMsg = `${athleteName} was bumped from Casual Shooting — ${toLabel} tier replaced ${fromLabel}.`
-              next = [...next, { ...data, id: assignedId } as Booking]
-            }
-            continue
+    let nextBookings = [...bookings]
+    for (const data of itemsWithCodes) {
+      const assignedId = data.id ?? newIdMap.get(data)!
+      if (data.sessionType === 'Casual Shooting' && !data.id) {
+        const existing = nextBookings.filter(b =>
+          b.spaceId === data.spaceId && b.date === data.date && b.sessionType === 'Casual Shooting'
+        )
+        if (existing.length >= CASUAL_SHOOTING_MAX) {
+          const newPri = data.memberTier ? TIER_PRIORITY[data.memberTier] : TIER_PRIORITY.casual
+          const sorted = [...existing].sort((a, b_) => {
+            const pa = a.memberTier ? TIER_PRIORITY[a.memberTier] : TIER_PRIORITY.casual
+            const pb = b_.memberTier ? TIER_PRIORITY[b_.memberTier] : TIER_PRIORITY.casual
+            return pa - pb
+          })
+          const lowest = sorted[0]
+          const lowestPri = lowest.memberTier ? TIER_PRIORITY[lowest.memberTier] : TIER_PRIORITY.casual
+          if (newPri > lowestPri) {
+            nextBookings = nextBookings.filter(b => b.id !== lowest.id)
+            bumpedIdsForDeletion.push(lowest.id)
+            const athleteName = lowest.athletes[0] ?? 'A booking'
+            const fromLabel = lowest.memberTier ? lowest.memberTier.charAt(0).toUpperCase() + lowest.memberTier.slice(1) : 'Casual'
+            const toLabel   = data.memberTier   ? data.memberTier.charAt(0).toUpperCase()   + data.memberTier.slice(1)   : 'Casual'
+            bumpMsg = `${athleteName} was bumped from Casual Shooting — ${toLabel} tier replaced ${fromLabel}.`
+            nextBookings = [...nextBookings, { ...data, id: assignedId } as Booking]
           }
-        }
-        if (data.id) {
-          next = next.map(b => b.id === data.id ? { ...data, id: data.id! } as Booking : b)
-        } else {
-          next = [...next, { ...data, id: assignedId } as Booking]
+          continue
         }
       }
-      return next
-    })
+      if (data.id) {
+        nextBookings = nextBookings.map(b => b.id === data.id ? { ...data, id: data.id! } as Booking : b)
+      } else {
+        nextBookings = [...nextBookings, { ...data, id: assignedId } as Booking]
+      }
+    }
+
+    // Build Supabase upsert rows (same IDs as computed nextBookings)
+    const upsertRows = itemsWithCodes.map(data => ({
+      id:             data.id ?? newIdMap.get(data)!,
+      session_type:   data.sessionType,
+      space:          data.spaceId,
+      date:           data.date,
+      start_mins:     data.startMins,
+      duration_mins:  data.duration,
+      coach_id:       data.coach,
+      booking_type:   data.bookingType,
+      notes:          data.notes ?? null,
+      athlete_names:  data.athletes,
+      max_capacity:   data.capacity ?? 1,
+      series_id:      data.seriesId ?? null,
+      shareable_code: data.joinCode ?? null,
+      admin_override: data.adminOverride ?? false,
+      meta: {
+        memberTier:      data.memberTier,
+        enrolmentType:   data.enrolmentType,
+        pricePerSession: data.pricePerSession,
+        termLength:      data.termLength,
+      },
+    }))
+
+    // Write to Supabase FIRST — only update local state after DB confirms
+    if (bumpedIdsForDeletion.length > 0) {
+      await Promise.all(bumpedIdsForDeletion.map(id => supabase.from('bookings').delete().eq('id', id)))
+    }
+    const { error: upsertError } = await supabase.from('bookings').upsert(upsertRows, { onConflict: 'id' })
+    if (upsertError) {
+      console.error('[bookings] upsert failed:', upsertError)
+      showToast(`Failed to save booking: ${upsertError.message}`)
+      return // keep modal open
+    }
+
+    // Supabase succeeded — update local state and close modal
+    setBookings(nextBookings)
     setModal(null)
     if (bumpMsg) showToast(bumpMsg)
     if (firstNewJoinLink) setJoinLinkModal(firstNewJoinLink)
 
-    // Delete any bumped bookings from Supabase
-    bumpedIdsForDeletion.forEach(id => supabase.from('bookings').delete().eq('id', id))
-
-    // Persist new/updated bookings to Supabase (same IDs as local state via newIdMap)
-    const upsertRows = itemsWithCodes.map(data => ({
-      id:            data.id ?? newIdMap.get(data)!,
-      session_type:  data.sessionType,
-      space:         data.spaceId,
-      date:          data.date,
-      start_mins:    data.startMins,
-      duration_mins: data.duration,
-      coach_id:      data.coach,
-      booking_type:  data.bookingType,
-      notes:         data.notes ?? null,
-      athlete_names: data.athletes,
-      max_capacity:  data.capacity ?? 1,
-      series_id:     data.seriesId ?? null,
-      shareable_code: data.joinCode ?? null,
-      admin_override: data.adminOverride ?? false,
-      meta: {
-        memberTier:     data.memberTier,
-        enrolmentType:  data.enrolmentType,
-        pricePerSession: data.pricePerSession,
-        termLength:     data.termLength,
-      },
-    }))
-    supabase.from('bookings').upsert(upsertRows, { onConflict: 'id' })
-
     // Track credit usage for new member bookings
     const wk = getMondayKey(new Date())
     itemsWithCodes.forEach(item => {
-      if (item.id) return  // skip edits
+      if (item.id) return
       if (item.bookingType !== 'member') return
       const creditType = SESSION_TO_CREDIT[item.sessionType]
       if (!creditType) return
@@ -1407,22 +1409,55 @@ export default function BookingsPage() {
     })
   }
 
-  function handleDelete(id: string) {
+  async function handleDelete(id: string) {
+    const { error } = await supabase.from('bookings').delete().eq('id', id)
+    if (error) {
+      console.error('[bookings] delete failed:', error)
+      showToast(`Failed to delete booking: ${error.message}`)
+      return
+    }
     setBookings(prev => prev.filter(b => b.id !== id))
     setModal(null)
-    supabase.from('bookings').delete().eq('id', id)
   }
 
-  function handleDeleteFrom(seriesId: string, fromDate: string) {
-    setBookings(prev => {
-      const deleted = prev.filter(b => b.seriesId === seriesId && b.date >= fromDate)
-      deleted.forEach(b => supabase.from('bookings').delete().eq('id', b.id))
-      return prev.filter(b => !(b.seriesId === seriesId && b.date >= fromDate))
-    })
+  async function handleDeleteFrom(seriesId: string, fromDate: string) {
+    const { error } = await supabase.from('bookings').delete().eq('series_id', seriesId).gte('date', fromDate)
+    if (error) {
+      console.error('[bookings] series delete failed:', error)
+      showToast(`Failed to delete series: ${error.message}`)
+      return
+    }
+    setBookings(prev => prev.filter(b => !(b.seriesId === seriesId && b.date >= fromDate)))
     setModal(null)
   }
 
-  function handleSaveFrom(fromDate: string, seriesId: string, updates: Omit<Booking, 'id' | 'date' | 'seriesId'>) {
+  async function handleSaveFrom(fromDate: string, seriesId: string, updates: Omit<Booking, 'id' | 'date' | 'seriesId'>) {
+    const affected = bookings.filter(b => b.seriesId === seriesId && b.date >= fromDate)
+    const upsertRows = affected.map(b => ({
+      id:             b.id,
+      session_type:   updates.sessionType,
+      space:          updates.spaceId,
+      date:           b.date,
+      start_mins:     updates.startMins,
+      duration_mins:  updates.duration,
+      coach_id:       updates.coach,
+      booking_type:   updates.bookingType,
+      notes:          updates.notes ?? null,
+      athlete_names:  updates.athletes,
+      max_capacity:   updates.capacity ?? b.capacity ?? 1,
+      series_id:      b.seriesId ?? null,
+      shareable_code: b.joinCode ?? null,
+      admin_override: updates.adminOverride ?? false,
+      meta: {},
+    }))
+    if (upsertRows.length > 0) {
+      const { error } = await supabase.from('bookings').upsert(upsertRows, { onConflict: 'id' })
+      if (error) {
+        console.error('[bookings] series update failed:', error)
+        showToast(`Failed to update series: ${error.message}`)
+        return
+      }
+    }
     setBookings(prev => prev.map(b =>
       b.seriesId === seriesId && b.date >= fromDate ? { ...b, ...updates } : b
     ))
@@ -2511,10 +2546,10 @@ function BookingModal({
   modal: NonNullable<Modal>
   today: string
   onClose: () => void
-  onSave: (items: (Omit<Booking, 'id'> & { id?: string })[]) => void
-  onDelete: (id: string) => void
-  onDeleteFrom: (seriesId: string, fromDate: string) => void
-  onSaveFrom:   (fromDate: string, seriesId: string, updates: Omit<Booking, 'id' | 'date' | 'seriesId'>) => void
+  onSave: (items: (Omit<Booking, 'id'> & { id?: string })[]) => Promise<void>
+  onDelete: (id: string) => Promise<void>
+  onDeleteFrom: (seriesId: string, fromDate: string) => Promise<void>
+  onSaveFrom:   (fromDate: string, seriesId: string, updates: Omit<Booking, 'id' | 'date' | 'seriesId'>) => Promise<void>
   onEdit: (b: Booking) => void
   onEditSeries: (b: Booking) => void
   creditUsage: Record<string, number>
@@ -2540,6 +2575,7 @@ function BookingModal({
   const [repeat,      setRepeat]      = useState<'none' | 'weekly' | 'fortnightly' | 'monthly' | 'yearly'>('none')
   const [repeatUntil, setRepeatUntil] = useState('')
   const [bookingType, setBookingType] = useState<'member' | 'casual' | 'unavailable' | 'program'>('member')
+  const [saving,       setSaving]       = useState(false)
   const [seriesPrompt, setSeriesPrompt] = useState<'edit' | 'delete' | null>(null)
   const [seriesScope,  setSeriesScope]  = useState<'single' | 'future'>('single')
   const [casualAthletes, setCasualAthletes] = useState<CasualAthleteEntry[]>([newCasualAthlete()])
@@ -2630,59 +2666,67 @@ function BookingModal({
     setAthletes(prev => prev.includes(name) ? prev.filter(a => a !== name) : [...prev, name])
   }
 
-  function handleSave() {
+  async function handleSave() {
     const duration = Math.max(15, finishMins - startMins)
-
     const trimmedNotes = notes.trim() || undefined
-    if (bookingType === 'unavailable') {
-      const spaces = (modal.kind === 'add' && unavailableSpaces.length > 0) ? unavailableSpaces : [spaceId]
+    setSaving(true)
+    try {
+      if (bookingType === 'unavailable') {
+        const spaces = (modal.kind === 'add' && unavailableSpaces.length > 0) ? unavailableSpaces : [spaceId]
+        if (editSeriesFuture) {
+          await onSaveFrom(src!.date, src!.seriesId!, { spaceId, startMins, duration, sessionType, athletes: [], coach, bookingType: 'unavailable' as const, notes: trimmedNotes })
+        } else if (repeat === 'none' || !repeatUntil) {
+          await onSave(spaces.map((sid, i) => ({
+            spaceId: sid, startMins, duration, sessionType, athletes: [], coach,
+            bookingType: 'unavailable' as const, date,
+            id: i === 0 && modal.kind === 'edit' ? src?.id : undefined,
+            seriesId: modal.kind === 'edit' ? src?.seriesId : undefined,
+            notes: trimmedNotes,
+          })))
+        } else {
+          const newSeriesId = uid()
+          const dates = occurrenceDates(date, repeat, repeatUntil)
+          await onSave(spaces.flatMap(sid =>
+            dates.map(d => ({
+              spaceId: sid, startMins, duration, sessionType, athletes: [], coach,
+              bookingType: 'unavailable' as const, date: d, seriesId: newSeriesId,
+              notes: trimmedNotes,
+            }))
+          ))
+        }
+        return
+      }
+      const memberCasualNames = memberCasuals
+        .map(e => e.type === 'existing' ? e.existingId : e.name.trim())
+        .filter(Boolean)
+      const effectiveAthletes = isIndividual
+        ? (singleAthlete === 'other' ? (customAthlete.trim() ? [customAthlete.trim()] : []) : singleAthlete ? [singleAthlete] : [])
+        : [...athletes, ...memberCasualNames]
+      const base = { spaceId, startMins, duration, sessionType, athletes: effectiveAthletes, coach, bookingType, memberTier: memberTier || undefined, adminOverride: adminOverride || undefined, capacity: bookingType === 'program' ? capacity : undefined, notes: trimmedNotes, enrolmentType: bookingType === 'program' ? enrolmentType : undefined, pricePerSession: bookingType === 'program' ? pricePerSession : undefined, termLength: bookingType === 'program' ? effectiveTermLength : undefined }
       if (editSeriesFuture) {
-        onSaveFrom(src!.date, src!.seriesId!, { spaceId, startMins, duration, sessionType, athletes: [], coach, bookingType: 'unavailable' as const, notes: trimmedNotes })
+        await onSaveFrom(src!.date, src!.seriesId!, base)
       } else if (repeat === 'none' || !repeatUntil) {
-        onSave(spaces.map((sid, i) => ({
-          spaceId: sid, startMins, duration, sessionType, athletes: [], coach,
-          bookingType: 'unavailable' as const, date,
-          id: i === 0 && modal.kind === 'edit' ? src?.id : undefined,
-          seriesId: modal.kind === 'edit' ? src?.seriesId : undefined,
-          notes: trimmedNotes,
-        })))
+        await onSave([{ ...base, date, id: src?.id, seriesId: src?.seriesId }])
       } else {
         const newSeriesId = uid()
         const dates = occurrenceDates(date, repeat, repeatUntil)
-        onSave(spaces.flatMap(sid =>
-          dates.map(d => ({
-            spaceId: sid, startMins, duration, sessionType, athletes: [], coach,
-            bookingType: 'unavailable' as const, date: d, seriesId: newSeriesId,
-            notes: trimmedNotes,
-          }))
-        ))
+        await onSave(dates.map(d => ({ ...base, date: d, seriesId: newSeriesId })))
       }
-      return
-    }
-
-    const memberCasualNames = memberCasuals
-      .map(e => e.type === 'existing' ? e.existingId : e.name.trim())
-      .filter(Boolean)
-    const effectiveAthletes = isIndividual
-      ? (singleAthlete === 'other' ? (customAthlete.trim() ? [customAthlete.trim()] : []) : singleAthlete ? [singleAthlete] : [])
-      : [...athletes, ...memberCasualNames]
-    const base = { spaceId, startMins, duration, sessionType, athletes: effectiveAthletes, coach, bookingType, memberTier: memberTier || undefined, adminOverride: adminOverride || undefined, capacity: bookingType === 'program' ? capacity : undefined, notes: trimmedNotes, enrolmentType: bookingType === 'program' ? enrolmentType : undefined, pricePerSession: bookingType === 'program' ? pricePerSession : undefined, termLength: bookingType === 'program' ? effectiveTermLength : undefined }
-    if (editSeriesFuture) {
-      onSaveFrom(src!.date, src!.seriesId!, base)
-    } else if (repeat === 'none' || !repeatUntil) {
-      onSave([{ ...base, date, id: src?.id, seriesId: src?.seriesId }])
-    } else {
-      const newSeriesId = uid()
-      const dates = occurrenceDates(date, repeat, repeatUntil)
-      onSave(dates.map(d => ({ ...base, date: d, seriesId: newSeriesId })))
+    } finally {
+      setSaving(false)
     }
   }
 
-  function handleSeriesConfirm() {
+  async function handleSeriesConfirm() {
     if (!src || !seriesPrompt) return
     if (seriesPrompt === 'delete') {
-      if (seriesScope === 'single') onDelete(src.id)
-      else onDeleteFrom(src.seriesId!, src.date)
+      setSaving(true)
+      try {
+        if (seriesScope === 'single') await onDelete(src.id)
+        else await onDeleteFrom(src.seriesId!, src.date)
+      } finally {
+        setSaving(false)
+      }
     } else {
       setSeriesPrompt(null)
       setSeriesScope('single')
@@ -3976,17 +4020,18 @@ function BookingModal({
                     <button
                       type="button"
                       onClick={handleSave}
-                      disabled={isNewBooking && date < today}
+                      disabled={saving || (isNewBooking && date < today)}
                       title={isNewBooking && date < today ? 'Cannot book a session in the past' : undefined}
-                      className={`rounded-lg px-5 py-2 text-sm font-semibold text-white transition ${isNewBooking && date < today ? 'cursor-not-allowed opacity-50' : 'hover:opacity-90'}`}
+                      className={`rounded-lg px-5 py-2 text-sm font-semibold text-white transition ${saving || (isNewBooking && date < today) ? 'cursor-not-allowed opacity-50' : 'hover:opacity-90'}`}
                       style={{ backgroundColor: accentColor }}
                     >
-                      {(modal.kind === 'edit' || editSeriesFuture) ? 'Save Changes' : 'Create Booking'}
+                      {saving ? 'Saving…' : (modal.kind === 'edit' || editSeriesFuture) ? 'Save Changes' : 'Create Booking'}
                     </button>
                     <button
                       type="button"
                       onClick={onClose}
-                      className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50"
+                      disabled={saving}
+                      className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50 disabled:opacity-50"
                     >
                       Cancel
                     </button>
@@ -4007,19 +4052,20 @@ function BookingModal({
                   <button
                     type="button"
                     onClick={onClose}
-                    className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50"
+                    disabled={saving}
+                    className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50 disabled:opacity-50"
                   >
                     Cancel
                   </button>
                   <button
                     type="button"
                     onClick={handleSave}
-                    disabled={isNewBooking && date < today}
+                    disabled={saving || (isNewBooking && date < today)}
                     title={isNewBooking && date < today ? 'Cannot book a session in the past' : undefined}
-                    className={`rounded-lg px-5 py-2 text-sm font-semibold text-white transition ${isNewBooking && date < today ? 'cursor-not-allowed opacity-50' : 'hover:opacity-90'}`}
+                    className={`rounded-lg px-5 py-2 text-sm font-semibold text-white transition ${saving || (isNewBooking && date < today) ? 'cursor-not-allowed opacity-50' : 'hover:opacity-90'}`}
                     style={{ backgroundColor: accentColor }}
                   >
-                    {(modal.kind === 'edit' || editSeriesFuture) ? 'Save Changes' : bookingType === 'unavailable' ? 'Mark Unavailability' : bookingType === 'program' ? 'Save Program' : 'Create Booking'}
+                    {saving ? 'Saving…' : (modal.kind === 'edit' || editSeriesFuture) ? 'Save Changes' : bookingType === 'unavailable' ? 'Mark Unavailability' : bookingType === 'program' ? 'Save Program' : 'Create Booking'}
                   </button>
                 </div>
               )}

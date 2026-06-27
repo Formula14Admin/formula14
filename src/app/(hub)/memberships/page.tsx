@@ -538,6 +538,7 @@ export default function MembershipsPage() {
     if (patch.billing     !== undefined) dbPatch.billing_records     = patch.billing
     if (Object.keys(dbPatch).length > 0) {
       supabase.from('members').update(dbPatch).eq('id', id)
+        .then(({ error }) => { if (error) console.error('[members] update failed:', error) })
     }
   }
 
@@ -577,17 +578,11 @@ export default function MembershipsPage() {
       billing_records:     [billingRecord],
     }
     const { data, error } = await supabase.from('members').insert(payload).select().single()
+    if (error) {
+      console.error('[members] insert failed:', error)
+    }
     if (!error && data) {
       setMembers((prev) => [...prev, dbToMember(data)])
-    } else {
-      const m: Member = {
-        id: uid(), firstName: newFirst.trim(), lastName: newLast.trim(),
-        email: newEmail.trim(), plan, status: 'active',
-        started: newStarted, nextCharge: firstCharge,
-        outstanding: 0, sessionsThisMonth: 0, notes: newNotes.trim(),
-        billing: [billingRecord],
-      }
-      setMembers((prev) => [...prev, m])
     }
     setShowAddModal(false)
     setNewFirst(''); setNewLast(''); setNewEmail('')
