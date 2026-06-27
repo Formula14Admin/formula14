@@ -4354,7 +4354,7 @@ function BookingInformationTab() {
     : CANONICAL_SESSION_TYPES
 
   const FIELD_CLS  = 'h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-center text-sm text-gray-800 outline-none transition focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/40'
-  const FIELD_AREA = 'w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-800 outline-none transition resize-none focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/40'
+  const FIELD_AREA = 'w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-center text-sm text-gray-800 outline-none transition resize-none focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/40'
   const LBL_CLS    = 'mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-400 text-center'
   const DURATION_OPTIONS_BIT = Array.from({ length: 24 }, (_, i) => {
     const mins = (i + 1) * 15
@@ -4578,7 +4578,7 @@ function BookingInformationTab() {
       {editingId !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl">
-            <div className="flex items-center justify-between border-b border-gray-100 bg-white px-6 py-4">
+            <div className="relative flex items-center justify-center border-b border-gray-100 bg-white px-6 py-4">
               <h3 className="text-base font-bold text-gray-900">
                 Edit — {editIsProg
                   ? catalogue.find(p => p.id === editingId)?.name
@@ -4586,7 +4586,7 @@ function BookingInformationTab() {
                 }
               </h3>
               <button onClick={() => setEditingId(null)}
-                className="rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100">
+                className="absolute right-4 rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100">
                 <IconX size={18} />
               </button>
             </div>
@@ -4609,27 +4609,27 @@ function BookingInformationTab() {
                     </div>
                     <div>
                       <label className={LBL_CLS}>Duration</label>
-                      <select value={editDraft.durationMins}
-                        onChange={e => setEditDraft(d => ({ ...d, durationMins: e.target.value }))}
-                        className={FIELD_CLS + ' cursor-pointer'}>
-                        {DURATION_OPTIONS_BIT.map(opt => (
-                          <option key={opt.value} value={String(opt.value)}>{opt.label}</option>
-                        ))}
-                      </select>
+                      <SelectPicker
+                        value={editDraft.durationMins}
+                        onChange={v => setEditDraft(d => ({ ...d, durationMins: v }))}
+                        options={DURATION_OPTIONS_BIT.map(opt => ({ value: String(opt.value), label: opt.label }))}
+                        panelMaxHeight={220}
+                      />
                     </div>
                     <div>
                       <label className={LBL_CLS}>Session Style</label>
-                      <select value={editDraft.style}
-                        onChange={e => setEditDraft(d => ({ ...d, style: e.target.value }))}
-                        className={FIELD_CLS + ' cursor-pointer'}>
-                        <option value="Coached">Coached</option>
-                        <option value="Self-serve">Self-serve</option>
-                        <option value="Membership credit">Membership credit</option>
-                      </select>
+                      <SelectPicker
+                        value={editDraft.style}
+                        onChange={v => setEditDraft(d => ({ ...d, style: v }))}
+                        options={[
+                          { value: 'Coached', label: 'Coached' },
+                          { value: 'Self-serve', label: 'Self-serve' },
+                          { value: 'Membership credit', label: 'Membership credit' },
+                        ]}
+                      />
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2.5">
-                    <IconInfoCircle size={13} className="shrink-0 text-blue-400" />
+                  <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2.5 text-center">
                     <p className="text-xs text-blue-600">Pricing is managed in <strong>Pricing &amp; Payments → Pricing Config</strong></p>
                   </div>
                 </>
@@ -4658,8 +4658,7 @@ function BookingInformationTab() {
                         placeholder="#6BA3D6" className={FIELD_CLS} />
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2.5">
-                    <IconInfoCircle size={13} className="shrink-0 text-blue-400" />
+                  <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2.5 text-center">
                     <p className="text-xs text-blue-600">Pricing &amp; capacity are managed in <strong>Pricing &amp; Payments → Pricing Config</strong></p>
                   </div>
                 </>
