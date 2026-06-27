@@ -443,6 +443,7 @@ function Toggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
 
 export default function PricingPage() {
   const pricingInitialisedFromDb = useRef(false)
+  const pricingSkipFirstWrite = useRef(true)
   const [pricingConfigs, setPricingConfigs] = useState<SessionPricingConfig[]>(INIT_PRICING)
   const [editingPricing, setEditingPricing] = useState<string | null>(null)
   const [editTiers, setEditTiers] = useState<PricingTier[]>([])
@@ -722,8 +723,22 @@ export default function PricingPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // On mount: restore from localStorage before Supabase responds (avoids INIT_PRICING flash)
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(PRICING_CONFIGS_LS)
+      if (raw) {
+        const cached = JSON.parse(raw) as SessionPricingConfig[]
+        if (cached.length > 0 && !pricingInitialisedFromDb.current) setPricingConfigs(cached)
+      }
+    } catch {}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   useEffect(() => {
     if (typeof window === 'undefined') return
+    // Skip first write: INIT_PRICING must not overwrite valid data already in localStorage
+    if (pricingSkipFirstWrite.current) { pricingSkipFirstWrite.current = false; return }
     localStorage.setItem(PRICING_CONFIGS_LS, JSON.stringify(pricingConfigs))
     // Sync each config back to Supabase
     if (pricingInitialisedFromDb.current) {

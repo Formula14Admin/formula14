@@ -4,8 +4,10 @@ import { createClient } from '@supabase/supabase-js'
 
 // Server-side Supabase client (uses anon key; authenticate_user is SECURITY DEFINER)
 const supabaseAuth = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  process.env.NEXT_PUBLIC_SUPABASE_URL
+    || 'https://dydrtbrhhgyppancbhpy.supabase.co',
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR5ZHJ0YnJoaGd5cHBhbmNiaHB5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI1MjQzODIsImV4cCI6MjA5ODEwMDM4Mn0.46LZMlaoN_ts2Dsur9ma2lBsMLMaC0wvhN7njrRlcGc'
 )
 
 // Fallback users for development before migrations are run

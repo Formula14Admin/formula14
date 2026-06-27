@@ -469,20 +469,45 @@ export default function MembershipsPage() {
   const [newStarted, setNewStarted] = useState('')
   const [newNotes, setNewNotes] = useState('')
 
-  // Load members from Supabase; fall back to seed data if table is empty
+  const MEMBERS_CACHE_KEY = 'f14_members_cache'
+
+  // Keep localStorage cache in sync so data survives refreshes even if Supabase is slow
   useEffect(() => {
-    supabase
-      .from('members')
-      .select('*')
-      .order('last_name')
-      .then(({ data, error }) => {
+    if (members.length > 0) {
+      try { localStorage.setItem(MEMBERS_CACHE_KEY, JSON.stringify(members)) } catch {}
+    }
+  }, [members])
+
+  // Load members: show cache immediately, then refresh from Supabase
+  useEffect(() => {
+    void (async () => {
+      let hasCache = false
+      try {
+        const raw = localStorage.getItem(MEMBERS_CACHE_KEY)
+        if (raw) {
+          const cached = JSON.parse(raw) as Member[]
+          if (cached.length > 0) { setMembers(cached); hasCache = true }
+        }
+      } catch {}
+
+      try {
+        const { data, error } = await supabase
+          .from('members')
+          .select('*')
+          .order('last_name')
+        if (error) console.error('[members] Supabase error:', error)
         if (!error && data && data.length > 0) {
           setMembers(data.map(dbToMember))
-        } else {
+        } else if (!hasCache) {
           setMembers(INIT_MEMBERS)
         }
+      } catch (err) {
+        console.error('[members] fetch failed:', err)
+        if (!hasCache) setMembers(INIT_MEMBERS)
+      } finally {
         setLoading(false)
-      })
+      }
+    })()
   }, [])
 
   const selectedMember = members.find((m) => m.id === selectedId) ?? null

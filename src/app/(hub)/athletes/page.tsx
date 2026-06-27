@@ -517,20 +517,45 @@ export default function AthletesPage() {
   const [showAddModal, setShowAddModal] = useState(false)
   const [form, setForm] = useState<NewAthleteForm>(blankForm())
 
-  // Load athletes from Supabase; fall back to seed data if table is empty
+  const ATHLETES_CACHE_KEY = 'f14_athletes_cache'
+
+  // Keep localStorage cache in sync so data survives refreshes even if Supabase is slow
   useEffect(() => {
-    supabase
-      .from('athletes')
-      .select('*')
-      .order('last_name')
-      .then(({ data, error }) => {
+    if (athletes.length > 0) {
+      try { localStorage.setItem(ATHLETES_CACHE_KEY, JSON.stringify(athletes)) } catch {}
+    }
+  }, [athletes])
+
+  // Load athletes: show cache immediately, then refresh from Supabase
+  useEffect(() => {
+    void (async () => {
+      let hasCache = false
+      try {
+        const raw = localStorage.getItem(ATHLETES_CACHE_KEY)
+        if (raw) {
+          const cached = JSON.parse(raw) as Athlete[]
+          if (cached.length > 0) { setAthletes(cached); hasCache = true }
+        }
+      } catch {}
+
+      try {
+        const { data, error } = await supabase
+          .from('athletes')
+          .select('*')
+          .order('last_name')
+        if (error) console.error('[athletes] Supabase error:', error)
         if (!error && data && data.length > 0) {
           setAthletes(data.map(dbToAthlete))
-        } else {
+        } else if (!hasCache) {
           setAthletes(INIT_ATHLETES)
         }
+      } catch (err) {
+        console.error('[athletes] fetch failed:', err)
+        if (!hasCache) setAthletes(INIT_ATHLETES)
+      } finally {
         setLoading(false)
-      })
+      }
+    })()
   }, [])
 
   const selected = athletes.find((a) => a.id === selectedId) ?? null
