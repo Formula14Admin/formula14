@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
+import { supabase } from '@/lib/supabase'
 import {
   IconLock,
   IconLockOpen,
@@ -441,6 +442,7 @@ function Toggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function PricingPage() {
+  const pricingInitialisedFromDb = useRef(false)
   const [pricingConfigs, setPricingConfigs] = useState<SessionPricingConfig[]>(INIT_PRICING)
   const [editingPricing, setEditingPricing] = useState<string | null>(null)
   const [editTiers, setEditTiers] = useState<PricingTier[]>([])
@@ -698,9 +700,44 @@ export default function PricingPage() {
     localStorage.setItem('f14_program_catalogue', JSON.stringify(catalogue))
   }, [catalogue])
 
+  // On mount: load pricing configs from Supabase if available
+  useEffect(() => {
+    supabase
+      .from('session_types')
+      .select('*')
+      .then(({ data, error }) => {
+        if (!error && data && data.length > 0 && !pricingInitialisedFromDb.current) {
+          pricingInitialisedFromDb.current = true
+          const configs: SessionPricingConfig[] = data.map(row => ({
+            sessionType:  row.session_type_id,
+            tiers:        (row.tiers as PricingTier[]) ?? [],
+            durationMins: row.duration_minutes ?? 60,
+          }))
+          setPricingConfigs(configs)
+          if (typeof window !== 'undefined') {
+            localStorage.setItem(PRICING_CONFIGS_LS, JSON.stringify(configs))
+          }
+        }
+      })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   useEffect(() => {
     if (typeof window === 'undefined') return
     localStorage.setItem(PRICING_CONFIGS_LS, JSON.stringify(pricingConfigs))
+    // Sync each config back to Supabase
+    if (pricingInitialisedFromDb.current) {
+      pricingConfigs.forEach(config => {
+        supabase
+          .from('session_types')
+          .upsert({
+            session_type_id:  config.sessionType,
+            name:             config.sessionType,
+            tiers:            config.tiers,
+            duration_minutes: config.durationMins ?? 60,
+          }, { onConflict: 'session_type_id' })
+      })
+    }
   }, [pricingConfigs])
 
   function saveProg(item: ProgramCatalogueItem) {

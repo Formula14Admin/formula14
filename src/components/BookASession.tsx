@@ -274,26 +274,26 @@ function CalendarPicker({
   }
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-      <div className="mb-4 flex items-center justify-between">
+    <div className="rounded-2xl border border-gray-200 bg-white p-7 shadow-sm">
+      <div className="mb-7 flex items-center justify-between">
         <button type="button" onClick={() => nav(-1)}
-          className="rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100">
-          <IconChevronLeft size={18} />
+          className="rounded-lg p-2 text-gray-400 transition hover:bg-gray-100">
+          <IconChevronLeft size={22} />
         </button>
-        <span className="text-sm font-bold text-gray-900">
+        <span className="text-xl font-bold text-gray-900">
           {MONTHS_LONG[month.getMonth()]} {month.getFullYear()}
         </span>
         <button type="button" onClick={() => nav(1)}
-          className="rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100">
-          <IconChevronRight size={18} />
+          className="rounded-lg p-2 text-gray-400 transition hover:bg-gray-100">
+          <IconChevronRight size={22} />
         </button>
       </div>
-      <div className="mb-1.5 grid grid-cols-7 text-center">
+      <div className="mb-3 grid grid-cols-7 text-center">
         {DOW_SHORT.map(d => (
-          <p key={d} className="text-[10px] font-bold uppercase tracking-wide text-gray-400">{d}</p>
+          <p key={d} className="text-xs font-bold uppercase tracking-wide text-gray-400">{d}</p>
         ))}
       </div>
-      <div className="grid grid-cols-7 gap-y-1">
+      <div className="grid grid-cols-7 gap-y-2">
         {cells.map((iso, i) => {
           if (!iso) return <div key={i} />
           const day = parseInt(iso.slice(8), 10)
@@ -303,7 +303,7 @@ function CalendarPicker({
           return (
             <button key={iso} type="button" disabled={!available}
               onClick={() => onSelectDate(iso)}
-              className={`mx-auto flex h-9 w-9 items-center justify-center rounded-full text-sm font-medium transition
+              className={`mx-auto flex h-12 w-12 items-center justify-center rounded-full text-base font-medium transition
                 ${isSel ? 'font-bold text-white'
                   : available ? 'text-gray-800 hover:bg-[#6BA3D6]/10'
                   : 'cursor-not-allowed text-gray-300'}`}
@@ -1217,23 +1217,26 @@ export function BookASession({
               {/* ── Date & Time ───────────────────────────────────────────── */}
               {step === 'datetime' && selectedType && typeId && (
                 <div>
-                  <BackBtn onClick={() => {
-                    if (typeId === 'small-group') setStep('sgs-choice')
-                    else resetFlow()
-                  }} />
-                  <h2 className="mb-1 text-xl font-bold text-gray-900">{selectedType.label}</h2>
-                  <p className="mb-6 text-sm text-gray-500">
-                    Select a date, then choose a time slot.
-                    {typeId === 'small-group' && sgsFlow === 'book-new' && (
-                      <span className="ml-1 text-[#6BA3D6]">
-                        Existing sessions with spots are shown — select one to join, or pick a new slot.
-                      </span>
-                    )}
-                  </p>
+                  {/* Slim header bar: back + session name */}
+                  <div className="mb-6 flex items-center gap-3">
+                    <button type="button"
+                      onClick={() => { if (typeId === 'small-group') setStep('sgs-choice'); else resetFlow() }}
+                      className="flex shrink-0 items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-600 shadow-sm transition hover:bg-gray-50">
+                      <IconChevronLeft size={15} />
+                      Back
+                    </button>
+                    <div className="min-w-0">
+                      <h2 className="text-xl font-bold leading-tight text-gray-900">{selectedType.label}</h2>
+                      {typeId === 'small-group' && sgsFlow === 'book-new' && (
+                        <p className="text-xs text-[#6BA3D6]">Existing sessions with spots are shown — select one to join, or pick a new slot.</p>
+                      )}
+                    </div>
+                  </div>
 
-                  <div className="flex flex-col gap-5 lg:flex-row">
-                    {/* Calendar */}
-                    <div className="w-full shrink-0 lg:w-[300px]">
+                  {/* Calendar (left, ~65%) + Slots panel (right, ~35%) */}
+                  <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
+                    {/* Calendar — dominant element */}
+                    <div className="min-w-0 flex-1">
                       <CalendarPicker
                         month={calMonth} setMonth={setCalMonth}
                         selectedDate={selectedDate}
@@ -1242,45 +1245,52 @@ export function BookASession({
                       />
                     </div>
 
-                    {/* Slots */}
-                    <div className="flex-1">
-                      {!selectedDate ? (
-                        <div className="flex h-48 items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white text-sm text-gray-400">
-                          Select a date to see available times
-                        </div>
-                      ) : (
-                        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-                          <p className="mb-4 text-sm font-bold text-gray-900">
-                            {displayDate(selectedDate, { weekday: 'long', day: 'numeric', month: 'long' })}
-                          </p>
-                          {slotsForDate.length === 0 ? (
-                            <p className="text-sm text-gray-400">No slots available on this day.</p>
-                          ) : (
-                            <div className="flex flex-wrap gap-2">
-                              {slotsForDate.map(slot => {
-                                const isSel = selectedSlot?.startMins === slot.startMins
-                                const isExisting = slot.isSgsExisting
-                                return (
-                                  <button key={`${slot.startMins}-${isExisting}`} type="button"
-                                    onClick={() => { setSelectedSlot(slot); setTimeout(() => setStep('confirm'), 150) }}
-                                    className={`flex flex-col rounded-xl border px-4 py-2.5 text-sm transition ${isSel ? 'text-white' : 'border-gray-200 bg-white text-gray-700 hover:border-[#6BA3D6] hover:bg-[#6BA3D6]/5'}`}
-                                    style={isSel ? { backgroundColor: ACCENT, borderColor: ACCENT } : undefined}>
-                                    <span className="font-semibold">{minsToLabel(slot.startMins)}</span>
-                                    {isExisting && slot.spotsLeft !== undefined && (
-                                      <span className={`mt-0.5 text-[11px] font-medium ${isSel ? 'text-white/80' : 'text-[#6BA3D6]'}`}>
-                                        Existing session — {slot.spotsLeft} spot{slot.spotsLeft !== 1 ? 's' : ''} left
-                                      </span>
-                                    )}
-                                    {!isExisting && typeId === 'small-group' && (
-                                      <span className={`mt-0.5 text-[11px] ${isSel ? 'text-white/70' : 'text-gray-400'}`}>New session</span>
-                                    )}
-                                  </button>
-                                )
-                              })}
+                    {/* Slots panel — right side, sticky */}
+                    <div className="w-full shrink-0 lg:sticky lg:top-4 lg:w-72">
+                      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+                        {!selectedDate ? (
+                          <div className="flex h-48 items-center justify-center p-5 text-sm text-gray-400">
+                            Select a date to see available times
+                          </div>
+                        ) : (
+                          <>
+                            <div className="border-b border-gray-100 px-5 py-4">
+                              <p className="text-sm font-bold text-gray-900">
+                                {displayDate(selectedDate, { weekday: 'long', day: 'numeric', month: 'long' })}
+                              </p>
                             </div>
-                          )}
-                        </div>
-                      )}
+                            <div className="max-h-[420px] space-y-2 overflow-y-auto p-3">
+                              {slotsForDate.length === 0 ? (
+                                <p className="py-6 text-center text-sm text-gray-400">No slots available on this day.</p>
+                              ) : (
+                                slotsForDate.map(slot => {
+                                  const isSel = selectedSlot?.startMins === slot.startMins
+                                  const isExisting = slot.isSgsExisting
+                                  return (
+                                    <button key={`${slot.startMins}-${isExisting}`} type="button"
+                                      onClick={() => { setSelectedSlot(slot); setTimeout(() => setStep('confirm'), 150) }}
+                                      className={`flex w-full items-center justify-between rounded-xl border px-4 py-3 text-sm transition ${isSel ? 'text-white' : 'border-gray-200 bg-white text-gray-700 hover:border-[#6BA3D6] hover:bg-[#6BA3D6]/5'}`}
+                                      style={isSel ? { backgroundColor: ACCENT, borderColor: ACCENT } : undefined}>
+                                      <div className="text-left">
+                                        <span className="block font-semibold">{minsToLabel(slot.startMins)}</span>
+                                        {isExisting && slot.spotsLeft !== undefined && (
+                                          <span className={`mt-0.5 block text-[11px] font-medium ${isSel ? 'text-white/80' : 'text-[#6BA3D6]'}`}>
+                                            Existing · {slot.spotsLeft} spot{slot.spotsLeft !== 1 ? 's' : ''} left
+                                          </span>
+                                        )}
+                                        {!isExisting && typeId === 'small-group' && (
+                                          <span className={`mt-0.5 block text-[11px] ${isSel ? 'text-white/70' : 'text-gray-400'}`}>New session</span>
+                                        )}
+                                      </div>
+                                      <span className={`h-2 w-2 shrink-0 rounded-full ${isSel ? 'bg-white/60' : 'bg-green-400'}`} />
+                                    </button>
+                                  )
+                                })
+                              )}
+                            </div>
+                          </>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>

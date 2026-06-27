@@ -1,10 +1,18 @@
 import type { NextAuthOptions } from 'next-auth'
 import CredentialsProvider from 'next-auth/providers/credentials'
+import { createClient } from '@supabase/supabase-js'
 
-const USERS = [
-  { id: '1', name: 'Matt',   email: 'matt@formula14.com.au',   password: 'Formula14Matt!', role: 'admin'   },
-  { id: '2', name: 'Jade',   email: 'jade@formula14.com.au',   password: 'Formula14Jade!', role: 'admin'   },
-  { id: '3', name: 'Jordan', email: 'jordan@formula14.com.au', password: 'Athlete123!',     role: 'athlete' },
+// Server-side Supabase client (uses anon key; authenticate_user is SECURITY DEFINER)
+const supabaseAuth = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
+
+// Fallback users for development before migrations are run
+const FALLBACK_USERS = [
+  { id: '1', name: 'Matt',   email: 'matt@formula14.com.au',   password: 'Formula14Matt!', role: 'director' },
+  { id: '2', name: 'Jade',   email: 'jade@formula14.com.au',   password: 'Formula14Jade!', role: 'director' },
+  { id: '3', name: 'Jordan', email: 'jordan@formula14.com.au', password: 'Athlete123!',     role: 'athlete'  },
 ]
 
 // Use secure cookies whenever we're in production, regardless of NEXTAUTH_URL.
@@ -20,10 +28,36 @@ export const authOptions: NextAuthOptions = {
         password: { label: 'Password', type: 'password' },
       },
       async authorize(credentials) {
-        const user = USERS.find(
-          (u) => u.email === credentials?.email && u.password === credentials?.password
+        if (!credentials?.email || !credentials?.password) return null
+
+        // Try Supabase first (authenticate_user RPC uses bcrypt via pgcrypto)
+        try {
+          const { data, error } = await supabaseAuth.rpc('authenticate_user', {
+            p_email:    credentials.email,
+            p_password: credentials.password,
+          })
+          if (!error && data && data.length > 0) {
+            const u = data[0]
+            return {
+              id:   u.id,
+              name: `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim() || u.email,
+              email: u.email,
+              role:  u.role,
+            }
+          }
+        } catch {
+          // Supabase unavailable — fall through to local fallback
+        }
+
+        // Fallback: hardcoded users (used before migrations are run)
+        const fallback = FALLBACK_USERS.find(
+          (u) => u.email === credentials.email && u.password === credentials.password
         )
-        return user ?? null
+        if (fallback) {
+          return { id: fallback.id, name: fallback.name, email: fallback.email, role: fallback.role }
+        }
+
+        return null
       },
     }),
   ],

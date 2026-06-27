@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
+import { supabase } from '@/lib/supabase'
 import {
   IconX,
   IconSearch,
@@ -469,16 +470,68 @@ function blankForm(): NewAthleteForm {
   }
 }
 
+// ─── Supabase mapping ─────────────────────────────────────────────────────────
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function dbToAthlete(row: any): Athlete {
+  return {
+    id:             row.id,
+    firstName:      row.first_name  ?? '',
+    lastName:       row.last_name   ?? '',
+    email:          row.email       ?? '',
+    phone:          row.phone       ?? '',
+    dob:            row.date_of_birth ?? '',
+    gender:         (row.gender as Gender) ?? 'Male',
+    position:       (row.position as Position) ?? '',
+    repClub:        row.rep_club    ?? '',
+    school:         row.school      ?? '',
+    joined:         (row.created_at ?? '').slice(0, 10),
+    membership: {
+      plan:   (row.membership_tier   as MembershipPlan)   ?? null,
+      status: (row.membership_status as MembershipStatus) ?? null,
+    },
+    sessionsTotal:      row.sessions_total       ?? 0,
+    sessionsThisMonth:  row.sessions_this_month  ?? 0,
+    lastSession:        row.last_session_date    ?? null,
+    goals:              row.goals       ?? '',
+    coachNotes:         row.coach_notes ?? '',
+    emergency: {
+      name:         row.emergency_contact_name         ?? '',
+      phone:        row.emergency_contact_phone        ?? '',
+      relationship: row.emergency_contact_relationship ?? '',
+    },
+    recentSessions: [],
+  }
+}
+
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function AthletesPage() {
-  const [athletes, setAthletes] = useState<Athlete[]>(INIT_ATHLETES)
+  const [athletes, setAthletes] = useState<Athlete[]>([])
+  const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'member' | 'casual'>('all')
   const [posFilter, setPosFilter] = useState<Position | 'all'>('all')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
   const [form, setForm] = useState<NewAthleteForm>(blankForm())
+
+  // Load athletes from Supabase; fall back to seed data if table is empty
+  useEffect(() => {
+    supabase
+      .from('athletes')
+      .select('*')
+      .order('last_name')
+      .then(({ data, error }) => {
+        if (!error && data && data.length > 0) {
+          setAthletes(data.map(dbToAthlete))
+        } else {
+          setAthletes(INIT_ATHLETES)
+        }
+        setLoading(false)
+      })
+  }, [])
 
   const selected = athletes.find((a) => a.id === selectedId) ?? null
 
@@ -509,40 +562,75 @@ export default function AthletesPage() {
 
   function updateAthlete(id: string, patch: Partial<Athlete>) {
     setAthletes((prev) => prev.map((a) => (a.id === id ? { ...a, ...patch } : a)))
+    // Persist to Supabase (fire-and-forget optimistic update)
+    const dbPatch: Record<string, unknown> = {}
+    if (patch.firstName  !== undefined) dbPatch.first_name   = patch.firstName
+    if (patch.lastName   !== undefined) dbPatch.last_name    = patch.lastName
+    if (patch.email      !== undefined) dbPatch.email        = patch.email
+    if (patch.phone      !== undefined) dbPatch.phone        = patch.phone
+    if (patch.dob        !== undefined) dbPatch.date_of_birth = patch.dob || null
+    if (patch.gender     !== undefined) dbPatch.gender       = patch.gender
+    if (patch.position   !== undefined) dbPatch.position     = patch.position
+    if (patch.repClub    !== undefined) dbPatch.rep_club     = patch.repClub
+    if (patch.school     !== undefined) dbPatch.school       = patch.school
+    if (patch.goals      !== undefined) dbPatch.goals        = patch.goals
+    if (patch.coachNotes !== undefined) dbPatch.coach_notes  = patch.coachNotes
+    if (patch.membership !== undefined) {
+      dbPatch.membership_tier   = patch.membership.plan
+      dbPatch.membership_status = patch.membership.status
+    }
+    if (patch.emergency !== undefined) {
+      dbPatch.emergency_contact_name         = patch.emergency.name
+      dbPatch.emergency_contact_phone        = patch.emergency.phone
+      dbPatch.emergency_contact_relationship = patch.emergency.relationship
+    }
+    if (Object.keys(dbPatch).length > 0) {
+      supabase.from('athletes').update(dbPatch).eq('id', id)
+    }
   }
 
   function patchForm(patch: Partial<NewAthleteForm>) {
     setForm((f) => ({ ...f, ...patch }))
   }
 
-  function handleAddAthlete() {
+  async function handleAddAthlete() {
     if (!form.firstName.trim() || !form.lastName.trim() || !form.dob) return
-    const a: Athlete = {
-      id: uid(),
-      firstName: form.firstName.trim(),
-      lastName: form.lastName.trim(),
-      email: form.email.trim(),
-      phone: form.phone.trim(),
-      dob: form.dob,
-      gender: form.gender,
-      position: form.position,
-      repClub: form.repClub.trim(),
-      school: form.school.trim(),
-      joined: new Date().toISOString().slice(0, 10),
-      membership: { plan: null, status: null },
-      sessionsTotal: 0,
-      sessionsThisMonth: 0,
-      lastSession: null,
-      goals: form.goals.trim(),
-      coachNotes: form.notes.trim(),
-      emergency: {
-        name: form.emergencyName.trim(),
-        phone: form.emergencyPhone.trim(),
-        relationship: form.emergencyRel.trim(),
-      },
-      recentSessions: [],
+    const payload = {
+      first_name:                    form.firstName.trim(),
+      last_name:                     form.lastName.trim(),
+      email:                         form.email.trim(),
+      phone:                         form.phone.trim(),
+      date_of_birth:                 form.dob || null,
+      gender:                        form.gender,
+      position:                      form.position,
+      rep_club:                      form.repClub.trim(),
+      school:                        form.school.trim(),
+      goals:                         form.goals.trim(),
+      coach_notes:                   form.notes.trim(),
+      emergency_contact_name:        form.emergencyName.trim(),
+      emergency_contact_phone:       form.emergencyPhone.trim(),
+      emergency_contact_relationship: form.emergencyRel.trim(),
     }
-    setAthletes((prev) => [...prev, a])
+    const { data, error } = await supabase.from('athletes').insert(payload).select().single()
+    if (!error && data) {
+      setAthletes((prev) => [...prev, dbToAthlete(data)])
+    } else {
+      // Fallback: add locally with a temporary ID
+      const a: Athlete = {
+        id: uid(),
+        firstName: form.firstName.trim(), lastName: form.lastName.trim(),
+        email: form.email.trim(), phone: form.phone.trim(),
+        dob: form.dob, gender: form.gender, position: form.position,
+        repClub: form.repClub.trim(), school: form.school.trim(),
+        joined: new Date().toISOString().slice(0, 10),
+        membership: { plan: null, status: null },
+        sessionsTotal: 0, sessionsThisMonth: 0, lastSession: null,
+        goals: form.goals.trim(), coachNotes: form.notes.trim(),
+        emergency: { name: form.emergencyName.trim(), phone: form.emergencyPhone.trim(), relationship: form.emergencyRel.trim() },
+        recentSessions: [],
+      }
+      setAthletes((prev) => [...prev, a])
+    }
     setShowAddModal(false)
     setForm(blankForm())
   }
@@ -550,6 +638,12 @@ export default function AthletesPage() {
   function openAthlete(id: string) {
     setSelectedId((prev) => (prev === id ? null : id))
   }
+
+  if (loading) return (
+    <div className="flex min-h-screen items-center justify-center" style={{ backgroundColor: '#f4f6f9' }}>
+      <div className="text-sm text-gray-400">Loading athletes…</div>
+    </div>
+  )
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#f4f6f9' }}>

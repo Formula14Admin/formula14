@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
+import { supabase } from '@/lib/supabase'
 import { CANONICAL_SESSION_TYPES } from '@/lib/sessionTypes'
 import {
   IconChevronLeft,
@@ -595,6 +596,7 @@ export default function BookingsPage() {
   const today = ds(new Date())
 
   const [bookings,   setBookings]   = useState<Booking[]>(() => makeSamples(today))
+  const bookingsLoadedFromDb = useRef(false)
   const [creditUsage, setCreditUsage] = useState<Record<string, number>>(() => {
     const wk = getMondayKey(new Date())
     return {
@@ -654,6 +656,38 @@ export default function BookingsPage() {
     if (typeof window === 'undefined') return
     const raw = localStorage.getItem('f14_program_catalogue')
     if (raw) { try { const p = JSON.parse(raw); if (p.length) setCatalogue(p) } catch {} }
+  }, [])
+
+  // Load bookings from Supabase on mount (use DB data if available; otherwise keep sample data)
+  useEffect(() => {
+    supabase
+      .from('bookings')
+      .select('*')
+      .gte('date', new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10))
+      .order('date')
+      .then(({ data, error }) => {
+        if (!error && data && data.length > 0 && !bookingsLoadedFromDb.current) {
+          bookingsLoadedFromDb.current = true
+          setBookings(data.map(row => ({
+            id:          row.id,
+            date:        row.date,
+            spaceId:     (row.space ?? 'primary') as SpaceId,
+            startMins:   row.start_mins ?? 0,
+            duration:    row.duration_mins ?? 60,
+            sessionType: row.session_type,
+            athletes:    (row.athlete_names as string[]) ?? [],
+            coach:       (row.coach_id ?? '') as Booking['coach'],
+            bookingType: (row.booking_type ?? 'member') as Booking['bookingType'],
+            notes:       row.notes ?? '',
+            capacity:    row.max_capacity ?? 1,
+            seriesId:    row.series_id ?? undefined,
+            joinCode:    row.shareable_code ?? undefined,
+            adminOverride: row.admin_override ?? false,
+            ...(row.meta ?? {}),
+          })))
+        }
+      })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const gridRef = useRef<HTMLDivElement>(null)
@@ -1306,6 +1340,31 @@ export default function BookingsPage() {
     if (bumpMsg) showToast(bumpMsg)
     if (firstNewJoinLink) setJoinLinkModal(firstNewJoinLink)
 
+    // Persist new/updated bookings to Supabase
+    const upsertRows = itemsWithCodes.map(data => ({
+      id:            data.id ?? uid(),
+      session_type:  data.sessionType,
+      space:         data.spaceId,
+      date:          data.date,
+      start_mins:    data.startMins,
+      duration_mins: data.duration,
+      coach_id:      data.coach,
+      booking_type:  data.bookingType,
+      notes:         data.notes ?? null,
+      athlete_names: data.athletes,
+      max_capacity:  data.capacity ?? 1,
+      series_id:     data.seriesId ?? null,
+      shareable_code: data.joinCode ?? null,
+      admin_override: data.adminOverride ?? false,
+      meta: {
+        memberTier:     data.memberTier,
+        enrolmentType:  data.enrolmentType,
+        pricePerSession: data.pricePerSession,
+        termLength:     data.termLength,
+      },
+    }))
+    supabase.from('bookings').upsert(upsertRows, { onConflict: 'id' })
+
     // Track credit usage for new member bookings
     const wk = getMondayKey(new Date())
     itemsWithCodes.forEach(item => {
@@ -1324,10 +1383,15 @@ export default function BookingsPage() {
   function handleDelete(id: string) {
     setBookings(prev => prev.filter(b => b.id !== id))
     setModal(null)
+    supabase.from('bookings').delete().eq('id', id)
   }
 
   function handleDeleteFrom(seriesId: string, fromDate: string) {
-    setBookings(prev => prev.filter(b => !(b.seriesId === seriesId && b.date >= fromDate)))
+    setBookings(prev => {
+      const deleted = prev.filter(b => b.seriesId === seriesId && b.date >= fromDate)
+      deleted.forEach(b => supabase.from('bookings').delete().eq('id', b.id))
+      return prev.filter(b => !(b.seriesId === seriesId && b.date >= fromDate))
+    })
     setModal(null)
   }
 

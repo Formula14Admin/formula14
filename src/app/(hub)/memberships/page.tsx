@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
+import { supabase } from '@/lib/supabase'
 import {
   IconX,
   IconSearch,
@@ -427,10 +428,31 @@ function FamilyAccountCard() {
   )
 }
 
+// ─── Supabase mapping ─────────────────────────────────────────────────────────
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function dbToMember(row: any): Member {
+  return {
+    id:                 row.id,
+    firstName:          row.first_name          ?? '',
+    lastName:           row.last_name           ?? '',
+    email:              row.email               ?? '',
+    plan:               (row.plan as Plan)       ?? 'bronze',
+    status:             (row.status as MemberStatus) ?? 'active',
+    started:            row.started_date        ?? '',
+    nextCharge:         row.next_charge_date    ?? null,
+    outstanding:        Number(row.outstanding_balance ?? 0),
+    sessionsThisMonth:  row.sessions_this_month ?? 0,
+    notes:              row.notes               ?? '',
+    billing:            (row.billing_records as BillingRecord[]) ?? [],
+  }
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function MembershipsPage() {
-  const [members, setMembers] = useState<Member[]>(INIT_MEMBERS)
+  const [members, setMembers] = useState<Member[]>([])
+  const [loading, setLoading] = useState(true)
   const [creditUsage, setCreditUsage] = useState<Record<string, number>>(INIT_CREDIT_USAGE)
   const [filter, setFilter] = useState('all')
   const [search, setSearch] = useState('')
@@ -446,6 +468,22 @@ export default function MembershipsPage() {
   const [newPlan, setNewPlan] = useState<Plan>('bronze')
   const [newStarted, setNewStarted] = useState('')
   const [newNotes, setNewNotes] = useState('')
+
+  // Load members from Supabase; fall back to seed data if table is empty
+  useEffect(() => {
+    supabase
+      .from('members')
+      .select('*')
+      .order('last_name')
+      .then(({ data, error }) => {
+        if (!error && data && data.length > 0) {
+          setMembers(data.map(dbToMember))
+        } else {
+          setMembers(INIT_MEMBERS)
+        }
+        setLoading(false)
+      })
+  }, [])
 
   const selectedMember = members.find((m) => m.id === selectedId) ?? null
 
@@ -468,6 +506,17 @@ export default function MembershipsPage() {
 
   function updateMember(id: string, patch: Partial<Member>) {
     setMembers((prev) => prev.map((m) => (m.id === id ? { ...m, ...patch } : m)))
+    // Persist to Supabase (optimistic, fire-and-forget)
+    const dbPatch: Record<string, unknown> = {}
+    if (patch.plan        !== undefined) dbPatch.plan                = patch.plan
+    if (patch.status      !== undefined) dbPatch.status              = patch.status
+    if (patch.nextCharge  !== undefined) dbPatch.next_charge_date    = patch.nextCharge
+    if (patch.outstanding !== undefined) dbPatch.outstanding_balance = patch.outstanding
+    if (patch.notes       !== undefined) dbPatch.notes               = patch.notes
+    if (patch.billing     !== undefined) dbPatch.billing_records     = patch.billing
+    if (Object.keys(dbPatch).length > 0) {
+      supabase.from('members').update(dbPatch).eq('id', id)
+    }
   }
 
   function handleChangePlan(plan: Plan) {
@@ -487,21 +536,37 @@ export default function MembershipsPage() {
     setTimeout(() => setPaymentSent(false), 2500)
   }
 
-  function handleAddMember() {
+  async function handleAddMember() {
     if (!newFirst.trim() || !newLast.trim() || !newEmail.trim() || !newStarted) return
     const plan = newPlan
     const firstCharge = nextMondayFrom(newStarted)
-    const m: Member = {
-      id: uid(),
-      firstName: newFirst.trim(), lastName: newLast.trim(),
-      email: newEmail.trim(), plan,
-      status: 'active',
-      started: newStarted, nextCharge: firstCharge,
-      outstanding: 0, sessionsThisMonth: 0,
-      notes: newNotes.trim(),
-      billing: [{ id: uid(), date: firstCharge, amount: PLAN_INFO[plan].price, status: 'upcoming' }],
+    const billingRecord: BillingRecord = { id: uid(), date: firstCharge, amount: PLAN_INFO[plan].price, status: 'upcoming' }
+    const payload = {
+      first_name:          newFirst.trim(),
+      last_name:           newLast.trim(),
+      email:               newEmail.trim(),
+      plan,
+      status:              'active',
+      started_date:        newStarted,
+      next_charge_date:    firstCharge,
+      outstanding_balance: 0,
+      sessions_this_month: 0,
+      notes:               newNotes.trim(),
+      billing_records:     [billingRecord],
     }
-    setMembers((prev) => [...prev, m])
+    const { data, error } = await supabase.from('members').insert(payload).select().single()
+    if (!error && data) {
+      setMembers((prev) => [...prev, dbToMember(data)])
+    } else {
+      const m: Member = {
+        id: uid(), firstName: newFirst.trim(), lastName: newLast.trim(),
+        email: newEmail.trim(), plan, status: 'active',
+        started: newStarted, nextCharge: firstCharge,
+        outstanding: 0, sessionsThisMonth: 0, notes: newNotes.trim(),
+        billing: [billingRecord],
+      }
+      setMembers((prev) => [...prev, m])
+    }
     setShowAddModal(false)
     setNewFirst(''); setNewLast(''); setNewEmail('')
     setNewPlan('bronze'); setNewStarted(''); setNewNotes('')
@@ -512,6 +577,12 @@ export default function MembershipsPage() {
     setShowChangePlan(false)
     setPaymentSent(false)
   }
+
+  if (loading) return (
+    <div className="flex min-h-screen items-center justify-center" style={{ backgroundColor: '#f4f6f9' }}>
+      <div className="text-sm text-gray-400">Loading memberships…</div>
+    </div>
+  )
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#f4f6f9' }}>
