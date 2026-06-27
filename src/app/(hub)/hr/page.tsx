@@ -252,16 +252,48 @@ function PeopleTab({ staff, setStaff, appRoles, setAppRoles }: {
   setAppRoles: (r: AppRoleMap) => void
 }) {
   const [search, setSearch]   = useState('')
+  const [showInactive, setShowInactive] = useState(false)
   const [selected, setSelected] = useState<string | null>(null)
   const [showAdd, setShowAdd]  = useState(false)
   const [form, setForm]        = useState<typeof EMPTY_STAFF>({ ...EMPTY_STAFF })
   const [addSection, setAddSection] = useState<string>('personal')
   const [showSensitive, setShowSensitive] = useState(false)
   const [invited, setInvited]  = useState(false)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const [actionMenuId, setActionMenuId] = useState<string | null>(null)
+  const [staffToast, setStaffToast] = useState<string | null>(null)
+
+  function showStaffToast(msg: string) { setStaffToast(msg); setTimeout(() => setStaffToast(null), 4000) }
+
+  function handleDeactivate(id: string) {
+    const updated = staff.map(s => s.id === id ? { ...s, status: 'inactive' as StaffStatus } : s)
+    saveStaff(updated); setStaff(updated)
+    showStaffToast('Staff member marked as inactive.')
+  }
+
+  function handleReactivate(id: string) {
+    const updated = staff.map(s => s.id === id ? { ...s, status: 'active' as StaffStatus } : s)
+    saveStaff(updated); setStaff(updated)
+    showStaffToast('Staff member reactivated.')
+  }
+
+  function handleDelete(id: string) {
+    setDeleting(true)
+    const updated = staff.filter(s => s.id !== id)
+    saveStaff(updated); setStaff(updated)
+    if (selected === id) setSelected(null)
+    setConfirmDeleteId(null)
+    setDeleting(false)
+    showStaffToast('Staff member deleted.')
+  }
 
   const filtered = useMemo(() =>
-    staff.filter(s => `${s.firstName} ${s.lastName} ${s.role}`.toLowerCase().includes(search.toLowerCase())),
-  [staff, search])
+    staff.filter(s => {
+      if (!showInactive && s.status === 'inactive') return false
+      return `${s.firstName} ${s.lastName} ${s.role}`.toLowerCase().includes(search.toLowerCase())
+    }),
+  [staff, search, showInactive])
 
   const selectedStaff = staff.find(s => s.id === selected) ?? null
 
@@ -310,25 +342,65 @@ function PeopleTab({ staff, setStaff, appRoles, setAppRoles }: {
           </div>
         )}
 
+        {/* Show Inactive toggle */}
+        {staff.some(s => s.status === 'inactive') && (
+          <button type="button" onClick={() => setShowInactive(v => !v)}
+            className="rounded-xl border px-3 py-1.5 text-xs font-semibold transition"
+            style={showInactive ? { backgroundColor: '#6b7280', color: 'white', borderColor: '#6b7280' } : { backgroundColor: 'white', color: '#6b7280', borderColor: '#e5e7eb' }}>
+            {showInactive ? 'Hide Inactive' : 'Show Inactive'}
+          </button>
+        )}
+
         {/* Staff cards */}
         <div className="flex flex-col gap-2 overflow-y-auto">
           {filtered.map(s => {
             const role = appRoles[s.id]
             const isSelected = s.id === selected
+            const inactive = s.status === 'inactive'
             return (
-              <button key={s.id} type="button" onClick={() => setSelected(isSelected ? null : s.id)}
-                className={`flex items-center gap-3 rounded-xl border p-3 text-left transition ${isSelected ? 'border-[#6BA3D6] bg-[#6BA3D6]/5' : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'}`}>
-                <Avatar firstName={s.firstName} lastName={s.lastName} size={40} />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-bold text-gray-900">{s.firstName} {s.lastName}</p>
-                  <p className="truncate text-xs text-gray-500">{s.role}</p>
-                  <div className="mt-1 flex items-center gap-1.5 flex-wrap">
-                    <Badge label={EMPLOYMENT_LABELS[s.employmentType]} color="#6b7280" bg="#f3f4f6" />
-                    {role === 'director' && <Badge label="Director" color="#4a7fb5" bg="#eff6ff" />}
-                    <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: STATUS_COLORS[s.status] }} />
+              <div key={s.id} className="relative">
+                <button type="button" onClick={() => setSelected(isSelected ? null : s.id)}
+                  className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition ${isSelected ? 'border-[#6BA3D6] bg-[#6BA3D6]/5' : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'}`}
+                  style={{ opacity: inactive ? 0.6 : 1 }}>
+                  <Avatar firstName={s.firstName} lastName={s.lastName} size={40} />
+                  <div className="min-w-0 flex-1 pr-6">
+                    <p className="truncate text-sm font-bold text-gray-900">{s.firstName} {s.lastName}</p>
+                    <p className="truncate text-xs text-gray-500">{s.role}</p>
+                    <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                      <Badge label={EMPLOYMENT_LABELS[s.employmentType]} color="#6b7280" bg="#f3f4f6" />
+                      {role === 'director' && <Badge label="Director" color="#4a7fb5" bg="#eff6ff" />}
+                      {inactive && <Badge label="Inactive" color="#6b7280" bg="#f3f4f6" />}
+                      {!inactive && <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: STATUS_COLORS[s.status] }} />}
+                    </div>
                   </div>
+                </button>
+                {/* Three-dot action menu */}
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 z-10">
+                  <button type="button" onClick={e => { e.stopPropagation(); setActionMenuId(actionMenuId === s.id ? null : s.id) }}
+                    className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600">
+                    ⋯
+                  </button>
+                  {actionMenuId === s.id && (
+                    <>
+                      <div className="fixed inset-0 z-20" onClick={() => setActionMenuId(null)} />
+                      <div className="absolute right-0 top-8 z-30 w-44 overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-lg">
+                        <button type="button" onClick={() => { setActionMenuId(null); setSelected(s.id) }}
+                          className="flex w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">View Profile</button>
+                        {inactive ? (
+                          <button type="button" onClick={() => { setActionMenuId(null); handleReactivate(s.id) }}
+                            className="flex w-full px-3 py-2 text-sm text-green-600 hover:bg-green-50">Reactivate</button>
+                        ) : (
+                          <button type="button" onClick={() => { setActionMenuId(null); handleDeactivate(s.id) }}
+                            className="flex w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">Mark as Inactive</button>
+                        )}
+                        <div className="my-1 border-t border-gray-100" />
+                        <button type="button" onClick={() => { setActionMenuId(null); setConfirmDeleteId(s.id) }}
+                          className="flex w-full px-3 py-2 text-sm text-red-600 hover:bg-red-50">Delete</button>
+                      </div>
+                    </>
+                  )}
                 </div>
-              </button>
+              </div>
             )
           })}
         </div>
@@ -358,7 +430,24 @@ function PeopleTab({ staff, setStaff, appRoles, setAppRoles }: {
                   )}
                 </div>
               </div>
-              <button className="rounded-lg p-2 text-gray-400 hover:bg-gray-100"><IconEdit size={16} /></button>
+              <div className="flex items-center gap-2">
+                {selectedStaff.status === 'active' ? (
+                  <button type="button" onClick={() => handleDeactivate(selectedStaff.id)}
+                    className="rounded-lg border border-gray-200 px-2.5 py-1 text-xs font-semibold text-gray-500 hover:bg-gray-50">
+                    Mark Inactive
+                  </button>
+                ) : (
+                  <button type="button" onClick={() => handleReactivate(selectedStaff.id)}
+                    className="rounded-lg border border-green-200 px-2.5 py-1 text-xs font-semibold text-green-600 hover:bg-green-50">
+                    Reactivate
+                  </button>
+                )}
+                <button type="button" onClick={() => setConfirmDeleteId(selectedStaff.id)}
+                  className="rounded-lg border border-red-200 px-2.5 py-1 text-xs font-semibold text-red-500 hover:bg-red-50">
+                  Delete
+                </button>
+                <button className="rounded-lg p-2 text-gray-400 hover:bg-gray-100"><IconEdit size={16} /></button>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-x-8 gap-y-4 text-sm">
@@ -504,6 +593,47 @@ function PeopleTab({ staff, setStaff, appRoles, setAppRoles }: {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ── Delete confirmation modal ── */}
+      {confirmDeleteId && (() => {
+        const s = staff.find(x => x.id === confirmDeleteId)
+        if (!s) return null
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-100">
+                <IconX size={24} className="text-red-600" />
+              </div>
+              <h2 className="mb-2 text-lg font-bold text-gray-900">Delete {s.firstName} {s.lastName}?</h2>
+              <p className="mb-6 text-sm text-gray-500">
+                This will permanently remove their profile, pay history and all associated records.
+                <strong className="font-semibold text-gray-700"> This cannot be undone.</strong>
+              </p>
+              <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+                To preserve history, consider <strong>Mark as Inactive</strong> instead — they can be reactivated at any time.
+              </div>
+              <div className="flex justify-end gap-3">
+                <button type="button" onClick={() => setConfirmDeleteId(null)} disabled={deleting}
+                  className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+                  Cancel
+                </button>
+                <button type="button" onClick={() => handleDelete(confirmDeleteId)} disabled={deleting}
+                  className="rounded-xl px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                  style={{ backgroundColor: '#dc2626' }}>
+                  {deleting ? 'Deleting…' : 'Delete Permanently'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* ── Staff toast ── */}
+      {staffToast && (
+        <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-2xl bg-gray-900 px-5 py-3 text-sm font-semibold text-white shadow-xl">
+          {staffToast}
         </div>
       )}
     </div>

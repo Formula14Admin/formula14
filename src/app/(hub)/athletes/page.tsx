@@ -53,6 +53,7 @@ interface Athlete {
   emergency: { name: string; phone: string; relationship: string }
   recentSessions: RecentSession[]
   inviteStatus?: 'invited' | 'accepted' | null
+  isActive: boolean
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -97,7 +98,7 @@ const INPUT = 'w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-g
 
 // ─── Sample athletes ──────────────────────────────────────────────────────────
 
-const INIT_ATHLETES: Athlete[] = [
+const INIT_ATHLETES: Athlete[] = (([
   {
     id: 'a1',
     firstName: 'Liam', lastName: 'Carter',
@@ -278,7 +279,7 @@ const INIT_ATHLETES: Athlete[] = [
       { date: '2026-06-10', type: 'Casual Shooting',        coach: 'Jade', space: 'Shooting Bay' },
     ],
   },
-]
+]) as Omit<Athlete, 'isActive'>[]).map(a => ({ ...a, isActive: true }))
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -408,56 +409,108 @@ function StatCard({ icon, label, value, sub, accent }: {
 
 // ─── Athlete Card ─────────────────────────────────────────────────────────────
 
-function AthleteCard({ athlete, selected, onClick }: {
-  athlete: Athlete; selected: boolean; onClick: () => void
+function AthleteCard({ athlete, selected, onClick, onDeactivate, onReactivate, onDelete }: {
+  athlete: Athlete
+  selected: boolean
+  onClick: () => void
+  onDeactivate: () => void
+  onReactivate: () => void
+  onDelete: () => void
 }) {
+  const [menuOpen, setMenuOpen] = useState(false)
   const age = calcAge(athlete.dob)
   const group = ageGroup(athlete.dob)
   const isMember = !!athlete.membership.plan
   const card = isMember ? MEMBER_CARD : CASUAL_CARD
+  const inactive = !athlete.isActive
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="w-full rounded-2xl border-2 p-4 text-left transition hover:shadow-md"
+    <div
+      className="relative w-full rounded-2xl border-2 p-4 text-left transition hover:shadow-md"
       style={{
-        backgroundColor: card.bg,
-        borderColor: selected ? card.selectedBorder : card.border,
+        backgroundColor: inactive ? '#f9fafb' : card.bg,
+        borderColor: selected ? card.selectedBorder : inactive ? '#e5e7eb' : card.border,
+        opacity: inactive ? 0.65 : 1,
       }}
     >
-      {/* Top row: avatar + name + position */}
-      <div className="flex items-start gap-3">
-        <AvatarCircle athlete={athlete} size={52} />
-        <div className="min-w-0 flex-1">
-          <div className="truncate font-bold text-gray-900">
-            {athlete.firstName} {athlete.lastName}
-          </div>
-          <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-            <PositionBadge position={athlete.position} />
-            <span className="text-xs text-gray-400">{age} yrs · {group}</span>
-          </div>
-          <div className="mt-1 truncate text-xs text-gray-500">{athlete.repClub}</div>
-          <div className="truncate text-xs text-gray-400">{athlete.school}</div>
-        </div>
+      {/* Three-dot menu */}
+      <div className="absolute right-3 top-3 z-10">
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); setMenuOpen(o => !o) }}
+          className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+        >
+          ⋯
+        </button>
+        {menuOpen && (
+          <>
+            <div className="fixed inset-0 z-20" onClick={() => setMenuOpen(false)} />
+            <div className="absolute right-0 top-8 z-30 w-44 overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-lg">
+              <button type="button" onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onClick() }}
+                className="flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                View Profile
+              </button>
+              {inactive ? (
+                <button type="button" onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onReactivate() }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-green-600 hover:bg-green-50">
+                  Reactivate
+                </button>
+              ) : (
+                <button type="button" onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onDeactivate() }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                  Mark as Inactive
+                </button>
+              )}
+              <div className="my-1 border-t border-gray-100" />
+              <button type="button" onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onDelete() }}
+                className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50">
+                Delete
+              </button>
+            </div>
+          </>
+        )}
       </div>
 
-      {/* Divider */}
-      <div className="my-3 border-t border-gray-100" />
-
-      {/* Bottom row: membership + sessions + invite badge */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5">
-          <MembershipBadge membership={athlete.membership} />
-          {(athlete.inviteStatus ?? null) === 'invited' && (
-            <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold"
-              style={{ backgroundColor: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' }}>
-              Invited
-            </span>
-          )}
+      {/* Clickable area */}
+      <button type="button" onClick={onClick} className="w-full text-left">
+        {/* Top row: avatar + name + position */}
+        <div className="flex items-start gap-3 pr-6">
+          <AvatarCircle athlete={athlete} size={52} />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5">
+              <span className="truncate font-bold text-gray-900">{athlete.firstName} {athlete.lastName}</span>
+              {inactive && (
+                <span className="shrink-0 rounded-full bg-gray-200 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-gray-500">
+                  Inactive
+                </span>
+              )}
+            </div>
+            <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+              <PositionBadge position={athlete.position} />
+              <span className="text-xs text-gray-400">{age} yrs · {group}</span>
+            </div>
+            <div className="mt-1 truncate text-xs text-gray-500">{athlete.repClub}</div>
+            <div className="truncate text-xs text-gray-400">{athlete.school}</div>
+          </div>
         </div>
-        <SessionsMini athlete={athlete} />
-      </div>
-    </button>
+
+        {/* Divider */}
+        <div className="my-3 border-t border-gray-100" />
+
+        {/* Bottom row: membership + sessions + invite badge */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <MembershipBadge membership={athlete.membership} />
+            {(athlete.inviteStatus ?? null) === 'invited' && (
+              <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold"
+                style={{ backgroundColor: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' }}>
+                Invited
+              </span>
+            )}
+          </div>
+          <SessionsMini athlete={athlete} />
+        </div>
+      </button>
+    </div>
   )
 }
 
@@ -511,6 +564,7 @@ function dbToAthlete(row: any): Athlete {
     },
     recentSessions: [],
     inviteStatus: (row.invite_status as 'invited' | 'accepted' | null) ?? null,
+    isActive: row.is_active ?? true,
   }
 }
 
@@ -523,10 +577,14 @@ export default function AthletesPage() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'member' | 'casual'>('all')
   const [posFilter, setPosFilter] = useState<Position | 'all'>('all')
+  const [showInactive, setShowInactive] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
   const [form, setForm] = useState<NewAthleteForm>(blankForm())
   const [inviteToast, setInviteToast] = useState<string | null>(null)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const [toast, setToast] = useState<string | null>(null)
 
   const ATHLETES_CACHE_KEY = 'f14_athletes_cache'
 
@@ -571,6 +629,7 @@ export default function AthletesPage() {
   const filtered = useMemo(() => {
     return athletes
       .filter((a) => {
+        if (!showInactive && !a.isActive) return false
         if (statusFilter === 'member' && !a.membership.plan) return false
         if (statusFilter === 'casual' && a.membership.plan) return false
         if (posFilter !== 'all' && a.position !== posFilter) return false
@@ -582,16 +641,19 @@ export default function AthletesPage() {
         return true
       })
       .sort((a, b) => {
+        // Active before inactive
+        if (a.isActive !== b.isActive) return a.isActive ? -1 : 1
         const last = a.lastName.localeCompare(b.lastName)
         return last !== 0 ? last : a.firstName.localeCompare(b.firstName)
       })
-  }, [athletes, search, statusFilter, posFilter])
+  }, [athletes, search, statusFilter, posFilter, showInactive])
 
-  // Stats
-  const totalAthletes    = athletes.length
-  const activeMembers    = athletes.filter((a) => a.membership.status === 'active').length
-  const trainingThisWeek = athletes.filter((a) => a.lastSession && a.lastSession >= '2026-06-15').length
-  const avgSessions      = (athletes.reduce((s, a) => s + a.sessionsThisMonth, 0) / athletes.length).toFixed(1)
+  // Stats (active athletes only)
+  const activeAthletes   = athletes.filter(a => a.isActive)
+  const totalAthletes    = activeAthletes.length
+  const activeMembers    = activeAthletes.filter((a) => a.membership.status === 'active').length
+  const trainingThisWeek = activeAthletes.filter((a) => a.lastSession && a.lastSession >= '2026-06-22').length
+  const avgSessions      = activeAthletes.length > 0 ? (activeAthletes.reduce((s, a) => s + a.sessionsThisMonth, 0) / activeAthletes.length).toFixed(1) : '0.0'
 
   function updateAthlete(id: string, patch: Partial<Athlete>) {
     setAthletes((prev) => prev.map((a) => (a.id === id ? { ...a, ...patch } : a)))
@@ -621,6 +683,45 @@ export default function AthletesPage() {
       supabase.from('athletes').update(dbPatch).eq('id', id)
         .then(({ error }) => { if (error) console.error('[athletes] update failed:', error) })
     }
+  }
+
+  function showToast(msg: string) {
+    setToast(msg)
+    setTimeout(() => setToast(null), 4000)
+  }
+
+  async function handleDeleteAthlete(id: string) {
+    setDeleting(true)
+    try {
+      // Delete associated data first (best-effort)
+      await supabase.from('bookings').delete().contains('athlete_names', [athletes.find(a => a.id === id)?.firstName + ' ' + athletes.find(a => a.id === id)?.lastName])
+      const { error } = await supabase.from('athletes').delete().eq('id', id)
+      if (error) {
+        console.error('[athletes] delete failed:', error)
+        showToast(`Failed to delete athlete: ${error.message}`)
+        return
+      }
+      setAthletes(prev => prev.filter(a => a.id !== id))
+      if (selectedId === id) setSelectedId(null)
+      setConfirmDeleteId(null)
+      showToast('Athlete deleted permanently.')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  async function handleDeactivateAthlete(id: string) {
+    const { error } = await supabase.from('athletes').update({ is_active: false }).eq('id', id)
+    if (error) { console.error('[athletes] deactivate failed:', error); showToast('Failed to deactivate athlete'); return }
+    setAthletes(prev => prev.map(a => a.id === id ? { ...a, isActive: false } : a))
+    showToast('Athlete marked as inactive. Their history is preserved.')
+  }
+
+  async function handleReactivateAthlete(id: string) {
+    const { error } = await supabase.from('athletes').update({ is_active: true }).eq('id', id)
+    if (error) { console.error('[athletes] reactivate failed:', error); showToast('Failed to reactivate athlete'); return }
+    setAthletes(prev => prev.map(a => a.id === id ? { ...a, isActive: true } : a))
+    showToast('Athlete reactivated.')
   }
 
   function patchForm(patch: Partial<NewAthleteForm>) {
@@ -668,6 +769,7 @@ export default function AthletesPage() {
       emergency:    { name: form.emergencyName.trim(), phone: form.emergencyPhone.trim(), relationship: form.emergencyRel.trim() },
       recentSessions: [],
       inviteStatus: hasEmail ? 'invited' : null,
+      isActive: true,
     }
 
     if (error) console.error('[invite_athlete] error:', error)
@@ -803,6 +905,22 @@ export default function AthletesPage() {
               </button>
             ))}
           </div>
+
+          {/* Include Inactive toggle */}
+          {athletes.some(a => !a.isActive) && (
+            <button
+              type="button"
+              onClick={() => setShowInactive(v => !v)}
+              className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition"
+              style={
+                showInactive
+                  ? { backgroundColor: '#6b7280', color: 'white' }
+                  : { backgroundColor: 'white', color: '#6b7280', border: '1px solid #e5e7eb' }
+              }
+            >
+              {showInactive ? 'Hide Inactive' : 'Show Inactive'}
+            </button>
+          )}
         </div>
 
         {/* ── Card grid ──────────────────────────────────────────────────────── */}
@@ -818,6 +936,9 @@ export default function AthletesPage() {
                 athlete={a}
                 selected={selectedId === a.id}
                 onClick={() => openAthlete(a.id)}
+                onDeactivate={() => handleDeactivateAthlete(a.id)}
+                onReactivate={() => handleReactivateAthlete(a.id)}
+                onDelete={() => setConfirmDeleteId(a.id)}
               />
             ))}
           </div>
@@ -863,13 +984,45 @@ export default function AthletesPage() {
                       </div>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedId(null)}
-                    className="rounded-lg p-1.5 text-gray-400 transition hover:bg-white/80 hover:text-gray-600"
-                  >
-                    <IconX size={18} />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    {a.isActive ? (
+                      <button
+                        type="button"
+                        onClick={() => handleDeactivateAthlete(a.id)}
+                        title="Mark as Inactive"
+                        className="rounded-lg px-2.5 py-1 text-xs font-semibold text-gray-500 transition hover:bg-white/80 hover:text-gray-700"
+                        style={{ border: '1px solid #e5e7eb' }}
+                      >
+                        Mark Inactive
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleReactivateAthlete(a.id)}
+                        title="Reactivate Athlete"
+                        className="rounded-lg px-2.5 py-1 text-xs font-semibold text-green-600 transition hover:bg-green-50"
+                        style={{ border: '1px solid #bbf7d0' }}
+                      >
+                        Reactivate
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDeleteId(a.id)}
+                      title="Delete Athlete"
+                      className="rounded-lg px-2.5 py-1 text-xs font-semibold text-red-500 transition hover:bg-red-50"
+                      style={{ border: '1px solid #fecaca' }}
+                    >
+                      Delete
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedId(null)}
+                      className="rounded-lg p-1.5 text-gray-400 transition hover:bg-white/80 hover:text-gray-600"
+                    >
+                      <IconX size={18} />
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -1184,6 +1337,55 @@ export default function AthletesPage() {
           <button onClick={() => setInviteToast(null)} className="rounded-full p-0.5 hover:bg-white/10">✕</button>
         </div>
       )}
+
+      {/* ── General toast ─────────────────────────────────────────────────────── */}
+      {toast && (
+        <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-2xl bg-gray-900 px-5 py-3 text-sm font-semibold text-white shadow-xl">
+          {toast}
+        </div>
+      )}
+
+      {/* ── Delete confirmation modal ─────────────────────────────────────────── */}
+      {confirmDeleteId && (() => {
+        const a = athletes.find(x => x.id === confirmDeleteId)
+        if (!a) return null
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-100">
+                <IconX size={24} className="text-red-600" />
+              </div>
+              <h2 className="mb-2 text-lg font-bold text-gray-900">Delete {a.firstName} {a.lastName}?</h2>
+              <p className="mb-6 text-sm text-gray-500">
+                This will permanently remove their profile, booking history and all associated data.
+                <strong className="font-semibold text-gray-700"> This cannot be undone.</strong>
+              </p>
+              <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+                To preserve history, consider <strong>Mark as Inactive</strong> instead — their data stays on file and they can be reactivated at any time.
+              </div>
+              <div className="flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setConfirmDeleteId(null)}
+                  disabled={deleting}
+                  className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDeleteAthlete(confirmDeleteId)}
+                  disabled={deleting}
+                  className="rounded-xl px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+                  style={{ backgroundColor: '#dc2626' }}
+                >
+                  {deleting ? 'Deleting…' : 'Delete Permanently'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
     </div>
   )
