@@ -4416,7 +4416,6 @@ function BookingInformationTab() {
               const label        = m.label        ?? def.label
               const description  = m.description  ?? def.description
               const durationMins = m.durationMins ?? def.durationMins
-              const location     = m.location     ?? def.location
               const style        = m.style        ?? def.style
               const lp = def.id === 'small-group' ? null : getLivePrice(def.id)
 
@@ -4443,11 +4442,10 @@ function BookingInformationTab() {
                         </div>
                       </div>
 
-                      {/* Middle: Duration · Location · Style */}
-                      <div className="hidden shrink-0 flex-col justify-center gap-2.5 border-l border-gray-100 px-5 py-5 md:flex" style={{ minWidth: 200 }}>
+                      {/* Middle: Duration · Style */}
+                      <div className="hidden shrink-0 flex-col justify-center gap-2.5 border-l border-gray-100 px-5 py-5 md:flex" style={{ minWidth: 160 }}>
                         {([
                           { label: 'Duration',  value: `${durationMins} min` },
-                          { label: 'Location',  value: location },
                           { label: 'Style',     value: style },
                         ] as const).map(d => (
                           <div key={d.label}>
@@ -4613,12 +4611,6 @@ function BookingInformationTab() {
                       <label className={LBL_CLS}>Icon (emoji)</label>
                       <input value={editDraft.emoji}
                         onChange={e => setEditDraft(d => ({ ...d, emoji: e.target.value }))}
-                        className={FIELD_CLS} />
-                    </div>
-                    <div className="col-span-2">
-                      <label className={LBL_CLS}>Location / Space</label>
-                      <input value={editDraft.location}
-                        onChange={e => setEditDraft(d => ({ ...d, location: e.target.value }))}
                         className={FIELD_CLS} />
                     </div>
                     <div className="col-span-2">
