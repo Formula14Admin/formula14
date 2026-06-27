@@ -663,7 +663,6 @@ export default function BookingsPage() {
     supabase
       .from('bookings')
       .select('*')
-      .gte('date', new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10))
       .order('date')
       .then(({ data, error }) => {
         if (!error && data && data.length > 0 && !bookingsLoadedFromDb.current) {
@@ -1293,10 +1292,17 @@ export default function BookingsPage() {
       return data
     })
 
+    // Pre-generate IDs for new items so local state and Supabase always use the same UUID.
+    // Uses object reference as key so the same ID is retrieved in both setBookings and upsertRows.
+    const newIdMap = new Map<object, string>()
+    itemsWithCodes.forEach(item => { if (!item.id) newIdMap.set(item, uid()) })
+
+    const bumpedIdsForDeletion: string[] = []
     let bumpMsg: string | null = null
     setBookings(prev => {
       let next = [...prev]
       for (const data of itemsWithCodes) {
+        const assignedId = data.id ?? newIdMap.get(data)!
         // Bump logic for new Casual Shooting bookings
         if (data.sessionType === 'Casual Shooting' && !data.id) {
           const existing = next.filter(b =>
@@ -1315,6 +1321,7 @@ export default function BookingsPage() {
             const lowestPri = lowest.memberTier ? TIER_PRIORITY[lowest.memberTier] : TIER_PRIORITY.casual
             if (newPri > lowestPri) {
               next = next.filter(b => b.id !== lowest.id)
+              bumpedIdsForDeletion.push(lowest.id)
               const athleteName = lowest.athletes[0] ?? 'A booking'
               const fromLabel = lowest.memberTier
                 ? lowest.memberTier.charAt(0).toUpperCase() + lowest.memberTier.slice(1)
@@ -1323,7 +1330,7 @@ export default function BookingsPage() {
                 ? data.memberTier.charAt(0).toUpperCase() + data.memberTier.slice(1)
                 : 'Casual'
               bumpMsg = `${athleteName} was bumped from Casual Shooting — ${toLabel} tier replaced ${fromLabel}.`
-              next = [...next, { ...data, id: uid() } as Booking]
+              next = [...next, { ...data, id: assignedId } as Booking]
             }
             continue
           }
@@ -1331,7 +1338,7 @@ export default function BookingsPage() {
         if (data.id) {
           next = next.map(b => b.id === data.id ? { ...data, id: data.id! } as Booking : b)
         } else {
-          next = [...next, { ...data, id: uid() } as Booking]
+          next = [...next, { ...data, id: assignedId } as Booking]
         }
       }
       return next
@@ -1340,9 +1347,12 @@ export default function BookingsPage() {
     if (bumpMsg) showToast(bumpMsg)
     if (firstNewJoinLink) setJoinLinkModal(firstNewJoinLink)
 
-    // Persist new/updated bookings to Supabase
+    // Delete any bumped bookings from Supabase
+    bumpedIdsForDeletion.forEach(id => supabase.from('bookings').delete().eq('id', id))
+
+    // Persist new/updated bookings to Supabase (same IDs as local state via newIdMap)
     const upsertRows = itemsWithCodes.map(data => ({
-      id:            data.id ?? uid(),
+      id:            data.id ?? newIdMap.get(data)!,
       session_type:  data.sessionType,
       space:         data.spaceId,
       date:          data.date,

@@ -53,7 +53,7 @@ BEGIN
     u.id, u.email, u.first_name, u.last_name, u.role
   FROM users u
   WHERE u.email = p_email
-    AND u.password_hash = crypt(p_password, u.password_hash);
+    AND u.password_hash = extensions.crypt(p_password, u.password_hash);
 END;
 $$;
 
