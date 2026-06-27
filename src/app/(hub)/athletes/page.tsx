@@ -52,6 +52,7 @@ interface Athlete {
   coachNotes: string
   emergency: { name: string; phone: string; relationship: string }
   recentSessions: RecentSession[]
+  inviteStatus?: 'invited' | 'accepted' | null
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -443,9 +444,17 @@ function AthleteCard({ athlete, selected, onClick }: {
       {/* Divider */}
       <div className="my-3 border-t border-gray-100" />
 
-      {/* Bottom row: membership + sessions */}
+      {/* Bottom row: membership + sessions + invite badge */}
       <div className="flex items-center justify-between">
-        <MembershipBadge membership={athlete.membership} />
+        <div className="flex items-center gap-1.5">
+          <MembershipBadge membership={athlete.membership} />
+          {(athlete.inviteStatus ?? null) === 'invited' && (
+            <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold"
+              style={{ backgroundColor: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' }}>
+              Invited
+            </span>
+          )}
+        </div>
         <SessionsMini athlete={athlete} />
       </div>
     </button>
@@ -501,6 +510,7 @@ function dbToAthlete(row: any): Athlete {
       relationship: row.emergency_contact_relationship ?? '',
     },
     recentSessions: [],
+    inviteStatus: (row.invite_status as 'invited' | 'accepted' | null) ?? null,
   }
 }
 
@@ -516,6 +526,7 @@ export default function AthletesPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
   const [form, setForm] = useState<NewAthleteForm>(blankForm())
+  const [inviteToast, setInviteToast] = useState<string | null>(null)
 
   const ATHLETES_CACHE_KEY = 'f14_athletes_cache'
 
@@ -619,45 +630,58 @@ export default function AthletesPage() {
   }
 
   async function handleAddAthlete() {
-    if (!form.firstName.trim() || !form.lastName.trim() || !form.dob) return
-    const payload = {
-      first_name:                    form.firstName.trim(),
-      last_name:                     form.lastName.trim(),
-      email:                         form.email.trim(),
-      phone:                         form.phone.trim(),
-      date_of_birth:                 form.dob || null,
-      gender:                        form.gender,
-      position:                      form.position,
-      rep_club:                      form.repClub.trim(),
-      school:                        form.school.trim(),
-      goals:                         form.goals.trim(),
-      coach_notes:                   form.notes.trim(),
-      emergency_contact_name:        form.emergencyName.trim(),
-      emergency_contact_phone:       form.emergencyPhone.trim(),
-      emergency_contact_relationship: form.emergencyRel.trim(),
+    if (!form.firstName.trim() || !form.lastName.trim()) return
+    const hasEmail = form.email.trim() !== ''
+
+    // Use invite_athlete RPC: creates user account (if email given) + athlete record
+    const { data, error } = await supabase.rpc('invite_athlete', {
+      p_email:           form.email.trim() || null,
+      p_first_name:      form.firstName.trim(),
+      p_last_name:       form.lastName.trim(),
+      p_phone:           form.phone.trim() || null,
+      p_dob:             form.dob || null,
+      p_position:        form.position || null,
+      p_school:          form.school.trim() || null,
+      p_goals:           form.goals.trim() || null,
+      p_coach_notes:     form.notes.trim() || null,
+      p_emergency_name:  form.emergencyName.trim() || null,
+      p_emergency_phone: form.emergencyPhone.trim() || null,
+      p_emergency_rel:   form.emergencyRel.trim() || null,
+    })
+
+    const newAthleteId: string = (!error && data && data[0]?.athlete_id) ? data[0].athlete_id : uid()
+
+    const newAthlete: Athlete = {
+      id:           newAthleteId,
+      firstName:    form.firstName.trim(),
+      lastName:     form.lastName.trim(),
+      email:        form.email.trim(),
+      phone:        form.phone.trim(),
+      dob:          form.dob,
+      gender:       form.gender,
+      position:     form.position,
+      repClub:      form.repClub.trim(),
+      school:       form.school.trim(),
+      joined:       new Date().toISOString().slice(0, 10),
+      membership:   { plan: null, status: null },
+      sessionsTotal: 0, sessionsThisMonth: 0, lastSession: null,
+      goals:        form.goals.trim(),
+      coachNotes:   form.notes.trim(),
+      emergency:    { name: form.emergencyName.trim(), phone: form.emergencyPhone.trim(), relationship: form.emergencyRel.trim() },
+      recentSessions: [],
+      inviteStatus: hasEmail ? 'invited' : null,
     }
-    const { data, error } = await supabase.from('athletes').insert(payload).select().single()
-    if (!error && data) {
-      setAthletes((prev) => [...prev, dbToAthlete(data)])
-    } else {
-      // Fallback: add locally with a temporary ID
-      const a: Athlete = {
-        id: uid(),
-        firstName: form.firstName.trim(), lastName: form.lastName.trim(),
-        email: form.email.trim(), phone: form.phone.trim(),
-        dob: form.dob, gender: form.gender, position: form.position,
-        repClub: form.repClub.trim(), school: form.school.trim(),
-        joined: new Date().toISOString().slice(0, 10),
-        membership: { plan: null, status: null },
-        sessionsTotal: 0, sessionsThisMonth: 0, lastSession: null,
-        goals: form.goals.trim(), coachNotes: form.notes.trim(),
-        emergency: { name: form.emergencyName.trim(), phone: form.emergencyPhone.trim(), relationship: form.emergencyRel.trim() },
-        recentSessions: [],
-      }
-      setAthletes((prev) => [...prev, a])
-    }
+
+    if (error) console.error('[invite_athlete] error:', error)
+
+    setAthletes(prev => [...prev, newAthlete])
     setShowAddModal(false)
     setForm(blankForm())
+
+    if (hasEmail) {
+      setInviteToast(`Invitation queued for ${form.email.trim()}`)
+      setTimeout(() => setInviteToast(null), 4000)
+    }
   }
 
   function openAthlete(id: string) {
@@ -1144,7 +1168,7 @@ export default function AthletesPage() {
               <button
                 type="button"
                 onClick={handleAddAthlete}
-                disabled={!form.firstName.trim() || !form.lastName.trim() || !form.dob}
+                disabled={!form.firstName.trim() || !form.lastName.trim()}
                 className="rounded-xl px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-40"
                 style={{ backgroundColor: ACCENT }}
               >
@@ -1152,6 +1176,14 @@ export default function AthletesPage() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ── Invitation toast ───────────────────────────────────────────────────── */}
+      {inviteToast && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl bg-gray-900 px-5 py-3.5 text-sm font-semibold text-white shadow-xl">
+          ✉️ {inviteToast}
+          <button onClick={() => setInviteToast(null)} className="rounded-full p-0.5 hover:bg-white/10">✕</button>
         </div>
       )}
 

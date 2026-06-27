@@ -48,6 +48,13 @@ export default function Home() {
             >
               Log in
             </Link>
+            <Link
+              href="/signup"
+              onClick={() => setOpen(false)}
+              className="block px-4 py-2.5 text-sm text-gray-400 transition-colors hover:bg-white/[0.05] hover:text-gray-200"
+            >
+              Sign up
+            </Link>
           </div>
         )}
       </div>

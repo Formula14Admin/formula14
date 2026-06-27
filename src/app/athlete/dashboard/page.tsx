@@ -2,11 +2,11 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import { useSession, signOut } from 'next-auth/react'
+import { useSession } from 'next-auth/react'
 import {
   IconCalendar, IconFlame, IconCurrencyDollar, IconTrophy,
-  IconCheck, IconX, IconChevronRight, IconBell,
-  IconBook, IconLogout, IconUser, IconTarget,
+  IconCheck, IconX, IconChevronRight,
+  IconBook, IconTarget,
   IconMoodSmile, IconLayoutDashboard, IconCards,
 } from '@tabler/icons-react'
 
@@ -217,10 +217,66 @@ function CancelDialog({ sessionLabel, onCancel, onClose }: {
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
+// ─── Profile Completion Modal ─────────────────────────────────────────────────
+
+function ProfileCompleteModal({ onDone }: { onDone: () => void }) {
+  const [dob,     setDob]     = useState('')
+  const [phone,   setPhone]   = useState('')
+  const [repClub, setRepClub] = useState('')
+  const [exp,     setExp]     = useState('')
+
+  function handleSave(e: React.FormEvent) {
+    e.preventDefault()
+    onDone()
+  }
+
+  const FIELD = 'mb-1 block text-xs font-semibold text-gray-600'
+  const INPUT = 'w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-[#6BA3D6] focus:ring-2 focus:ring-[#6BA3D6]/10'
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl">
+        <div className="border-b border-gray-100 px-6 py-5">
+          <p className="text-base font-bold text-gray-900">Complete your profile</p>
+          <p className="mt-0.5 text-sm text-gray-500">Help your coach get to know you better.</p>
+        </div>
+        <form onSubmit={handleSave} className="space-y-3 px-6 py-5">
+          <div>
+            <label className={FIELD}>Date of Birth</label>
+            <input type="date" value={dob} onChange={e => setDob(e.target.value)} className={INPUT} />
+          </div>
+          <div>
+            <label className={FIELD}>Phone Number</label>
+            <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="04xx xxx xxx" className={INPUT} />
+          </div>
+          <div>
+            <label className={FIELD}>Rep Club</label>
+            <input type="text" value={repClub} onChange={e => setRepClub(e.target.value)} placeholder="e.g. Sydney Kings Academy" className={INPUT} />
+          </div>
+          <div>
+            <label className={FIELD}>Playing Experience</label>
+            <textarea value={exp} onChange={e => setExp(e.target.value)} placeholder="Brief background — years played, positions, any rep experience" rows={2} className={INPUT + ' resize-none'} />
+          </div>
+          <div className="flex gap-3 pt-1">
+            <button type="submit" className="flex-1 rounded-xl py-2.5 text-sm font-bold text-white" style={{ backgroundColor: '#6BA3D6' }}>
+              Save Profile
+            </button>
+            <button type="button" onClick={onDone} className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-500 hover:bg-gray-50">
+              Skip
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+// ─── Page ──────────────────────────────────────────────────────────────────────
+
 export default function AthleteDashboard() {
   const { data: session } = useSession()
   const name   = session?.user?.name ?? 'Athlete'
-  const initials = name.slice(0, 2).toUpperCase()
+  const userId = session?.user?.id
   const quote  = getDailyQuote()
 
   // State
@@ -231,9 +287,9 @@ export default function AthleteDashboard() {
   const [showFeelModal, setShowFeelModal] = useState(false)
   const [cancelTarget,  setCancelTarget]  = useState<typeof UPCOMING_SESSIONS[0] | null>(null)
   const [toast,         setToast]         = useState<string | null>(null)
-  const [avatarOpen,    setAvatarOpen]    = useState(false)
+  const [showProfilePrompt, setShowProfilePrompt] = useState(false)
 
-  // Load from localStorage
+  // Load from localStorage; show welcome toast and profile prompt when appropriate
   useEffect(() => {
     try {
       const raw = localStorage.getItem('f14_habits')
@@ -247,7 +303,25 @@ export default function AthleteDashboard() {
       const raw = localStorage.getItem(`f14_athlete_checkin_${TODAY}`)
       if (raw) setCheckIn(JSON.parse(raw))
     } catch { /* ignore */ }
+
+    // Welcome message set by signup page after first registration
+    try {
+      const msg = localStorage.getItem('f14_welcome_msg')
+      if (msg) {
+        showToast(msg)
+        localStorage.removeItem('f14_welcome_msg')
+      }
+    } catch { /* ignore */ }
   }, [])
+
+  // Profile completion prompt (show once per user after first login)
+  useEffect(() => {
+    if (!userId) return
+    try {
+      const seen = localStorage.getItem(`f14_profile_prompt_${userId}`)
+      if (!seen) setShowProfilePrompt(true)
+    } catch { /* ignore */ }
+  }, [userId])
 
   function showToast(msg: string) {
     setToast(msg)
@@ -335,50 +409,15 @@ export default function AthleteDashboard() {
   // Outstanding balance: $0 for demo
   const balance = 0
 
+  function dismissProfilePrompt() {
+    try {
+      if (userId) localStorage.setItem(`f14_profile_prompt_${userId}`, 'seen')
+    } catch { /* ignore */ }
+    setShowProfilePrompt(false)
+  }
+
   return (
     <div className="min-h-screen pb-12" style={{ backgroundColor: '#f4f6f9' }}>
-
-      {/* ── Top Nav ────────────────────────────────────────────────────────── */}
-      <nav className="sticky top-0 z-20 flex items-center justify-between border-b border-gray-200 bg-white px-4 py-3 shadow-sm">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-black tracking-tight text-gray-900">FORMULA<span style={{ color: ACCENT }}>14</span></span>
-        </div>
-        <div className="flex items-center gap-2">
-          <button className="relative flex h-9 w-9 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100">
-            <IconBell size={19} />
-            <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-red-500" />
-          </button>
-          <div className="relative">
-            <button
-              onClick={() => setAvatarOpen(o => !o)}
-              className="flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold text-white"
-              style={{ backgroundColor: ACCENT }}
-            >
-              {initials}
-            </button>
-            {avatarOpen && (
-              <>
-                <div className="fixed inset-0 z-30" onClick={() => setAvatarOpen(false)} />
-                <div className="absolute right-0 top-11 z-40 w-44 overflow-hidden rounded-xl border border-gray-100 bg-white shadow-xl">
-                  <div className="border-b border-gray-100 px-4 py-2.5">
-                    <p className="text-xs font-bold text-gray-800">{name}</p>
-                    <p className="text-[11px] text-gray-400">Athlete</p>
-                  </div>
-                  <Link href="/portal" className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-600 hover:bg-gray-50">
-                    <IconUser size={15} /> My Profile
-                  </Link>
-                  <button
-                    onClick={() => signOut({ callbackUrl: '/login' })}
-                    className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-gray-600 hover:bg-gray-50"
-                  >
-                    <IconLogout size={15} /> Sign out
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      </nav>
 
       {/* ── Header / Greeting ─────────────────────────────────────────────── */}
       <div className="px-4 py-6" style={{ background: `linear-gradient(135deg, ${ACCENT}12 0%, transparent 60%)` }}>
@@ -427,13 +466,13 @@ export default function AthleteDashboard() {
         <div className="rounded-2xl bg-white shadow-sm">
           <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
             <h2 className="font-bold text-gray-900">Upcoming Sessions</h2>
-            <Link href="/portal" className="flex items-center gap-1 rounded-xl px-3 py-1.5 text-xs font-bold text-white" style={{ backgroundColor: ACCENT }}>
+            <Link href="/athlete/book" className="flex items-center gap-1 rounded-xl px-3 py-1.5 text-xs font-bold text-white" style={{ backgroundColor: ACCENT }}>
               + Book
             </Link>
           </div>
           {sessions.length === 0 ? (
             <div className="py-10 text-center text-sm text-gray-400">
-              No sessions booked. <Link href="/portal" className="font-semibold underline" style={{ color: ACCENT }}>Book one now</Link>
+              No sessions booked. <Link href="/athlete/book" className="font-semibold underline" style={{ color: ACCENT }}>Book one now</Link>
             </div>
           ) : (
             <ul className="divide-y divide-gray-50">
@@ -484,7 +523,7 @@ export default function AthleteDashboard() {
             {scheduledToday.length === 0 ? (
               <div className="py-8 text-center text-sm text-gray-400">
                 No habits set up yet.{' '}
-                <Link href="/goals" className="font-semibold underline" style={{ color: ACCENT }}>Set them up</Link>
+                <Link href="/athlete/goals" className="font-semibold underline" style={{ color: ACCENT }}>Set them up</Link>
               </div>
             ) : (
               <div className="divide-y divide-gray-50">
@@ -514,7 +553,7 @@ export default function AthleteDashboard() {
               </div>
             )}
             <div className="border-t border-gray-50 px-5 py-3">
-              <Link href="/goals" className="flex items-center gap-1 text-xs font-semibold" style={{ color: ACCENT }}>
+              <Link href="/athlete/goals" className="flex items-center gap-1 text-xs font-semibold" style={{ color: ACCENT }}>
                 View all habits <IconChevronRight size={13} />
               </Link>
             </div>
@@ -529,7 +568,7 @@ export default function AthleteDashboard() {
             {activeGoals.length === 0 ? (
               <div className="py-8 text-center text-sm text-gray-400">
                 No active goals.{' '}
-                <Link href="/goals" className="font-semibold underline" style={{ color: ACCENT }}>Set a goal</Link>
+                <Link href="/athlete/goals" className="font-semibold underline" style={{ color: ACCENT }}>Set a goal</Link>
               </div>
             ) : (
               <div className="divide-y divide-gray-50">
@@ -556,7 +595,7 @@ export default function AthleteDashboard() {
               </div>
             )}
             <div className="border-t border-gray-50 px-5 py-3">
-              <Link href="/goals" className="flex items-center gap-1 text-xs font-semibold" style={{ color: ACCENT }}>
+              <Link href="/athlete/goals" className="flex items-center gap-1 text-xs font-semibold" style={{ color: ACCENT }}>
                 View all goals <IconChevronRight size={13} />
               </Link>
             </div>
@@ -650,7 +689,7 @@ export default function AthleteDashboard() {
                   </div>
                 ))}
               </div>
-              <Link href="/portal" className="block text-center rounded-xl border border-gray-200 py-2 text-xs font-bold text-gray-600 hover:bg-gray-50">
+              <Link href="/athlete/book" className="block text-center rounded-xl border border-gray-200 py-2 text-xs font-bold text-gray-600 hover:bg-gray-50">
                 Manage Membership
               </Link>
             </div>
@@ -662,8 +701,8 @@ export default function AthleteDashboard() {
           <h2 className="mb-3 text-xs font-bold uppercase tracking-wide text-gray-400">Quick Actions</h2>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
             {[
-              { label: 'Book a Session',    href: '/portal',         icon: <IconCalendar size={20} />,       color: ACCENT      },
-              { label: 'My Bookings',       href: '/portal',         icon: <IconLayoutDashboard size={20} />, color: '#8b5cf6'  },
+              { label: 'Book a Session',    href: '/athlete/book',         icon: <IconCalendar size={20} />,       color: ACCENT      },
+              { label: 'My Bookings',       href: '/athlete/bookings',     icon: <IconLayoutDashboard size={20} />, color: '#8b5cf6'  },
               { label: 'Check In',          href: '#',               icon: <IconMoodSmile size={20} />,      color: '#10b981', action: () => setShowFeelModal(true) },
               { label: 'Message Coach',     href: '#',               icon: <IconBook size={20} />,           color: '#f59e0b', disabled: true },
               { label: 'Leaderboard',       href: '/shooting-test',  icon: <IconTarget size={20} />,         color: '#ef4444'  },
@@ -697,6 +736,9 @@ export default function AthleteDashboard() {
           onCancel={() => { cancelSession(cancelTarget.id); setCancelTarget(null) }}
           onClose={() => setCancelTarget(null)}
         />
+      )}
+      {showProfilePrompt && (
+        <ProfileCompleteModal onDone={dismissProfilePrompt} />
       )}
 
       {/* ── Toast ─────────────────────────────────────────────────────────── */}
