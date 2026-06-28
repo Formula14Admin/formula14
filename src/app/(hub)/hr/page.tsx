@@ -2,6 +2,8 @@
 
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { sendEmail } from '@/lib/send-email'
+import { supabase } from '@/lib/supabase'
+import { CANONICAL_SESSION_TYPES } from '@/lib/sessionTypes'
 import {
   IconBriefcase,
   IconUsers,
@@ -682,13 +684,131 @@ function ModalSelect({ label, value, onChange, options }: {
 
 // ── Availability Tab ───────────────────────────────────────────────────────────
 
+// day_of_week: 0=Sun,1=Mon,2=Tue,3=Wed,4=Thu,5=Fri,6=Sat (JS Date.getDay() convention)
 const DAYS_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+const DOW_JS     = [1, 2, 3, 4, 5, 6, 0]  // maps DAYS_SHORT index → JS day-of-week
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
+
+const COACHED_TYPE_IDS = CANONICAL_SESSION_TYPES.filter(t => !t.selfServe).map(t => t.id)
+
+interface CoachDayRow {
+  id?: string
+  coachId: string
+  dayOfWeek: number
+  startTime: string  // 'HH:MM'
+  endTime: string
+  sessionTypesEnabled: string[]
+}
+
+interface FacilityDayRow {
+  id?: string
+  dayOfWeek: number
+  startTime: string
+  endTime: string
+  disabledSessionTypes: string[]
+}
+
+interface ExceptionRow {
+  id: string
+  appliesTo: string
+  exceptionType: 'block' | 'extra'
+  date: string
+  startTime: string | null
+  endTime: string | null
+  reason: string | null
+}
+
+function timeStr(raw: string | null | undefined): string {
+  if (!raw) return ''
+  return raw.slice(0, 5) // '06:00:00' → '06:00'
+}
 
 function AvailabilityTab({ staff }: { staff: StaffMember[] }) {
   const [sub, setSub] = useState<AvailSub>('overview')
   const [calMonth, setCalMonth] = useState(() => new Date())
 
+  // ── DB state ────────────────────────────────────────────────────────────────
+  const [coachRows,    setCoachRows]    = useState<CoachDayRow[]>([])
+  const [facilityRows, setFacilityRows] = useState<FacilityDayRow[]>([])
+  const [exceptions,   setExceptions]   = useState<ExceptionRow[]>([])
+  const [loading,      setLoading]      = useState(true)
+
+  // Local edit state (coach schedules)
+  const [coachEdits,    setCoachEdits]    = useState<Record<string, CoachDayRow[]>>({})
+  const [savingCoach,   setSavingCoach]   = useState<string | null>(null)
+  const [coachSaved,    setCoachSaved]    = useState<string | null>(null)
+
+  // Local edit state (facility)
+  const [facilityEdits, setFacilityEdits] = useState<FacilityDayRow[]>([])
+  const [savingFacility, setSavingFacility] = useState(false)
+  const [facilitySaved,  setFacilitySaved]  = useState(false)
+
+  // Exception form
+  const [exForm, setExForm] = useState({ appliesTo: 'facility', exType: 'block', date: '', startTime: '', endTime: '', reason: '' })
+  const [savingEx, setSavingEx] = useState(false)
+
+  // ── Load from Supabase ───────────────────────────────────────────────────────
+  useEffect(() => {
+    void (async () => {
+      setLoading(true)
+      const [{ data: cd }, { data: fd }, { data: ex }] = await Promise.all([
+        supabase.from('coach_availability').select('*').order('day_of_week'),
+        supabase.from('facility_availability').select('*').order('day_of_week'),
+        supabase.from('availability_exceptions').select('*').order('date'),
+      ])
+
+      const coachParsed: CoachDayRow[] = (cd ?? []).map((r: Record<string, unknown>) => ({
+        id:                  r.id as string,
+        coachId:             r.coach_id as string,
+        dayOfWeek:           r.day_of_week as number,
+        startTime:           timeStr(r.start_time as string),
+        endTime:             timeStr(r.end_time as string),
+        sessionTypesEnabled: (r.session_types_enabled as string[]) ?? [],
+      }))
+
+      const facParsed: FacilityDayRow[] = (fd ?? []).map((r: Record<string, unknown>) => ({
+        id:                   r.id as string,
+        dayOfWeek:            r.day_of_week as number,
+        startTime:            timeStr(r.start_time as string),
+        endTime:              timeStr(r.end_time as string),
+        disabledSessionTypes: (r.disabled_session_types as string[]) ?? [],
+      }))
+
+      const exParsed: ExceptionRow[] = (ex ?? []).map((r: Record<string, unknown>) => ({
+        id:            r.id as string,
+        appliesTo:     r.applies_to as string,
+        exceptionType: r.exception_type as 'block' | 'extra',
+        date:          r.date as string,
+        startTime:     timeStr(r.start_time as string | null) || null,
+        endTime:       timeStr(r.end_time as string | null) || null,
+        reason:        (r.reason as string | null) ?? null,
+      }))
+
+      setCoachRows(coachParsed)
+      setFacilityRows(facParsed)
+      setExceptions(exParsed)
+
+      // Initialise edit state from DB
+      const coachMap: Record<string, CoachDayRow[]> = {}
+      for (const s of staff) {
+        const days = coachParsed.filter(r => r.coachId === s.id)
+        coachMap[s.id] = DOW_JS.map((jsDow, idx) => {
+          const ex = days.find(r => r.dayOfWeek === jsDow)
+          return ex ?? { coachId: s.id, dayOfWeek: jsDow, startTime: '06:00', endTime: '21:00', sessionTypesEnabled: [...COACHED_TYPE_IDS] }
+        })
+      }
+      setCoachEdits(coachMap)
+      setFacilityEdits(DOW_JS.map((jsDow) => {
+        const ex = facParsed.find(r => r.dayOfWeek === jsDow)
+        return ex ?? { dayOfWeek: jsDow, startTime: '', endTime: '', disabledSessionTypes: [] }
+      }))
+
+      setLoading(false)
+    })()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // ── Overview calendar helpers ────────────────────────────────────────────────
   const monthDates = useMemo(() => {
     const y = calMonth.getFullYear(), m = calMonth.getMonth()
     const firstDow = ((new Date(y, m, 1).getDay() + 6) % 7)
@@ -703,11 +823,94 @@ function AvailabilityTab({ staff }: { staff: StaffMember[] }) {
 
   const coachColors: Record<string, string> = { s1: '#6BA3D6', s2: '#6BAD6B', s3: '#D4A520' }
 
-  // Simulate coach availability per day-of-week
-  const coachDows: Record<string, number[]> = {
-    s1: [0, 1, 2, 3, 4],      // Mon–Fri
-    s2: [1, 2, 3, 4, 5],      // Tue–Sat
-    s3: [5, 6],               // Sat–Sun
+  // ── Save coach schedule ──────────────────────────────────────────────────────
+  async function saveCoachSchedule(staffId: string) {
+    setSavingCoach(staffId)
+    const rows = coachEdits[staffId] ?? []
+    // enabledDays = rows where startTime and endTime are set
+    const enabledRows = rows.filter(r => r.startTime && r.endTime)
+    const disabledDows = rows.filter(r => !r.startTime || !r.endTime).map(r => r.dayOfWeek)
+
+    // Delete rows for disabled days
+    if (disabledDows.length > 0) {
+      await supabase.from('coach_availability').delete()
+        .eq('coach_id', staffId).in('day_of_week', disabledDows)
+    }
+    // Upsert enabled days
+    for (const row of enabledRows) {
+      await supabase.from('coach_availability').upsert({
+        ...(row.id ? { id: row.id } : {}),
+        coach_id:              staffId,
+        day_of_week:           row.dayOfWeek,
+        start_time:            row.startTime,
+        end_time:              row.endTime,
+        session_types_enabled: row.sessionTypesEnabled,
+      }, { onConflict: 'coach_id,day_of_week' })
+    }
+    setSavingCoach(null)
+    setCoachSaved(staffId)
+    setTimeout(() => setCoachSaved(null), 2000)
+  }
+
+  // ── Save facility schedule ───────────────────────────────────────────────────
+  async function saveFacilitySchedule() {
+    setSavingFacility(true)
+    const enabledRows  = facilityEdits.filter(r => r.startTime && r.endTime)
+    const disabledDows = facilityEdits.filter(r => !r.startTime || !r.endTime).map(r => r.dayOfWeek)
+
+    if (disabledDows.length > 0) {
+      await supabase.from('facility_availability').delete().in('day_of_week', disabledDows)
+    }
+    for (const row of enabledRows) {
+      await supabase.from('facility_availability').upsert({
+        ...(row.id ? { id: row.id } : {}),
+        day_of_week:             row.dayOfWeek,
+        start_time:              row.startTime,
+        end_time:                row.endTime,
+        disabled_session_types:  row.disabledSessionTypes,
+      }, { onConflict: 'day_of_week' })
+    }
+    setSavingFacility(false)
+    setFacilitySaved(true)
+    setTimeout(() => setFacilitySaved(false), 2000)
+  }
+
+  // ── Save exception ───────────────────────────────────────────────────────────
+  async function saveException(e: React.FormEvent) {
+    e.preventDefault()
+    if (!exForm.date) return
+    setSavingEx(true)
+    await supabase.from('availability_exceptions').insert({
+      applies_to:     exForm.appliesTo,
+      exception_type: exForm.exType,
+      date:           exForm.date,
+      start_time:     exForm.startTime || null,
+      end_time:       exForm.endTime   || null,
+      reason:         exForm.reason    || null,
+    })
+    const { data } = await supabase.from('availability_exceptions').select('*').order('date')
+    setExceptions((data ?? []).map((r: Record<string, unknown>) => ({
+      id: r.id as string, appliesTo: r.applies_to as string, exceptionType: r.exception_type as 'block' | 'extra',
+      date: r.date as string, startTime: timeStr(r.start_time as string | null) || null,
+      endTime: timeStr(r.end_time as string | null) || null, reason: (r.reason as string | null) ?? null,
+    })))
+    setExForm({ appliesTo: 'facility', exType: 'block', date: '', startTime: '', endTime: '', reason: '' })
+    setSavingEx(false)
+  }
+
+  async function deleteException(id: string) {
+    await supabase.from('availability_exceptions').delete().eq('id', id)
+    setExceptions(prev => prev.filter(e => e.id !== id))
+  }
+
+  const INPUT_SM = 'rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs outline-none focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/20'
+
+  if (loading) {
+    return (
+      <div className="flex flex-1 items-center justify-center p-10 text-sm text-gray-400">
+        Loading availability…
+      </div>
+    )
   }
 
   return (
@@ -739,24 +942,27 @@ function AvailabilityTab({ staff }: { staff: StaffMember[] }) {
           <div className="grid grid-cols-7 gap-1">
             {monthDates.map((iso, i) => {
               if (!iso) return <div key={i} className="h-20 rounded-lg" />
-              const dow = ((new Date(iso + 'T12:00:00').getDay() + 6) % 7)
+              const jsDow = new Date(iso + 'T12:00:00').getDay()
               const isToday = iso === TODAY_ISO
               const day = parseInt(iso.slice(8), 10)
-              const present = staff.filter(s => coachDows[s.id]?.includes(dow))
+              const present = staff.filter(s => coachRows.some(r => r.coachId === s.id && r.dayOfWeek === jsDow))
+              const blocked = exceptions.some(e => e.exceptionType === 'block' && e.date === iso)
               return (
-                <div key={iso} className={`h-20 rounded-lg border p-1.5 ${isToday ? 'border-[#6BA3D6] bg-[#6BA3D6]/5' : 'border-gray-100 bg-white hover:bg-gray-50'}`}>
-                  <p className={`mb-1 text-xs font-bold ${isToday ? 'text-[#6BA3D6]' : 'text-gray-600'}`}>{day}</p>
-                  <div className="flex flex-wrap gap-0.5">
-                    {present.map(s => (
-                      <div key={s.id} title={`${s.firstName} ${s.lastName}`}
-                        className="h-2 w-2 rounded-full" style={{ backgroundColor: coachColors[s.id] ?? '#9ca3af' }} />
-                    ))}
-                  </div>
+                <div key={iso} className={`h-20 rounded-lg border p-1.5 ${blocked ? 'border-red-100 bg-red-50' : isToday ? 'border-[#6BA3D6] bg-[#6BA3D6]/5' : 'border-gray-100 bg-white hover:bg-gray-50'}`}>
+                  <p className={`mb-1 text-xs font-bold ${isToday ? 'text-[#6BA3D6]' : blocked ? 'text-red-400' : 'text-gray-600'}`}>{day}</p>
+                  {blocked
+                    ? <div className="text-[9px] text-red-400">Closed</div>
+                    : <div className="flex flex-wrap gap-0.5">
+                        {present.map(s => (
+                          <div key={s.id} title={`${s.firstName} ${s.lastName}`}
+                            className="h-2 w-2 rounded-full" style={{ backgroundColor: coachColors[s.id] ?? '#9ca3af' }} />
+                        ))}
+                      </div>
+                  }
                 </div>
               )
             })}
           </div>
-          {/* Legend */}
           <div className="mt-4 flex flex-wrap gap-4">
             {staff.map(s => (
               <div key={s.id} className="flex items-center gap-1.5">
@@ -764,61 +970,226 @@ function AvailabilityTab({ staff }: { staff: StaffMember[] }) {
                 <span className="text-xs text-gray-500">{s.firstName} {s.lastName}</span>
               </div>
             ))}
+            <div className="flex items-center gap-1.5">
+              <div className="h-2.5 w-2.5 rounded-full bg-red-300" />
+              <span className="text-xs text-gray-500">Blocked</span>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Coach schedules */}
+      {/* Coach schedules — editable */}
       {sub === 'coach' && (
         <div className="flex-1 overflow-y-auto space-y-5">
           {staff.map(s => {
-            const dows = coachDows[s.id] ?? []
+            const days = coachEdits[s.id] ?? []
             return (
               <div key={s.id} className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-                <div className="mb-4 flex items-center gap-3">
-                  <Avatar firstName={s.firstName} lastName={s.lastName} size={36} />
-                  <div>
-                    <p className="text-sm font-bold text-gray-900">{s.firstName} {s.lastName}</p>
-                    <p className="text-xs text-gray-500">{s.role} · {EMPLOYMENT_LABELS[s.employmentType]}</p>
+                <div className="mb-4 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Avatar firstName={s.firstName} lastName={s.lastName} size={36} />
+                    <div>
+                      <p className="text-sm font-bold text-gray-900">{s.firstName} {s.lastName}</p>
+                      <p className="text-xs text-gray-500">{s.role} · {EMPLOYMENT_LABELS[s.employmentType]}</p>
+                    </div>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => void saveCoachSchedule(s.id)}
+                    disabled={savingCoach === s.id}
+                    className="rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
+                    style={{ backgroundColor: coachSaved === s.id ? '#10b981' : ACCENT }}>
+                    {savingCoach === s.id ? 'Saving…' : coachSaved === s.id ? 'Saved ✓' : 'Save Changes'}
+                  </button>
                 </div>
-                <div className="grid grid-cols-7 gap-2">
-                  {DAYS_SHORT.map((d, i) => {
-                    const available = dows.includes(i)
+
+                <div className="space-y-3">
+                  {DAYS_SHORT.map((dayLabel, idx) => {
+                    const jsDow = DOW_JS[idx]
+                    const row   = days.find(r => r.dayOfWeek === jsDow) ?? { coachId: s.id, dayOfWeek: jsDow, startTime: '', endTime: '', sessionTypesEnabled: [] }
+                    const isOn  = !!(row.startTime && row.endTime)
+
+                    function updateRow(patch: Partial<CoachDayRow>) {
+                      setCoachEdits(prev => {
+                        const updated = (prev[s.id] ?? []).map(r => r.dayOfWeek === jsDow ? { ...r, ...patch } : r)
+                        if (!updated.find(r => r.dayOfWeek === jsDow)) {
+                          updated.push({ coachId: s.id, dayOfWeek: jsDow, startTime: '', endTime: '', sessionTypesEnabled: [...COACHED_TYPE_IDS], ...patch })
+                        }
+                        return { ...prev, [s.id]: updated }
+                      })
+                    }
+
                     return (
-                      <div key={d} className={`rounded-lg border py-2 text-center text-xs font-semibold ${available ? 'border-green-200 bg-green-50 text-green-700' : 'border-gray-100 bg-gray-50 text-gray-300'}`}>
-                        {d}
-                        <div className="mt-1">{available ? '✓' : '–'}</div>
+                      <div key={dayLabel} className={`rounded-xl border px-4 py-3 transition ${isOn ? 'border-gray-200 bg-white' : 'border-gray-100 bg-gray-50'}`}>
+                        <div className="flex flex-wrap items-center gap-3">
+                          <button
+                            type="button"
+                            onClick={() => updateRow(isOn ? { startTime: '', endTime: '' } : { startTime: '06:00', endTime: '21:00', sessionTypesEnabled: [...COACHED_TYPE_IDS] })}
+                            className={`relative h-5 w-9 rounded-full transition-colors ${isOn ? 'bg-green-500' : 'bg-gray-300'}`}>
+                            <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${isOn ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                          </button>
+                          <span className={`w-9 text-xs font-bold ${isOn ? 'text-gray-700' : 'text-gray-400'}`}>{dayLabel}</span>
+
+                          {isOn && (
+                            <>
+                              <input type="time" value={row.startTime} onChange={e => updateRow({ startTime: e.target.value })}
+                                className={INPUT_SM} />
+                              <span className="text-xs text-gray-400">–</span>
+                              <input type="time" value={row.endTime} onChange={e => updateRow({ endTime: e.target.value })}
+                                className={INPUT_SM} />
+                              <span className="ml-auto hidden sm:flex flex-wrap gap-1.5">
+                                {CANONICAL_SESSION_TYPES.filter(t => !t.selfServe).map(t => {
+                                  const on = row.sessionTypesEnabled.includes(t.id)
+                                  return (
+                                    <button key={t.id} type="button"
+                                      onClick={() => {
+                                        const next = on
+                                          ? row.sessionTypesEnabled.filter(x => x !== t.id)
+                                          : [...row.sessionTypesEnabled, t.id]
+                                        updateRow({ sessionTypesEnabled: next })
+                                      }}
+                                      className="rounded-full px-2 py-0.5 text-[10px] font-semibold transition"
+                                      style={on
+                                        ? { backgroundColor: `${ACCENT}20`, color: ACCENT, border: `1px solid ${ACCENT}40` }
+                                        : { backgroundColor: '#f3f4f6', color: '#9ca3af', border: '1px solid #e5e7eb' }}>
+                                      {t.label}
+                                    </button>
+                                  )
+                                })}
+                              </span>
+                            </>
+                          )}
+                          {!isOn && <span className="text-xs text-gray-400">Unavailable</span>}
+                        </div>
+                        {isOn && (
+                          <div className="mt-2 flex sm:hidden flex-wrap gap-1.5">
+                            {CANONICAL_SESSION_TYPES.filter(t => !t.selfServe).map(t => {
+                              const on = row.sessionTypesEnabled.includes(t.id)
+                              return (
+                                <button key={t.id} type="button"
+                                  onClick={() => {
+                                    const next = on
+                                      ? row.sessionTypesEnabled.filter(x => x !== t.id)
+                                      : [...row.sessionTypesEnabled, t.id]
+                                    updateRow({ sessionTypesEnabled: next })
+                                  }}
+                                  className="rounded-full px-2 py-0.5 text-[10px] font-semibold transition"
+                                  style={on
+                                    ? { backgroundColor: `${ACCENT}20`, color: ACCENT, border: `1px solid ${ACCENT}40` }
+                                    : { backgroundColor: '#f3f4f6', color: '#9ca3af', border: '1px solid #e5e7eb' }}>
+                                  {t.label}
+                                </button>
+                              )
+                            })}
+                          </div>
+                        )}
                       </div>
                     )
                   })}
                 </div>
-                <p className="mt-3 text-xs text-gray-400 italic">Read-only — update via coach&apos;s own availability settings.</p>
               </div>
             )
           })}
         </div>
       )}
 
-      {/* Facility settings */}
+      {/* Facility settings — editable */}
       {sub === 'facility' && (
-        <div className="flex-1 overflow-y-auto rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-          <h3 className="mb-4 text-sm font-bold text-gray-900">Default Facility Hours</h3>
-          <div className="space-y-2">
-            {DAYS_SHORT.map((day, i) => {
-              const defaultOpen = i < 6
-              return (
-                <div key={day} className="flex items-center gap-4 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-                  <p className="w-12 text-sm font-semibold text-gray-700">{day}</p>
-                  <div className={`h-2 w-2 rounded-full ${defaultOpen ? 'bg-green-500' : 'bg-red-400'}`} />
-                  <p className="text-sm text-gray-600">{defaultOpen ? '6:00 am – 9:00 pm' : 'Closed'}</p>
-                  <span className="ml-auto text-xs text-gray-400">Edit in Bookings → Calendar settings</span>
-                </div>
-              )
-            })}
+        <div className="flex-1 overflow-y-auto space-y-5">
+          {/* Hours editor */}
+          <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-sm font-bold text-gray-900">Facility Hours</h3>
+              <button type="button" onClick={() => void saveFacilitySchedule()} disabled={savingFacility}
+                className="rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
+                style={{ backgroundColor: facilitySaved ? '#10b981' : ACCENT }}>
+                {savingFacility ? 'Saving…' : facilitySaved ? 'Saved ✓' : 'Save Changes'}
+              </button>
+            </div>
+            <div className="space-y-3">
+              {DAYS_SHORT.map((dayLabel, idx) => {
+                const jsDow = DOW_JS[idx]
+                const row   = facilityEdits.find(r => r.dayOfWeek === jsDow) ?? { dayOfWeek: jsDow, startTime: '', endTime: '', disabledSessionTypes: [] }
+                const isOn  = !!(row.startTime && row.endTime)
+
+                function updateFac(patch: Partial<FacilityDayRow>) {
+                  setFacilityEdits(prev => {
+                    const updated = prev.map(r => r.dayOfWeek === jsDow ? { ...r, ...patch } : r)
+                    if (!updated.find(r => r.dayOfWeek === jsDow)) {
+                      updated.push({ dayOfWeek: jsDow, startTime: '', endTime: '', disabledSessionTypes: [], ...patch })
+                    }
+                    return updated
+                  })
+                }
+
+                return (
+                  <div key={dayLabel} className={`rounded-xl border px-4 py-3 transition ${isOn ? 'border-gray-200 bg-white' : 'border-gray-100 bg-gray-50'}`}>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <button type="button"
+                        onClick={() => updateFac(isOn ? { startTime: '', endTime: '' } : { startTime: '06:00', endTime: '21:00' })}
+                        className={`relative h-5 w-9 rounded-full transition-colors ${isOn ? 'bg-green-500' : 'bg-gray-300'}`}>
+                        <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${isOn ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                      </button>
+                      <span className={`w-9 text-xs font-bold ${isOn ? 'text-gray-700' : 'text-gray-400'}`}>{dayLabel}</span>
+                      {isOn ? (
+                        <>
+                          <input type="time" value={row.startTime} onChange={e => updateFac({ startTime: e.target.value })} className={INPUT_SM} />
+                          <span className="text-xs text-gray-400">–</span>
+                          <input type="time" value={row.endTime} onChange={e => updateFac({ endTime: e.target.value })} className={INPUT_SM} />
+                        </>
+                      ) : (
+                        <span className="text-xs text-gray-400">Closed</span>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
           </div>
-          <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs text-blue-700">
-            Full facility schedule management (overrides, public holidays, closures) is available in <strong>Bookings → Calendar</strong>.
+
+          {/* Exceptions */}
+          <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+            <h3 className="mb-4 text-sm font-bold text-gray-900">Exceptions &amp; Closures</h3>
+            {exceptions.length > 0 && (
+              <div className="mb-4 space-y-2">
+                {exceptions.map(ex => (
+                  <div key={ex.id} className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 px-4 py-2.5">
+                    <div className={`h-2 w-2 rounded-full shrink-0 ${ex.exceptionType === 'block' ? 'bg-red-400' : 'bg-green-500'}`} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-gray-700">{ex.date} — <span className="font-normal">{ex.appliesTo === 'facility' ? 'Facility' : `Coach: ${ex.appliesTo.replace('coach:', '')}`}</span></p>
+                      {ex.reason && <p className="text-xs text-gray-400">{ex.reason}</p>}
+                      {ex.startTime && <p className="text-xs text-gray-400">{ex.startTime} – {ex.endTime}</p>}
+                    </div>
+                    <button type="button" onClick={() => void deleteException(ex.id)} className="shrink-0 rounded-lg p-1 text-gray-300 hover:text-red-400">
+                      <IconX size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <form onSubmit={e => void saveException(e)} className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Add Exception</p>
+              <div className="flex flex-wrap gap-2">
+                <select value={exForm.appliesTo} onChange={e => setExForm(p => ({ ...p, appliesTo: e.target.value }))} className={INPUT_SM}>
+                  <option value="facility">Facility</option>
+                  {staff.map(s => <option key={s.id} value={`coach:${s.id}`}>{s.firstName} {s.lastName}</option>)}
+                </select>
+                <select value={exForm.exType} onChange={e => setExForm(p => ({ ...p, exType: e.target.value }))} className={INPUT_SM}>
+                  <option value="block">Block (closure)</option>
+                  <option value="extra">Extra hours</option>
+                </select>
+                <input type="date" required value={exForm.date} onChange={e => setExForm(p => ({ ...p, date: e.target.value }))} className={INPUT_SM} />
+                <input type="time" placeholder="Start (optional)" value={exForm.startTime} onChange={e => setExForm(p => ({ ...p, startTime: e.target.value }))} className={INPUT_SM} />
+                <input type="time" placeholder="End (optional)" value={exForm.endTime} onChange={e => setExForm(p => ({ ...p, endTime: e.target.value }))} className={INPUT_SM} />
+                <input type="text" placeholder="Reason (optional)" value={exForm.reason} onChange={e => setExForm(p => ({ ...p, reason: e.target.value }))} className={`${INPUT_SM} min-w-[160px] flex-1`} />
+                <button type="submit" disabled={savingEx || !exForm.date}
+                  className="rounded-lg px-3 py-1 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
+                  style={{ backgroundColor: ACCENT }}>
+                  {savingEx ? 'Saving…' : 'Add'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
