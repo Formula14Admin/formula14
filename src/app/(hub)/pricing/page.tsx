@@ -385,6 +385,7 @@ function uid(): string {
 }
 
 function getPriceForCount(tiers: PricingTier[], count: number): number | null {
+  if (!Array.isArray(tiers)) return null
   const tier = tiers.find(t => count >= t.min && (t.max === null || count <= t.max))
   return tier?.pricePerAthlete ?? null
 }
@@ -444,7 +445,19 @@ export default function PricingPage() {
   const [pricingConfigs, setPricingConfigs] = useState<SessionPricingConfig[]>(() => {
     try {
       const raw = typeof window !== 'undefined' ? localStorage.getItem(PRICING_CONFIGS_LS) : null
-      if (raw) { const parsed = JSON.parse(raw) as SessionPricingConfig[]; if (Array.isArray(parsed) && parsed.length > 0) return parsed }
+      if (raw) {
+        const parsed = JSON.parse(raw) as SessionPricingConfig[]
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // Sanitise: if any config has a non-array tiers (stale Supabase string data), coerce it
+          const sanitised = parsed.map(c => ({
+            ...c,
+            tiers: Array.isArray(c.tiers)
+              ? c.tiers
+              : (() => { try { const t = JSON.parse(c.tiers as unknown as string); return Array.isArray(t) ? t : [] } catch { return [] } })(),
+          }))
+          return sanitised
+        }
+      }
     } catch {}
     return INIT_PRICING
   })
@@ -466,7 +479,7 @@ export default function PricingPage() {
   const [catalogue, setCatalogue] = useState<ProgramCatalogueItem[]>(() => {
     try {
       const raw = typeof window !== 'undefined' ? localStorage.getItem('f14_program_catalogue') : null
-      if (raw) { const parsed = JSON.parse(raw); if (parsed.length > 0) return parsed }
+      if (raw) { const parsed = JSON.parse(raw) as ProgramCatalogueItem[]; if (Array.isArray(parsed) && parsed.length > 0) return parsed }
     } catch {}
     return INIT_CATALOGUE
   })
