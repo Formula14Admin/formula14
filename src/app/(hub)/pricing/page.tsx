@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import {
   IconLock,
   IconLockOpen,
@@ -439,6 +439,40 @@ function Toggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
   )
 }
 
+// ─── Error Boundary ───────────────────────────────────────────────────────────
+
+class PricingConfigErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props)
+    this.state = { hasError: false }
+  }
+  static getDerivedStateFromError() { return { hasError: true } }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex flex-col items-center justify-center rounded-xl border border-red-200 bg-red-50 py-16 text-center">
+          <p className="text-base font-semibold text-red-700">Something went wrong loading Pricing Config</p>
+          <p className="mt-2 text-sm text-gray-500">Cached pricing data may be corrupt. Use the button below to reset and reload.</p>
+          <button
+            onClick={() => {
+              localStorage.removeItem('f14_pricing_configs')
+              localStorage.removeItem('f14_program_catalogue')
+              window.location.reload()
+            }}
+            className="mt-5 rounded-xl bg-red-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
+          >
+            Reset &amp; Refresh
+          </button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function PricingPage() {
@@ -723,6 +757,35 @@ export default function PricingPage() {
     if (typeof window === 'undefined') return
     localStorage.setItem(PRICING_CONFIGS_LS, JSON.stringify(pricingConfigs))
   }, [pricingConfigs])
+
+  // One-time mount: deep-sanitise tier field types so numeric fields are always numbers
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const raw = localStorage.getItem(PRICING_CONFIGS_LS)
+    if (!raw) return
+    try {
+      const parsed = JSON.parse(raw) as SessionPricingConfig[]
+      if (!Array.isArray(parsed)) return
+      let changed = false
+      const cleaned = parsed.map(c => {
+        if (!Array.isArray(c.tiers)) return c
+        const cleanedTiers = c.tiers.map(t => {
+          const id             = t.id ?? uid()
+          const min            = (typeof t.min === 'number' && !isNaN(t.min)) ? t.min : 1
+          const max            = (t.max === null) ? null : (typeof t.max === 'number' && !isNaN(t.max)) ? t.max : null
+          const pricePerAthlete = (typeof t.pricePerAthlete === 'number' && !isNaN(t.pricePerAthlete)) ? t.pricePerAthlete : 0
+          if (id !== t.id || min !== t.min || max !== t.max || pricePerAthlete !== t.pricePerAthlete) changed = true
+          return { ...t, id, min, max, pricePerAthlete }
+        })
+        return { ...c, tiers: cleanedTiers }
+      })
+      if (changed) {
+        localStorage.setItem(PRICING_CONFIGS_LS, JSON.stringify(cleaned))
+        setPricingConfigs(cleaned)
+      }
+    } catch {}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   function saveProg(item: ProgramCatalogueItem) {
     setCatalogue(prev => {
@@ -1216,6 +1279,7 @@ export default function PricingPage() {
           TAB: PRICING CONFIG
           ════════════════════════════════════════════════════════════════════ */}
       {tab === 'pricing' && (
+        <PricingConfigErrorBoundary>
         <div className="space-y-6">
 
           {/* Global settings */}
@@ -1539,7 +1603,7 @@ export default function PricingPage() {
                           ).map(row => (
                             <tr key={row.duration} className="border-b border-gray-100">
                               <td className="py-2 text-gray-700">{row.label}</td>
-                              <td className="py-2 font-semibold text-gray-900">${row.price}.00</td>
+                              <td className="py-2 font-semibold text-gray-900">${row.price ?? 0}.00</td>
                             </tr>
                           ))}
                         </tbody>
@@ -1578,7 +1642,7 @@ export default function PricingPage() {
                                     ? `${tier.min} athlete`
                                     : `${tier.min}–${tier.max} athletes`}
                                 </td>
-                                <td className="py-2 font-semibold text-gray-900">${tier.pricePerAthlete.toFixed(0)} / each</td>
+                                <td className="py-2 font-semibold text-gray-900">${(tier.pricePerAthlete ?? 0).toFixed(0)} / each</td>
                               </tr>
                             ))}
                             {config.tiers.length === 0 && (
@@ -1691,7 +1755,7 @@ export default function PricingPage() {
                             </div>
                             <p className="mt-0.5 text-xs text-gray-500 leading-relaxed">{prog.description}</p>
                             <div className="mt-1.5 flex items-center gap-4 text-xs text-gray-400">
-                              <span>${prog.pricePerSession}/session · {prog.numSessions ?? '—'} sessions → <strong className="text-gray-600">${((prog.pricePerSession) * (prog.numSessions ?? 0)).toFixed(0)} term fee</strong></span>
+                              <span>${prog.pricePerSession ?? 0}/session · {prog.numSessions ?? '—'} sessions → <strong className="text-gray-600">${((prog.pricePerSession ?? 0) * (prog.numSessions ?? 0)).toFixed(0)} term fee</strong></span>
                               <span>Max {prog.maxCapacity} athletes</span>
                             </div>
                           </div>
@@ -1786,7 +1850,7 @@ export default function PricingPage() {
                   </div>
                   {editingProg.numSessions > 0 && (
                     <p className="text-xs text-gray-400">
-                      Term fee: <strong className="text-gray-700">${(editingProg.pricePerSession * editingProg.numSessions).toFixed(0)}</strong> ({editingProg.numSessions} sessions × ${editingProg.pricePerSession})
+                      Term fee: <strong className="text-gray-700">${((editingProg.pricePerSession ?? 0) * (editingProg.numSessions ?? 0)).toFixed(0)}</strong> ({editingProg.numSessions} sessions × ${editingProg.pricePerSession ?? 0})
                     </p>
                   )}
                   <div>
@@ -1852,6 +1916,7 @@ export default function PricingPage() {
           )}
 
         </div>
+        </PricingConfigErrorBoundary>
       )}
     </div>
   )
