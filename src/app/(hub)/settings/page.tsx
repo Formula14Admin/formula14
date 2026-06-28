@@ -1,10 +1,12 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { useSession } from 'next-auth/react'
 import {
   IconPlus, IconTrash, IconEdit, IconCheck, IconX, IconMail,
   IconSend, IconEye, IconBell, IconPlug, IconUser,
-  IconToggleLeft, IconClock, IconRefresh,
+  IconToggleLeft, IconClock, IconRefresh, IconAlertTriangle,
+  IconPlayerPause, IconPlayerPlay, IconFlask, IconChevronDown,
 } from '@tabler/icons-react'
 import {
   loadRecipients, saveRecipients, DEFAULT_RECIPIENTS,
@@ -21,6 +23,18 @@ import {
   type CoachModuleKey,
   type CoachMemberModuleKey,
 } from '@/lib/module-visibility'
+import {
+  DEFAULT_NOTIFICATION_SETTINGS,
+  NOTIFICATION_SETTINGS_KEY,
+  NOTIFICATION_SETTINGS_STORAGE_KEY,
+  ADMIN_EMAILS,
+  TEST_EMAIL_DATA,
+  mergeNotifWithDefaults,
+  type NotificationSettings,
+  type AdminRecipient,
+  type FinanceRecipient,
+} from '@/lib/notification-settings'
+import type { TemplateName } from '@/lib/email-templates'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -310,6 +324,523 @@ function AddRecipientForm({ onAdd, onCancel }: { onAdd: (r: Recipient) => void; 
   )
 }
 
+// ─── Notifications tab ─────────────────────────────────────────────────────────
+
+type SendToOption = AdminRecipient
+
+const HOURS = Array.from({ length: 24 }, (_, i) => i)
+function fmtHour(h: number) {
+  if (h === 0)  return '12:00 AM'
+  if (h === 12) return '12:00 PM'
+  return h < 12 ? `${h}:00 AM` : `${h - 12}:00 PM`
+}
+
+// Small reusable toggle used inside notification rows (different from the module-visibility Toggle above)
+function NotifToggle({ enabled, onChange, disabled }: { enabled: boolean; onChange?: (v: boolean) => void; disabled?: boolean }) {
+  return (
+    <button
+      role="switch"
+      aria-checked={enabled}
+      onClick={() => !disabled && onChange?.(!enabled)}
+      disabled={disabled}
+      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-[#6BA3D6]/40 focus:ring-offset-1 ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+      style={{ backgroundColor: enabled ? ACCENT : '#d1d5db' }}
+    >
+      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${enabled ? 'translate-x-6' : 'translate-x-1'}`} />
+    </button>
+  )
+}
+
+// Badge for "sent to" audience
+function AudienceBadge({ label, color }: { label: string; color: string }) {
+  return (
+    <span className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+      style={{ backgroundColor: color + '18', color }}>
+      {label}
+    </span>
+  )
+}
+
+// SendTo selector (Matt / Jade / Both)
+function SendToSelector({ value, onChange }: { value: SendToOption; onChange: (v: SendToOption) => void }) {
+  return (
+    <select
+      value={value}
+      onChange={e => onChange(e.target.value as SendToOption)}
+      className="rounded-lg border border-gray-200 py-1 pl-2 pr-6 text-xs font-semibold text-gray-700 outline-none focus:border-[#6BA3D6]"
+    >
+      <option value="matt">Matt only</option>
+      <option value="jade">Jade only</option>
+      <option value="both">Matt &amp; Jade</option>
+    </select>
+  )
+}
+
+// Finance recipient checkboxes
+function FinanceRecipientPicker({ value, onChange }: {
+  value: FinanceRecipient[]
+  onChange: (v: FinanceRecipient[]) => void
+}) {
+  const OPTS: { id: FinanceRecipient; label: string }[] = [
+    { id: 'matt', label: 'Matt' },
+    { id: 'jade', label: 'Jade' },
+    { id: 'accountant', label: 'Accountant' },
+  ]
+  function toggle(id: FinanceRecipient) {
+    const next = value.includes(id) ? value.filter(v => v !== id) : [...value, id]
+    onChange(next)
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="text-xs text-gray-500">Send to:</span>
+      {OPTS.map(o => (
+        <label key={o.id} className="flex cursor-pointer items-center gap-1.5">
+          <span onClick={() => toggle(o.id)}
+            className={`flex h-3.5 w-3.5 items-center justify-center rounded border-2 ${value.includes(o.id) ? 'border-[#6BA3D6] bg-[#6BA3D6]' : 'border-gray-300'}`}>
+            {value.includes(o.id) && <IconCheck size={8} style={{ color: 'white' }} />}
+          </span>
+          <span className="text-xs font-medium text-gray-700">{o.label}</span>
+        </label>
+      ))}
+    </div>
+  )
+}
+
+// Inline test email form
+function TestEmailForm({ template, sessionEmail, onClose }: {
+  template: TemplateName
+  sessionEmail: string
+  onClose: () => void
+}) {
+  const [testTo, setTestTo]   = useState(sessionEmail)
+  const [sending, setSending] = useState(false)
+  const [result,  setResult]  = useState<'sent' | 'error' | null>(null)
+
+  async function handleSend() {
+    if (!testTo.trim()) return
+    setSending(true)
+    const sampleData = TEST_EMAIL_DATA[template] ?? {}
+    try {
+      const res = await fetch('/api/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ template, to: testTo.trim(), data: sampleData, test: true }),
+      })
+      const json = await res.json() as { success: boolean }
+      setResult(json.success ? 'sent' : 'error')
+    } catch {
+      setResult('error')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  if (result === 'sent') {
+    return (
+      <div className="mt-3 flex items-center gap-2 rounded-lg bg-green-50 px-3 py-2 text-xs font-semibold text-green-700">
+        <IconCheck size={13} /> Test email sent to {testTo}
+        <button onClick={onClose} className="ml-auto text-green-500 hover:text-green-700"><IconX size={13} /></button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="mt-3 flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 p-2">
+      <IconFlask size={14} className="shrink-0 text-gray-400" />
+      <input
+        type="email"
+        value={testTo}
+        onChange={e => setTestTo(e.target.value)}
+        placeholder="Send test to..."
+        className="min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-gray-400"
+      />
+      {result === 'error' && <span className="text-[11px] text-red-500">Failed</span>}
+      <button
+        onClick={handleSend}
+        disabled={sending || !testTo.trim()}
+        className="flex shrink-0 items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-bold text-white disabled:opacity-50"
+        style={{ backgroundColor: ACCENT }}
+      >
+        {sending ? <IconRefresh size={11} className="animate-spin" /> : <IconSend size={11} />}
+        {sending ? 'Sending…' : 'Send'}
+      </button>
+      <button onClick={onClose} className="shrink-0 text-gray-400 hover:text-gray-600"><IconX size={14} /></button>
+    </div>
+  )
+}
+
+// Single notification row
+function NotifRow({
+  label, desc, audience, audienceColor,
+  enabled, onToggle, alwaysOn,
+  template, sessionEmail,
+  children,
+}: {
+  label:         string
+  desc:          string
+  audience:      string
+  audienceColor: string
+  enabled:       boolean
+  onToggle?:     (v: boolean) => void
+  alwaysOn?:     boolean
+  template:      TemplateName
+  sessionEmail:  string
+  children?:     React.ReactNode
+}) {
+  const [showTest, setShowTest] = useState(false)
+
+  return (
+    <div className={`py-4 ${!enabled && !alwaysOn ? 'opacity-60' : ''}`}>
+      <div className="flex items-start gap-4">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-sm font-semibold text-gray-900">{label}</p>
+            <AudienceBadge label={audience} color={audienceColor} />
+            {alwaysOn && (
+              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-500">
+                Always on
+              </span>
+            )}
+          </div>
+          <p className="mt-0.5 text-xs text-gray-500">{desc}</p>
+          {enabled && children && (
+            <div className="mt-2 flex flex-wrap items-center gap-3">
+              {children}
+            </div>
+          )}
+        </div>
+        <div className="flex shrink-0 items-center gap-3 pt-0.5">
+          <button
+            onClick={() => setShowTest(v => !v)}
+            className="flex items-center gap-1 rounded-lg border border-gray-200 px-2 py-1 text-[11px] font-semibold text-gray-500 hover:bg-gray-100"
+          >
+            <IconFlask size={11} /> Test
+          </button>
+          <span className={`w-6 text-right text-xs font-bold ${alwaysOn || enabled ? '' : 'text-gray-400'}`}
+            style={alwaysOn || enabled ? { color: ACCENT } : {}}>
+            {alwaysOn ? 'ON' : enabled ? 'ON' : 'OFF'}
+          </span>
+          <NotifToggle enabled={alwaysOn ? true : enabled} onChange={onToggle} disabled={alwaysOn} />
+        </div>
+      </div>
+      {showTest && (
+        <TestEmailForm
+          template={template}
+          sessionEmail={sessionEmail}
+          onClose={() => setShowTest(false)}
+        />
+      )}
+    </div>
+  )
+}
+
+// Section wrapper
+function NotifSection({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
+  return (
+    <div className="overflow-hidden rounded-xl bg-white shadow-sm">
+      <div className="border-b border-gray-100 px-6 py-5">
+        <h2 className="text-base font-bold text-gray-900">{title}</h2>
+        <p className="text-xs text-gray-400">{subtitle}</p>
+      </div>
+      <div className="divide-y divide-gray-50 px-6">
+        {children}
+      </div>
+    </div>
+  )
+}
+
+// Full notifications tab
+function NotificationsTab({
+  settings, sessionEmail,
+  onPause, onSendingHours, onPatch,
+}: {
+  settings:       NotificationSettings
+  sessionEmail:   string
+  onPause:        (v: boolean) => void
+  onSendingHours: (start: number, end: number) => void
+  onPatch:        <K extends keyof NotificationSettings>(key: K, patch: Partial<NotificationSettings[K] & object>) => void
+}) {
+  const s = settings
+
+  return (
+    <div className="space-y-6">
+
+      {/* ── Global settings ─── */}
+      <div className="overflow-hidden rounded-xl bg-white shadow-sm">
+        <div className="border-b border-gray-100 px-6 py-5">
+          <h2 className="text-base font-bold text-gray-900">General Settings</h2>
+          <p className="text-xs text-gray-400">Global controls that apply to all email notifications</p>
+        </div>
+
+        {/* Master pause */}
+        <div className="px-6 py-5">
+          <div className={`flex items-start justify-between gap-6 rounded-xl border-2 p-4 transition-colors ${s.paused ? 'border-amber-300 bg-amber-50' : 'border-gray-100 bg-gray-50'}`}>
+            <div className="flex items-start gap-3">
+              <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${s.paused ? 'bg-amber-100' : 'bg-gray-100'}`}>
+                {s.paused
+                  ? <IconPlayerPause size={18} className="text-amber-600" />
+                  : <IconPlayerPlay  size={18} className="text-gray-400" />}
+              </div>
+              <div>
+                <p className={`text-sm font-bold ${s.paused ? 'text-amber-800' : 'text-gray-900'}`}>
+                  {s.paused ? 'Notifications are paused' : 'Pause All Notifications'}
+                </p>
+                <p className={`mt-0.5 text-xs ${s.paused ? 'text-amber-700' : 'text-gray-500'}`}>
+                  {s.paused
+                    ? 'No emails will be sent until you resume. Useful during development or testing.'
+                    : 'Temporarily stop all outbound emails. Individual settings are preserved.'}
+                </p>
+              </div>
+            </div>
+            <div className="flex shrink-0 items-center gap-3">
+              <span className={`text-xs font-bold ${s.paused ? 'text-amber-600' : 'text-gray-400'}`}>
+                {s.paused ? 'PAUSED' : 'ACTIVE'}
+              </span>
+              <NotifToggle enabled={s.paused} onChange={onPause} />
+            </div>
+          </div>
+        </div>
+
+        {/* Sending hours */}
+        <div className="border-t border-gray-50 px-6 py-5">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold text-gray-900">Email Sending Hours</p>
+              <p className="mt-0.5 text-xs text-gray-500">
+                Emails are queued outside these hours and sent at the next available window (Australia/Sydney time)
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-gray-500">From</span>
+              <select
+                value={s.sendingHours.start}
+                onChange={e => onSendingHours(Number(e.target.value), s.sendingHours.end)}
+                className="rounded-lg border border-gray-200 py-1.5 pl-2 pr-6 text-xs font-semibold text-gray-700 outline-none focus:border-[#6BA3D6]"
+              >
+                {HOURS.map(h => <option key={h} value={h}>{fmtHour(h)}</option>)}
+              </select>
+              <span className="text-xs font-semibold text-gray-500">to</span>
+              <select
+                value={s.sendingHours.end}
+                onChange={e => onSendingHours(s.sendingHours.start, Number(e.target.value))}
+                className="rounded-lg border border-gray-200 py-1.5 pl-2 pr-6 text-xs font-semibold text-gray-700 outline-none focus:border-[#6BA3D6]"
+              >
+                {HOURS.map(h => <option key={h} value={h}>{fmtHour(h)}</option>)}
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Athlete Notifications ─── */}
+      <NotifSection title="Athlete Notifications" subtitle="Emails sent directly to athletes about their bookings, membership, and account">
+        <NotifRow label="Booking Confirmation" desc="Sent to athlete when a booking is confirmed (by them or by admin)"
+          audience="Athlete" audienceColor="#6BA3D6"
+          enabled={s.bookingConfirmation.enabled}
+          onToggle={v => onPatch('bookingConfirmation', { enabled: v })}
+          template="booking-confirmation" sessionEmail={sessionEmail} />
+
+        <NotifRow label="Booking Cancellation" desc="Sent to athlete when their booking is cancelled"
+          audience="Athlete" audienceColor="#6BA3D6"
+          enabled={s.bookingCancellation.enabled}
+          onToggle={v => onPatch('bookingCancellation', { enabled: v })}
+          template="booking-cancellation" sessionEmail={sessionEmail} />
+
+        <NotifRow label="Join Request Approved" desc="Sent when coach approves their request to join a Small Group Session"
+          audience="Athlete" audienceColor="#6BA3D6"
+          enabled={s.joinRequestApproved.enabled}
+          onToggle={v => onPatch('joinRequestApproved', { enabled: v })}
+          template="join-request-approved" sessionEmail={sessionEmail} />
+
+        <NotifRow label="Join Request Declined" desc="Sent when coach declines their request to join a Small Group Session"
+          audience="Athlete" audienceColor="#6BA3D6"
+          enabled={s.joinRequestDeclined.enabled}
+          onToggle={v => onPatch('joinRequestDeclined', { enabled: v })}
+          template="join-request-declined" sessionEmail={sessionEmail} />
+
+        <NotifRow label="Session Reminder" desc="Reminder sent before an upcoming session"
+          audience="Athlete" audienceColor="#6BA3D6"
+          enabled={s.sessionReminder.enabled}
+          onToggle={v => onPatch('sessionReminder', { enabled: v })}
+          template="booking-confirmation" sessionEmail={sessionEmail}>
+          <select
+            value={s.sessionReminder.timing}
+            onChange={e => onPatch('sessionReminder', { timing: e.target.value as '24h' | '2h' | 'both' })}
+            className="rounded-lg border border-gray-200 py-1 pl-2 pr-6 text-xs font-semibold text-gray-700 outline-none focus:border-[#6BA3D6]"
+          >
+            <option value="24h">24 hours before</option>
+            <option value="2h">2 hours before</option>
+            <option value="both">Both (24h and 2h)</option>
+          </select>
+        </NotifRow>
+
+        <NotifRow label="Casual Shooting Bump" desc="Sent when their Casual Shooting booking is cancelled due to a higher-priority member"
+          audience="Athlete" audienceColor="#6BA3D6"
+          enabled={s.casualShootingBump.enabled}
+          onToggle={v => onPatch('casualShootingBump', { enabled: v })}
+          template="casual-shooting-bump" sessionEmail={sessionEmail} />
+
+        <NotifRow label="Failed Payment" desc="Sent when their payment fails during batch processing"
+          audience="Athlete" audienceColor="#6BA3D6"
+          enabled={s.failedPaymentAthlete.enabled}
+          onToggle={v => onPatch('failedPaymentAthlete', { enabled: v })}
+          template="failed-payment" sessionEmail={sessionEmail} />
+
+        <NotifRow label="Membership Renewal Reminder" desc="Reminder before their weekly membership renews"
+          audience="Athlete" audienceColor="#6BA3D6"
+          enabled={s.membershipRenewalReminder.enabled}
+          onToggle={v => onPatch('membershipRenewalReminder', { enabled: v })}
+          template="booking-confirmation" sessionEmail={sessionEmail}>
+          <select
+            value={s.membershipRenewalReminder.timing}
+            onChange={e => onPatch('membershipRenewalReminder', { timing: e.target.value as '3days' | '1day' })}
+            className="rounded-lg border border-gray-200 py-1 pl-2 pr-6 text-xs font-semibold text-gray-700 outline-none focus:border-[#6BA3D6]"
+          >
+            <option value="3days">3 days before renewal</option>
+            <option value="1day">1 day before renewal</option>
+          </select>
+        </NotifRow>
+
+        <NotifRow label="Program Enrolment Confirmation" desc="Sent when athlete is enrolled in a program"
+          audience="Athlete" audienceColor="#6BA3D6"
+          enabled={s.programEnrolmentConfirmation.enabled}
+          onToggle={v => onPatch('programEnrolmentConfirmation', { enabled: v })}
+          template="program-enrolment-confirmation" sessionEmail={sessionEmail} />
+
+        <NotifRow label="Welcome / Invitation Email" desc="Sent when a new athlete account is created or they are invited by admin"
+          audience="Athlete" audienceColor="#6BA3D6"
+          enabled={s.athleteWelcome.enabled}
+          onToggle={v => onPatch('athleteWelcome', { enabled: v })}
+          template="athlete-invitation" sessionEmail={sessionEmail} />
+
+        <NotifRow label="Password Reset" desc="Sent when an athlete requests a password reset"
+          audience="Athlete" audienceColor="#6BA3D6"
+          alwaysOn
+          enabled
+          template="password-reset" sessionEmail={sessionEmail} />
+      </NotifSection>
+
+      {/* ── Admin Notifications ─── */}
+      <NotifSection title="Admin Notifications" subtitle="Emails sent to Matt and/or Jade when action is needed">
+        {(
+          [
+            {
+              key: 'newJoinRequest' as const,
+              label: 'New Join Request',
+              desc: 'Notify when an athlete requests to join a Small Group Session',
+              template: 'join-request-approved' as TemplateName,
+            },
+            {
+              key: 'newProgramEnrolmentRequest' as const,
+              label: 'New Program Enrolment Request',
+              desc: 'Notify when an athlete requests to join an approval-required program',
+              template: 'program-enrolment-request' as TemplateName,
+            },
+            {
+              key: 'newAthleteRegistration' as const,
+              label: 'New Athlete Registration',
+              desc: 'Notify when a new athlete signs up through the public registration page',
+              template: 'athlete-invitation' as TemplateName,
+            },
+            {
+              key: 'failedPaymentAdmin' as const,
+              label: 'Failed Payment Alert',
+              desc: 'Notify when any athlete\'s payment fails',
+              template: 'failed-payment' as TemplateName,
+            },
+          ] as const
+        ).map(row => (
+          <NotifRow key={row.key} label={row.label} desc={row.desc}
+            audience="Admin" audienceColor="#7C3AED"
+            enabled={(s[row.key] as { enabled: boolean }).enabled}
+            onToggle={v => onPatch(row.key, { enabled: v })}
+            template={row.template} sessionEmail={sessionEmail}>
+            <SendToSelector
+              value={(s[row.key] as { sendTo: SendToOption }).sendTo}
+              onChange={v => onPatch(row.key, { sendTo: v })}
+            />
+          </NotifRow>
+        ))}
+
+        {/* Low Capacity Alert — has extra threshold input */}
+        <NotifRow label="Low Capacity Alert"
+          desc="Notify when a session drops below a minimum number of athletes 24 hours before"
+          audience="Admin" audienceColor="#7C3AED"
+          enabled={s.lowCapacityAlert.enabled}
+          onToggle={v => onPatch('lowCapacityAlert', { enabled: v })}
+          template="booking-confirmation" sessionEmail={sessionEmail}>
+          <SendToSelector value={s.lowCapacityAlert.sendTo} onChange={v => onPatch('lowCapacityAlert', { sendTo: v })} />
+          <label className="flex items-center gap-1.5 text-xs text-gray-500">
+            Threshold:
+            <input
+              type="number"
+              min={1}
+              max={20}
+              value={s.lowCapacityAlert.threshold}
+              onChange={e => onPatch('lowCapacityAlert', { threshold: Number(e.target.value) || 1 })}
+              className="w-14 rounded-lg border border-gray-200 px-2 py-1 text-xs font-semibold text-gray-700 outline-none focus:border-[#6BA3D6]"
+            />
+            athletes
+          </label>
+        </NotifRow>
+      </NotifSection>
+
+      {/* ── Finance Notifications ─── */}
+      <NotifSection title="Finance Notifications" subtitle="Automated financial summaries sent on a schedule">
+        <NotifRow label="Weekly Revenue Summary"
+          desc="Automatic weekly summary of revenue, expenses, and outstanding payments — sent every Monday morning"
+          audience="Finance" audienceColor="#D4A843"
+          enabled={s.weeklyRevenueSummary.enabled}
+          onToggle={v => onPatch('weeklyRevenueSummary', { enabled: v })}
+          template="finance-summary" sessionEmail={sessionEmail}>
+          <FinanceRecipientPicker
+            value={s.weeklyRevenueSummary.sendTo}
+            onChange={v => onPatch('weeklyRevenueSummary', { sendTo: v })}
+          />
+        </NotifRow>
+
+        <NotifRow label="Monthly Financial Summary"
+          desc="Automatic monthly P&amp;L summary — sent on the 1st of each month"
+          audience="Finance" audienceColor="#D4A843"
+          enabled={s.monthlyFinancialSummary.enabled}
+          onToggle={v => onPatch('monthlyFinancialSummary', { enabled: v })}
+          template="finance-summary" sessionEmail={sessionEmail}>
+          <FinanceRecipientPicker
+            value={s.monthlyFinancialSummary.sendTo}
+            onChange={v => onPatch('monthlyFinancialSummary', { sendTo: v })}
+          />
+        </NotifRow>
+      </NotifSection>
+
+      {/* ── HR Notifications ─── */}
+      <NotifSection title="HR Notifications" subtitle="Alerts for staff management and compliance">
+        <NotifRow label="Document Expiry Warning"
+          desc="Notify when a staff document (WWCC, First Aid, qualification) is expiring within 30 days"
+          audience="HR" audienceColor="#059669"
+          enabled={s.documentExpiryWarning.enabled}
+          onToggle={v => onPatch('documentExpiryWarning', { enabled: v })}
+          template="staff-invitation" sessionEmail={sessionEmail}>
+          <SendToSelector value={s.documentExpiryWarning.sendTo} onChange={v => onPatch('documentExpiryWarning', { sendTo: v })} />
+        </NotifRow>
+
+        <NotifRow label="Leave Request Submitted"
+          desc="Notify when a staff member submits a leave request"
+          audience="HR" audienceColor="#059669"
+          enabled={s.leaveRequestSubmitted.enabled}
+          onToggle={v => onPatch('leaveRequestSubmitted', { enabled: v })}
+          template="staff-invitation" sessionEmail={sessionEmail}>
+          <SendToSelector value={s.leaveRequestSubmitted.sendTo} onChange={v => onPatch('leaveRequestSubmitted', { sendTo: v })} />
+        </NotifRow>
+      </NotifSection>
+
+      <p className="text-xs text-gray-400">
+        Changes are saved automatically. The &ldquo;Pause All&rdquo; toggle overrides all individual settings.
+        Sending hours apply to all non-critical notifications (password reset emails always send immediately).
+      </p>
+    </div>
+  )
+}
+
 // ─── Placeholder tab ───────────────────────────────────────────────────────────
 
 function PlaceholderTab({ title, desc }: { title: string; desc: string }) {
@@ -339,6 +870,15 @@ export default function SettingsPage() {
   const [saveState,  setSaveState]    = useState<SaveState>('idle')
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // Notification Settings
+  const [notifSettings, setNotifSettings] = useState<NotificationSettings>(DEFAULT_NOTIFICATION_SETTINGS)
+  const [loadingNotif,  setLoadingNotif]  = useState(true)
+  const [notifSaveState, setNotifSaveState] = useState<SaveState>('idle')
+  const notifSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Session (for test email prefill)
+  const { data: session } = useSession()
+
   // Init
   useEffect(() => {
     setRecipients(loadRecipients())
@@ -349,6 +889,13 @@ export default function SettingsPage() {
       if (cached) setVisibility(mergeWithDefaults(JSON.parse(cached)))
     } catch { /* ignore */ }
 
+    // Load cached notification settings instantly
+    try {
+      const cachedNotif = localStorage.getItem(NOTIFICATION_SETTINGS_STORAGE_KEY)
+      if (cachedNotif) setNotifSettings(mergeNotifWithDefaults(JSON.parse(cachedNotif)))
+    } catch { /* ignore */ }
+
+    // Fetch module visibility from Supabase
     supabase
       .from('app_settings')
       .select('value')
@@ -361,6 +908,21 @@ export default function SettingsPage() {
           try { localStorage.setItem(MODULE_VISIBILITY_STORAGE_KEY, JSON.stringify(merged)) } catch { /* ignore */ }
         }
         setLoadingVis(false)
+      })
+
+    // Fetch notification settings from Supabase
+    supabase
+      .from('app_settings')
+      .select('value')
+      .eq('key', NOTIFICATION_SETTINGS_KEY)
+      .single()
+      .then(({ data, error }) => {
+        if (!error && data?.value) {
+          const merged = mergeNotifWithDefaults(data.value as Partial<NotificationSettings>)
+          setNotifSettings(merged)
+          try { localStorage.setItem(NOTIFICATION_SETTINGS_STORAGE_KEY, JSON.stringify(merged)) } catch { /* ignore */ }
+        }
+        setLoadingNotif(false)
       })
   }, [])
 
@@ -410,6 +972,36 @@ export default function SettingsPage() {
     saveVisibility(next)
   }
 
+  // Notification settings save + updater
+  const saveNotifSettings = useCallback(async (next: NotificationSettings) => {
+    if (notifSaveTimer.current) clearTimeout(notifSaveTimer.current)
+    setNotifSaveState('saving')
+    try { localStorage.setItem(NOTIFICATION_SETTINGS_STORAGE_KEY, JSON.stringify(next)) } catch { /* ignore */ }
+
+    const { error } = await supabase
+      .from('app_settings')
+      .upsert({ key: NOTIFICATION_SETTINGS_KEY, value: next, updated_at: new Date().toISOString() })
+
+    if (error) {
+      setNotifSaveState('error')
+    } else {
+      setNotifSaveState('saved')
+      notifSaveTimer.current = setTimeout(() => setNotifSaveState('idle'), 2500)
+    }
+  }, [])
+
+  function updateNotif<K extends keyof NotificationSettings>(key: K, value: NotificationSettings[K]) {
+    const next = { ...notifSettings, [key]: value }
+    setNotifSettings(next)
+    saveNotifSettings(next)
+  }
+
+  function patchNotif<K extends keyof NotificationSettings>(key: K, patch: Partial<NotificationSettings[K] & object>) {
+    const next = { ...notifSettings, [key]: { ...(notifSettings[key] as object), ...patch } }
+    setNotifSettings(next)
+    saveNotifSettings(next)
+  }
+
   // Recipients helpers
   function handleRecipientSave(updated: Recipient) {
     const next = recipients.map(r => r.id === updated.id ? updated : r)
@@ -435,7 +1027,8 @@ export default function SettingsPage() {
             <h1 className="text-xl font-bold text-gray-900">Settings</h1>
             <p className="text-sm text-gray-500">Manage operational preferences and configurations</p>
           </div>
-          {activeTab === 'visibility' && <SaveIndicator state={saveState} />}
+          {activeTab === 'visibility'    && <SaveIndicator state={saveState} />}
+          {activeTab === 'notifications' && <SaveIndicator state={notifSaveState} />}
         </div>
 
         {/* Tabs */}
@@ -594,12 +1187,23 @@ export default function SettingsPage() {
           </>
         )}
 
-        {/* ── Notifications (placeholder) ───────────────────────────────────── */}
+        {/* ── Notifications ────────────────────────────────────────────────── */}
         {activeTab === 'notifications' && (
-          <PlaceholderTab
-            title="Notifications"
-            desc="Configure email and push notification preferences for admins, coaches, and athletes. Coming soon."
-          />
+          <>
+            {loadingNotif ? (
+              <div className="flex items-center justify-center py-20">
+                <div className="h-6 w-6 animate-spin rounded-full border-2 border-gray-200" style={{ borderTopColor: ACCENT }} />
+              </div>
+            ) : (
+              <NotificationsTab
+                settings={notifSettings}
+                sessionEmail={session?.user?.email ?? ''}
+                onPause={v => updateNotif('paused', v)}
+                onSendingHours={(start, end) => updateNotif('sendingHours', { start, end })}
+                onPatch={patchNotif}
+              />
+            )}
+          </>
         )}
 
         {/* ── Integrations (placeholder) ────────────────────────────────────── */}
