@@ -3,7 +3,7 @@
 import { useMemo } from 'react'
 import {
   IconTrendingUp, IconTrendingDown, IconCurrencyDollar, IconReceipt,
-  IconCalendar, IconUsers, IconChartPie,
+  IconCalendar, IconUsers, IconChartPie, IconPaperclip, IconAlertTriangle,
 } from '@tabler/icons-react'
 import {
   Transaction, INCOME_CATS, EXPENSE_CATS, CHART_HISTORY,
@@ -61,6 +61,14 @@ export function OverviewTab({ transactions }: { transactions: Transaction[] }) {
     [transactions]
   )
 
+  // Receipt documentation stats for current month
+  const currentMonthExpenses = useMemo(() =>
+    transactions.filter(t => t.type === 'expense' && t.date.startsWith(CURRENT_YM)),
+    [transactions]
+  )
+  const withReceipt    = currentMonthExpenses.filter(t => !!t.receiptUrl).length
+  const withoutReceipt = currentMonthExpenses.filter(t => !t.receiptUrl).length
+
   const health = [
     { label: 'Membership Retention',   value: '87%',   color: '#10b981' },
     { label: 'Avg Revenue / Athlete',  value: fmtK(Math.round(junIncome / 24)),  color: ACCENT },
@@ -79,6 +87,58 @@ export function OverviewTab({ transactions }: { transactions: Transaction[] }) {
         <StatCard icon={<IconReceipt size={16}/>}         label="Outstanding Invoices"  value="$2,419"                sub="3 invoices pending" color="#f59e0b" />
         <StatCard icon={<IconCalendar size={16}/>}        label="Weekly Membership Rev" value={fmtMoney(weeklyMembership)} sub="Recurring weekly" color="#8b5cf6" />
         <StatCard icon={<IconCurrencyDollar size={16}/>}  label="Year to Date Revenue"  value={fmtK(ytdIncome)}       sub="Jul 2025 – Jun 2026" />
+      </div>
+
+      {/* Receipt documentation card */}
+      <div className="rounded-xl bg-white p-5 shadow-sm">
+        <div className="mb-3 flex items-center justify-between">
+          <div>
+            <h2 className="text-sm font-bold text-gray-900">Expense Documentation</h2>
+            <p className="text-xs text-gray-400">Receipt coverage for June 2026 expenses</p>
+          </div>
+          {withoutReceipt > 0 && (
+            <span className="flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700">
+              <IconAlertTriangle size={12} /> {withoutReceipt} missing
+            </span>
+          )}
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="flex items-center gap-3 rounded-xl border border-gray-100 p-4">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-green-50">
+              <IconPaperclip size={18} className="text-green-600" />
+            </div>
+            <div>
+              <p className="text-xl font-black text-gray-900">{withReceipt}</p>
+              <p className="text-xs text-gray-400">With receipt attached</p>
+            </div>
+          </div>
+          <div className={`flex items-center gap-3 rounded-xl border p-4 ${withoutReceipt > 0 ? 'border-amber-100 bg-amber-50/40' : 'border-gray-100'}`}>
+            <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${withoutReceipt > 0 ? 'bg-amber-100' : 'bg-gray-100'}`}>
+              <IconAlertTriangle size={18} className={withoutReceipt > 0 ? 'text-amber-600' : 'text-gray-400'} />
+            </div>
+            <div>
+              <p className={`text-xl font-black ${withoutReceipt > 0 ? 'text-amber-700' : 'text-gray-900'}`}>{withoutReceipt}</p>
+              <p className="text-xs text-gray-400">Without receipt</p>
+            </div>
+          </div>
+        </div>
+        {currentMonthExpenses.length > 0 && (
+          <div className="mt-3">
+            <div className="mb-1 flex items-center justify-between text-[11px] text-gray-400">
+              <span>Receipt coverage</span>
+              <span>{currentMonthExpenses.length > 0 ? Math.round((withReceipt / currentMonthExpenses.length) * 100) : 0}%</span>
+            </div>
+            <div className="h-1.5 overflow-hidden rounded-full bg-gray-100">
+              <div
+                className="h-full rounded-full transition-all duration-500"
+                style={{
+                  width: `${currentMonthExpenses.length > 0 ? (withReceipt / currentMonthExpenses.length) * 100 : 0}%`,
+                  backgroundColor: withoutReceipt === 0 ? '#10b981' : '#6BA3D6',
+                }}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Pie charts */}

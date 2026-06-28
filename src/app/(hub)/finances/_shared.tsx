@@ -24,6 +24,11 @@ export interface Transaction {
   amount: number
   reference: string
   notes: string
+  // Expense-only extras
+  receiptUrl?:     string
+  gstAmount?:      number
+  paymentMethod?:  string
+  isReimbursable?: boolean
 }
 
 export type PersonalTxType = 'income' | 'expense'
