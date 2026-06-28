@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { sendEmail } from '@/lib/send-email'
 import {
@@ -23,7 +23,9 @@ import {
   IconCreditCard,
   IconCheck,
   IconClock,
+  IconArrowLeft,
 } from '@tabler/icons-react'
+import { StripeCardStep } from '@/components/StripeCardModal'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -778,6 +780,23 @@ export default function AthletesPage() {
   const [newPlan, setNewPlan] = useState<MembershipPlan>('bronze')
   const [newStarted, setNewStarted] = useState('')
   const [newMemberNotes, setNewMemberNotes] = useState('')
+  // Step 2 — card collection
+  const [addMemberStep, setAddMemberStep] = useState<1 | 2>(1)
+  const [addMemberLoading, setAddMemberLoading] = useState(false)
+  const [addMemberSetupSecret, setAddMemberSetupSecret] = useState<string | null>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [addMemberInsertedData, setAddMemberInsertedData] = useState<any>(null)
+
+  // Convert to Member modal — step 2 card (when athlete has no PM)
+  const [convertSetupSecret, setConvertSetupSecret] = useState<string | null>(null)
+  const [convertAthleteForCard, setConvertAthleteForCard] = useState<Athlete | null>(null)
+
+  // Detail panel: payment method state (fetched per-athlete when panel opens)
+  const [panelPmLoading, setPanelPmLoading] = useState(false)
+  const [panelPm, setPanelPm] = useState<{
+    id: string; brand: string; last4: string; expMonth: number; expYear: number
+  } | null>(null)
+  const [panelPmAthleteId, setPanelPmAthleteId] = useState<string | null>(null)
 
   // Convert to Member modal
   const [convertAthleteId, setConvertAthleteId] = useState<string | null>(null)
@@ -855,6 +874,22 @@ export default function AthletesPage() {
       } catch {}
     })()
   }, [])
+
+  // Fetch payment method when detail panel opens for a new athlete
+  useEffect(() => {
+    const athleteId = selectedId
+    if (!athleteId) { setPanelPm(null); setPanelPmAthleteId(null); return }
+    if (athleteId === panelPmAthleteId) return // already loaded for this athlete
+    setPanelPmLoading(true)
+    setPanelPm(null)
+    setPanelPmAthleteId(athleteId)
+    void fetch(`/api/stripe/payment-method?athleteId=${athleteId}`)
+      .then(r => r.json())
+      .then(d => { if (d.paymentMethod) setPanelPm(d.paymentMethod) })
+      .catch(() => {})
+      .finally(() => setPanelPmLoading(false))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId])
 
   function switchTab(tab: ActiveTab) {
     setActiveTab(tab)
@@ -1049,47 +1084,83 @@ export default function AthletesPage() {
     }
   }
 
-  async function handleAddMember() {
+  function resetAddMemberModal() {
+    setNewFirst(''); setNewLast(''); setNewEmail('')
+    setNewPlan('bronze'); setNewStarted(''); setNewMemberNotes('')
+    setAddMemberStep(1); setAddMemberSetupSecret(null); setAddMemberInsertedData(null)
+    setAddMemberLoading(false)
+  }
+
+  // Step 1 → Step 2: insert athlete + create SetupIntent
+  async function handleAddMemberNext() {
     if (!newFirst.trim() || !newLast.trim() || !newEmail.trim() || !newStarted) return
+    setAddMemberLoading(true)
     const firstCharge = nextMondayFrom(newStarted)
     const billingRecord: BillingRecord = { id: uid(), date: firstCharge, amount: PLAN_INFO[newPlan].price, status: 'upcoming' }
     const payload = {
-      first_name:                 newFirst.trim(),
-      last_name:                  newLast.trim(),
-      email:                      newEmail.trim(),
-      membership_tier:            newPlan,
-      membership_status:          'active',
-      membership_started_date:    newStarted,
-      next_billing_date:          firstCharge,
-      outstanding_balance:        0,
-      billing_records:            [billingRecord],
-      sessions_this_month:        0,
-      sessions_total:             0,
-      coach_notes:                newMemberNotes.trim() || null,
+      first_name:              newFirst.trim(),
+      last_name:               newLast.trim(),
+      email:                   newEmail.trim(),
+      membership_tier:         newPlan,
+      membership_status:       'active',
+      membership_started_date: newStarted,
+      next_billing_date:       firstCharge,
+      outstanding_balance:     0,
+      billing_records:         [billingRecord],
+      sessions_this_month:     0,
+      sessions_total:          0,
+      coach_notes:             newMemberNotes.trim() || null,
     }
     const { data, error } = await supabase.from('athletes').insert(payload).select().single()
-    if (error) { console.error('[athletes] add member failed:', error); showToast('Failed to add member'); return }
-    if (data) {
-      setAthletes(prev => [...prev, dbToAthlete(data)])
-      // Create Stripe subscription — await to surface the payment link
-      try {
-        const res = await fetch('/api/stripe/create-subscription', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ athleteId: data.id, plan: newPlan }),
-        })
-        const d = await res.json()
-        if (d.error) console.error('[stripe] create-subscription:', d.error)
-        else if (d.hostedInvoiceUrl) {
-          setPaymentLink({ name: `${newFirst} ${newLast}`, url: d.hostedInvoiceUrl })
-        }
-      } catch (err) { console.error('[stripe] create-subscription:', err) }
+    if (error) {
+      console.error('[athletes] add member failed:', error)
+      showToast('Failed to add member — ' + (error.message ?? 'unknown error'))
+      setAddMemberLoading(false)
+      return
     }
-    setShowAddMemberModal(false)
-    setNewFirst(''); setNewLast(''); setNewEmail('')
-    setNewPlan('bronze'); setNewStarted(''); setNewMemberNotes('')
-    showToast(`${newFirst} ${newLast} added as a member.`)
+    setAddMemberInsertedData(data)
+    // Create Stripe customer + SetupIntent
+    try {
+      const res = await fetch('/api/stripe/create-setup-intent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ athleteId: data.id }),
+      })
+      const d = await res.json()
+      if (d.error) throw new Error(d.error)
+      setAddMemberSetupSecret(d.clientSecret)
+      setAddMemberStep(2)
+    } catch (err) {
+      console.error('[stripe] create-setup-intent:', err)
+      showToast('Stripe error — please try again.')
+    }
+    setAddMemberLoading(false)
   }
+
+  // Step 2: card saved → create subscription, close modal
+  const handleAddMemberCardSaved = useCallback(async (paymentMethodId: string) => {
+    const inserted = addMemberInsertedData
+    if (!inserted) return
+    // Save PM to Supabase and set as default
+    await fetch('/api/stripe/save-payment-method', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ athleteId: inserted.id, paymentMethodId }),
+    })
+    // Create subscription — now has a default PM so it goes active immediately
+    fetch('/api/stripe/create-subscription', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ athleteId: inserted.id, plan: newPlan }),
+    }).then(r => r.json()).then(d => {
+      if (d.error) console.error('[stripe] create-subscription:', d.error)
+    }).catch(console.error)
+    setAthletes(prev => [...prev, dbToAthlete(inserted)])
+    setShowAddMemberModal(false)
+    resetAddMemberModal()
+    showToast(`${inserted.first_name as string} ${inserted.last_name as string} added as a member!`)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [addMemberInsertedData, newPlan])
 
   async function handleConvertToMember() {
     const athlete = athletes.find(a => a.id === convertAthleteId)
@@ -1107,20 +1178,51 @@ export default function AthletesPage() {
     setConvertStarted('')
     setConvertPlan('bronze')
     showToast(`${athlete.firstName} converted to ${PLAN_INFO[convertPlan].label} member.`)
-    // Create Stripe subscription — await to surface the payment link
+    // Create subscription; if athlete has no PM, collect card via SetupIntent
     try {
-      const res = await fetch('/api/stripe/create-subscription', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ athleteId: athlete.id, plan: convertPlan }),
+      const siRes = await fetch('/api/stripe/create-setup-intent', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ athleteId: athlete.id }),
       })
-      const d = await res.json()
-      if (d.error) console.error('[stripe] create-subscription:', d.error)
-      else if (d.hostedInvoiceUrl) {
-        setPaymentLink({ name: `${athlete.firstName} ${athlete.lastName}`, url: d.hostedInvoiceUrl })
+      const siData = await siRes.json()
+      if (siData.error) throw new Error(siData.error)
+      // Check if they already have a saved PM
+      const pmRes = await fetch(`/api/stripe/payment-method?athleteId=${athlete.id}`)
+      const pmData = await pmRes.json()
+      if (pmData.paymentMethod) {
+        // Already has a card — create subscription directly
+        fetch('/api/stripe/create-subscription', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ athleteId: athlete.id, plan: convertPlan }),
+        }).then(r => r.json()).then(d => {
+          if (d.error) console.error('[stripe] create-subscription:', d.error)
+        }).catch(console.error)
+      } else {
+        // No card — show Stripe Elements to collect one
+        setConvertSetupSecret(siData.clientSecret)
+        setConvertAthleteForCard(athlete)
       }
-    } catch (err) { console.error('[stripe] create-subscription:', err) }
+    } catch (err) { console.error('[stripe] convert setup-intent:', err) }
   }
+
+  const handleConvertCardSaved = useCallback(async (paymentMethodId: string) => {
+    const athlete = convertAthleteForCard
+    if (!athlete) return
+    await fetch('/api/stripe/save-payment-method', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ athleteId: athlete.id, paymentMethodId }),
+    })
+    fetch('/api/stripe/create-subscription', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ athleteId: athlete.id, plan: convertPlan }),
+    }).then(r => r.json()).then(d => {
+      if (d.error) console.error('[stripe] create-subscription:', d.error)
+    }).catch(console.error)
+    setConvertSetupSecret(null)
+    setConvertAthleteForCard(null)
+    showToast('Card saved — membership is now active!')
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [convertAthleteForCard, convertPlan])
 
   function handleChangePlan(plan: MembershipPlan) {
     if (!selected) return
@@ -1609,6 +1711,47 @@ export default function AthletesPage() {
                         </div>
                       </section>
 
+                      {/* Payment Method */}
+                      <section>
+                        <h3 className="mb-3 text-xs font-bold uppercase tracking-wider text-gray-400">Payment Method</h3>
+                        <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+                          {panelPmLoading && panelPmAthleteId === a.id ? (
+                            <div className="h-5 w-40 animate-pulse rounded bg-gray-200" />
+                          ) : panelPm && panelPmAthleteId === a.id ? (
+                            <div className="flex items-center gap-3">
+                              <div className="flex h-9 w-14 items-center justify-center rounded-lg border border-gray-200 bg-white text-xs font-bold uppercase tracking-wide text-gray-700">
+                                {panelPm.brand}
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium text-gray-800">•••• •••• •••• {panelPm.last4}</p>
+                                <p className="text-xs text-gray-400">Expires {String(panelPm.expMonth).padStart(2, '0')}/{panelPm.expYear}</p>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-between">
+                              <span className="flex items-center gap-2 text-sm text-amber-600">
+                                <IconAlertTriangle size={15} /> No payment method on file
+                              </span>
+                              <button type="button"
+                                onClick={() => {
+                                  void fetch('/api/send-email', {
+                                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                      template: 'payment-method-reminder',
+                                      to: a.email,
+                                      data: { firstName: a.firstName, addCardUrl: `${window.location.origin}/athlete/membership` },
+                                    }),
+                                  }).then(() => showToast('Reminder email sent!'))
+                                }}
+                                className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition"
+                                style={{ backgroundColor: ACCENT + '20', color: ACCENT }}>
+                                <IconMail size={12} /> Send reminder
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </section>
+
                       {/* Billing History */}
                       {sortedBilling.length > 0 && (
                         <section>
@@ -1889,48 +2032,89 @@ export default function AthletesPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
-              <h2 className="text-base font-bold text-gray-900">Add Member</h2>
-              <button type="button" onClick={() => setShowAddMemberModal(false)}
-                className="rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100"><IconX size={18} /></button>
-            </div>
-            <div className="space-y-4 px-6 py-5">
-              <div className="grid grid-cols-2 gap-3">
-                <div><label className={LABEL}>First Name</label>
-                  <input type="text" value={newFirst} onChange={e => setNewFirst(e.target.value)} placeholder="Jordan" className={INPUT} /></div>
-                <div><label className={LABEL}>Last Name</label>
-                  <input type="text" value={newLast} onChange={e => setNewLast(e.target.value)} placeholder="Mitchell" className={INPUT} /></div>
-              </div>
-              <div><label className={LABEL}>Email</label>
-                <input type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="athlete@example.com" className={INPUT} /></div>
               <div>
-                <label className={LABEL}>Plan</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {(['bronze', 'silver', 'gold', 'platinum'] as MembershipPlan[]).map(p => (
-                    <PlanCard key={p} plan={p} selected={newPlan === p} onClick={() => setNewPlan(p)} />
+                <h2 className="text-base font-bold text-gray-900">Add Member</h2>
+                <div className="mt-1 flex items-center gap-2">
+                  {[1, 2].map(step => (
+                    <div key={step} className="flex items-center gap-1.5">
+                      <div className="flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold"
+                        style={{ backgroundColor: addMemberStep === step ? ACCENT : '#e5e7eb', color: addMemberStep === step ? 'white' : '#9ca3af' }}>
+                        {step}
+                      </div>
+                      <span className="text-xs" style={{ color: addMemberStep === step ? '#1f2937' : '#9ca3af' }}>
+                        {step === 1 ? 'Details' : 'Payment'}
+                      </span>
+                      {step < 2 && <span className="text-gray-200">→</span>}
+                    </div>
                   ))}
                 </div>
               </div>
-              <div>
-                <label className={LABEL}>Start Date</label>
-                <input type="date" value={newStarted} onChange={e => setNewStarted(e.target.value)} className={INPUT} />
-                {newStarted && (
-                  <p className="mt-1 text-xs text-gray-400">
-                    First billing Monday: <span className="font-medium">{fmtDate(nextMondayFrom(newStarted))}</span>
-                  </p>
-                )}
+              <button type="button" onClick={() => { setShowAddMemberModal(false); resetAddMemberModal() }}
+                className="rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100"><IconX size={18} /></button>
+            </div>
+
+            {addMemberStep === 1 ? (
+              <>
+                <div className="space-y-4 px-6 py-5">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div><label className={LABEL}>First Name</label>
+                      <input type="text" value={newFirst} onChange={e => setNewFirst(e.target.value)} placeholder="Jordan" className={INPUT} /></div>
+                    <div><label className={LABEL}>Last Name</label>
+                      <input type="text" value={newLast} onChange={e => setNewLast(e.target.value)} placeholder="Mitchell" className={INPUT} /></div>
+                  </div>
+                  <div><label className={LABEL}>Email</label>
+                    <input type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="athlete@example.com" className={INPUT} /></div>
+                  <div>
+                    <label className={LABEL}>Plan</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {(['bronze', 'silver', 'gold', 'platinum'] as MembershipPlan[]).map(p => (
+                        <PlanCard key={p} plan={p} selected={newPlan === p} onClick={() => setNewPlan(p)} />
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className={LABEL}>Start Date</label>
+                    <input type="date" value={newStarted} onChange={e => setNewStarted(e.target.value)} className={INPUT} />
+                    {newStarted && (
+                      <p className="mt-1 text-xs text-gray-400">
+                        First billing Monday: <span className="font-medium">{fmtDate(nextMondayFrom(newStarted))}</span>
+                      </p>
+                    )}
+                  </div>
+                  <div><label className={LABEL}>Notes <span className="normal-case font-normal text-gray-400">(optional)</span></label>
+                    <textarea rows={2} value={newMemberNotes} onChange={e => setNewMemberNotes(e.target.value)}
+                      placeholder="Any notes about this member…" className={INPUT + ' resize-none'} /></div>
+                </div>
+                <div className="flex justify-end gap-2 border-t border-gray-100 px-6 py-4">
+                  <button type="button" onClick={() => { setShowAddMemberModal(false); resetAddMemberModal() }}
+                    className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50">Cancel</button>
+                  <button type="button" onClick={handleAddMemberNext}
+                    disabled={!newFirst.trim() || !newLast.trim() || !newEmail.trim() || !newStarted || addMemberLoading}
+                    className="flex items-center gap-1.5 rounded-xl px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-40"
+                    style={{ backgroundColor: ACCENT }}>
+                    {addMemberLoading ? 'Setting up…' : 'Next → Payment'}
+                  </button>
+                </div>
+              </>
+            ) : addMemberSetupSecret ? (
+              <div className="px-6 py-5">
+                <p className="mb-4 text-sm text-gray-500">
+                  Enter a payment card for <strong>{newFirst} {newLast}</strong>. This will be charged weekly for their {PLAN_INFO[newPlan].label} membership.
+                </p>
+                <button type="button" onClick={() => setAddMemberStep(1)}
+                  className="mb-4 flex items-center gap-1.5 text-xs font-semibold text-gray-400 transition hover:text-gray-600">
+                  <IconArrowLeft size={13} /> Back to details
+                </button>
+                <StripeCardStep
+                  clientSecret={addMemberSetupSecret}
+                  onSuccess={handleAddMemberCardSaved}
+                  onBack={() => setAddMemberStep(1)}
+                  submitLabel="Activate Membership"
+                />
               </div>
-              <div><label className={LABEL}>Notes <span className="normal-case font-normal text-gray-400">(optional)</span></label>
-                <textarea rows={3} value={newMemberNotes} onChange={e => setNewMemberNotes(e.target.value)}
-                  placeholder="Any notes about this member…" className={INPUT + ' resize-none'} /></div>
-            </div>
-            <div className="flex justify-end gap-2 border-t border-gray-100 px-6 py-4">
-              <button type="button" onClick={() => setShowAddMemberModal(false)}
-                className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50">Cancel</button>
-              <button type="button" onClick={handleAddMember}
-                disabled={!newFirst.trim() || !newLast.trim() || !newEmail.trim() || !newStarted}
-                className="rounded-xl px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-40"
-                style={{ backgroundColor: ACCENT }}>Add Member</button>
-            </div>
+            ) : (
+              <div className="px-6 py-8 text-center text-sm text-gray-400">Setting up payment…</div>
+            )}
           </div>
         </div>
       )}
@@ -1980,6 +2164,33 @@ export default function AthletesPage() {
           </div>
         )
       })()}
+
+      {/* ── Convert to Member — card collection overlay ───────────────────────── */}
+      {convertSetupSecret && convertAthleteForCard && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+              <div>
+                <h2 className="text-base font-bold text-gray-900">Add Payment Card</h2>
+                <p className="text-xs text-gray-400 mt-0.5">For {convertAthleteForCard.firstName} {convertAthleteForCard.lastName}</p>
+              </div>
+              <button type="button" onClick={() => { setConvertSetupSecret(null); setConvertAthleteForCard(null) }}
+                className="rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100"><IconX size={18} /></button>
+            </div>
+            <div className="px-6 py-5">
+              <p className="mb-4 text-sm text-gray-500">
+                Enter a card to charge weekly for their {PLAN_INFO[convertPlan].label} membership.
+              </p>
+              <StripeCardStep
+                clientSecret={convertSetupSecret}
+                onSuccess={handleConvertCardSaved}
+                onBack={() => { setConvertSetupSecret(null); setConvertAthleteForCard(null) }}
+                submitLabel="Save Card & Activate"
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Delete confirmation ─────────────────────────────────────────────────── */}
       {confirmDeleteId && (() => {
