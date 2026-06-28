@@ -788,6 +788,9 @@ export default function AthletesPage() {
   const [showChangePlan, setShowChangePlan] = useState(false)
   const [paymentSent, setPaymentSent] = useState(false)
 
+  // Payment link modal (shown after subscription created for new member)
+  const [paymentLink, setPaymentLink] = useState<{ name: string; url: string } | null>(null)
+
   // Toasts / confirmations
   const [inviteToast, setInviteToast] = useState<string | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
@@ -1062,21 +1065,25 @@ export default function AthletesPage() {
       billing_records:            [billingRecord],
       sessions_this_month:        0,
       sessions_total:             0,
-      is_active:                  true,
       coach_notes:                newMemberNotes.trim() || null,
     }
     const { data, error } = await supabase.from('athletes').insert(payload).select().single()
     if (error) { console.error('[athletes] add member failed:', error); showToast('Failed to add member'); return }
     if (data) {
       setAthletes(prev => [...prev, dbToAthlete(data)])
-      // Create Stripe subscription (non-blocking — webhook confirms billing)
-      fetch('/api/stripe/create-subscription', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ athleteId: data.id, plan: newPlan }),
-      }).then(r => r.json()).then(d => {
+      // Create Stripe subscription — await to surface the payment link
+      try {
+        const res = await fetch('/api/stripe/create-subscription', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ athleteId: data.id, plan: newPlan }),
+        })
+        const d = await res.json()
         if (d.error) console.error('[stripe] create-subscription:', d.error)
-      }).catch(console.error)
+        else if (d.hostedInvoiceUrl) {
+          setPaymentLink({ name: `${newFirst} ${newLast}`, url: d.hostedInvoiceUrl })
+        }
+      } catch (err) { console.error('[stripe] create-subscription:', err) }
     }
     setShowAddMemberModal(false)
     setNewFirst(''); setNewLast(''); setNewEmail('')
@@ -1096,18 +1103,23 @@ export default function AthletesPage() {
       billingRecords: [billingRecord],
     }
     updateAthlete(athlete.id, patch)
-    // Create Stripe subscription (non-blocking — webhook confirms billing)
-    fetch('/api/stripe/create-subscription', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ athleteId: athlete.id, plan: convertPlan }),
-    }).then(r => r.json()).then(d => {
-      if (d.error) console.error('[stripe] create-subscription:', d.error)
-    }).catch(console.error)
     setConvertAthleteId(null)
     setConvertStarted('')
     setConvertPlan('bronze')
     showToast(`${athlete.firstName} converted to ${PLAN_INFO[convertPlan].label} member.`)
+    // Create Stripe subscription — await to surface the payment link
+    try {
+      const res = await fetch('/api/stripe/create-subscription', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ athleteId: athlete.id, plan: convertPlan }),
+      })
+      const d = await res.json()
+      if (d.error) console.error('[stripe] create-subscription:', d.error)
+      else if (d.hostedInvoiceUrl) {
+        setPaymentLink({ name: `${athlete.firstName} ${athlete.lastName}`, url: d.hostedInvoiceUrl })
+      }
+    } catch (err) { console.error('[stripe] create-subscription:', err) }
   }
 
   function handleChangePlan(plan: MembershipPlan) {
@@ -2000,6 +2012,45 @@ export default function AthletesPage() {
           </div>
         )
       })()}
+
+      {/* ── Payment Link Modal ─────────────────────────────────────────────────── */}
+      {paymentLink && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+              <div>
+                <h2 className="text-base font-bold text-gray-900">Payment Required</h2>
+                <p className="text-xs text-gray-400 mt-0.5">Share this link with {paymentLink.name}</p>
+              </div>
+              <button type="button" onClick={() => setPaymentLink(null)}
+                className="rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100"><IconX size={18} /></button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <div className="rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-800">
+                <IconCreditCard size={16} className="mb-1.5 text-blue-600" />
+                <p className="font-semibold mb-1">Membership set up — payment pending</p>
+                <p className="text-xs text-blue-600">Send this secure Stripe link to {paymentLink.name.split(' ')[0]} so they can enter their card details and activate their membership.</p>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-400">Payment Link</label>
+                <div className="flex items-center gap-2">
+                  <input readOnly value={paymentLink.url}
+                    className="flex-1 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-xs text-gray-600 focus:outline-none"
+                  />
+                  <button type="button"
+                    onClick={() => { void navigator.clipboard.writeText(paymentLink.url); showToast('Link copied!') }}
+                    className="shrink-0 rounded-xl px-3 py-2.5 text-xs font-semibold text-white transition hover:opacity-90"
+                    style={{ backgroundColor: ACCENT }}>Copy</button>
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end border-t border-gray-100 px-6 py-4">
+              <button type="button" onClick={() => setPaymentLink(null)}
+                className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50">Done</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Toasts ─────────────────────────────────────────────────────────────── */}
       {inviteToast && (

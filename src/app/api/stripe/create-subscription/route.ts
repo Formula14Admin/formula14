@@ -67,18 +67,14 @@ export async function POST(req: NextRequest) {
       metadata:    { athleteId, plan, source: 'formula14' },
       payment_behavior: 'default_incomplete',
       payment_settings: { save_default_payment_method: 'on_subscription' },
-      expand:      ['latest_invoice.payment_intent'],
+      expand:      ['latest_invoice'],
     })
 
-    const invoice = subscription.latest_invoice as import('stripe').Stripe.Invoice & {
-      payment_intent?: import('stripe').Stripe.PaymentIntent | null
-    } | null
-
-    const clientSecret =
-      invoice?.payment_intent &&
-      typeof invoice.payment_intent !== 'string' &&
-      invoice.payment_intent.client_secret
-        ? invoice.payment_intent.client_secret
+    // Extract hosted invoice URL so the admin can send it to the athlete for payment
+    const invoice = subscription.latest_invoice
+    const hostedInvoiceUrl =
+      invoice && typeof invoice !== 'string'
+        ? (invoice.hosted_invoice_url ?? null)
         : null
 
     // Update members table
@@ -108,9 +104,9 @@ export async function POST(req: NextRequest) {
     }).eq('id', athleteId)
 
     return NextResponse.json({
-      subscriptionId: subscription.id,
-      status:         subscription.status,
-      clientSecret,   // frontend uses this to confirm payment with Stripe.js
+      subscriptionId:   subscription.id,
+      status:           subscription.status,
+      hostedInvoiceUrl, // admin copies this link and sends to athlete to complete payment
     })
   } catch (err) {
     console.error('[stripe/create-subscription]', err)
