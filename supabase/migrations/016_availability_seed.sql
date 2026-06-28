@@ -2,12 +2,18 @@
 -- Seeds default facility and coach availability, adds unique constraints for upsert support.
 -- day_of_week follows JS Date.getDay() convention: 0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat
 
--- ── Unique constraints (safe to add idempotently) ─────────────────────────────
-ALTER TABLE facility_availability
-  ADD CONSTRAINT IF NOT EXISTS facility_availability_dow_unique UNIQUE (day_of_week);
+-- ── Unique constraints (added only if missing) ────────────────────────────────
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'facility_availability_dow_unique') THEN
+    ALTER TABLE facility_availability ADD CONSTRAINT facility_availability_dow_unique UNIQUE (day_of_week);
+  END IF;
+END $$;
 
-ALTER TABLE coach_availability
-  ADD CONSTRAINT IF NOT EXISTS coach_availability_coach_dow_unique UNIQUE (coach_id, day_of_week);
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'coach_availability_coach_dow_unique') THEN
+    ALTER TABLE coach_availability ADD CONSTRAINT coach_availability_coach_dow_unique UNIQUE (coach_id, day_of_week);
+  END IF;
+END $$;
 
 -- ── Default facility hours ────────────────────────────────────────────────────
 -- Mon–Fri 6 am – 9 pm, Sat 7 am – 7 pm. Sunday has no row = closed.
