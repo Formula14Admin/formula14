@@ -9,7 +9,6 @@ import {
   IconLayoutDashboard,
   IconCalendar,
   IconUsers,
-  IconId,
   IconCreditCard,
   IconLayoutKanban,
   IconForms,
@@ -67,7 +66,6 @@ const NAV: NavSection[] = [
       { label: 'Finances',                    href: '/finances',            icon: IconCash },
       { label: 'Forms',                       href: '/forms',               icon: IconForms },
       { label: 'HR',                          href: '/hr',                  icon: IconBriefcase },
-      { label: 'Memberships',                 href: '/memberships',         icon: IconId },
       {
         label: 'Policies & Procedures',
         href: '/policies-procedures',
