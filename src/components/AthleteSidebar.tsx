@@ -16,39 +16,51 @@ import {
   IconLogout,
   IconMenu2,
   IconX,
+  IconClock,
 } from '@tabler/icons-react'
+import { useModuleVisibility } from '@/components/ModuleVisibilityProvider'
+import type { AthleteModuleKey } from '@/lib/module-visibility'
 
 type IconProps = { size?: number; strokeWidth?: number; style?: CSSProperties }
 
 type NavItem = {
-  label: string
-  href: string
-  icon: ComponentType<IconProps>
+  label:     string
+  href:      string
+  icon:      ComponentType<IconProps>
+  moduleKey: AthleteModuleKey
 }
 
+const ACCENT = '#6BA3D6'
+
 const NAV_ITEMS: NavItem[] = [
-  { label: 'Dashboard',       href: '/athlete/dashboard',   icon: IconLayoutDashboard },
-  { label: 'Book a Session',  href: '/athlete/book',        icon: IconCalendarPlus    },
-  { label: 'My Bookings',     href: '/athlete/bookings',    icon: IconCalendar        },
-  { label: 'My Membership',   href: '/athlete/membership',  icon: IconCreditCard      },
-  { label: 'Journal',         href: '/athlete/journal',     icon: IconNotebook        },
-  { label: 'Goals & Habits',  href: '/athlete/goals',       icon: IconTarget          },
-  { label: 'How We Feel',     href: '/athlete/how-we-feel', icon: IconMoodSmile       },
+  { label: 'Dashboard',      href: '/athlete/dashboard',   icon: IconLayoutDashboard, moduleKey: 'dashboard'    },
+  { label: 'Book a Session', href: '/athlete/book',        icon: IconCalendarPlus,    moduleKey: 'book'         },
+  { label: 'My Bookings',    href: '/athlete/bookings',    icon: IconCalendar,        moduleKey: 'bookings'     },
+  { label: 'My Membership',  href: '/athlete/membership',  icon: IconCreditCard,      moduleKey: 'membership'   },
+  { label: 'Journal',        href: '/athlete/journal',     icon: IconNotebook,        moduleKey: 'journal'      },
+  { label: 'Goals & Habits', href: '/athlete/goals',       icon: IconTarget,          moduleKey: 'goals'        },
+  { label: 'How We Feel',    href: '/athlete/how-we-feel', icon: IconMoodSmile,       moduleKey: 'how-we-feel'  },
 ]
 
 function SidebarContent({ onClose }: { onClose?: () => void }) {
-  const pathname = usePathname()
+  const pathname    = usePathname()
   const { data: session } = useSession()
+  const visibility  = useModuleVisibility()
 
   const name  = session?.user?.name  ?? ''
   const email = session?.user?.email ?? ''
+
+  const visibleItems = NAV_ITEMS.filter(item => {
+    const state = visibility.athlete[item.moduleKey]
+    return state?.enabled !== false
+  })
 
   return (
     <aside
       className="flex h-full w-64 shrink-0 flex-col overflow-hidden"
       style={{ backgroundColor: '#1a1a1a' }}
     >
-      {/* Logo + close button (mobile) */}
+      {/* Logo + optional close */}
       <div className="flex items-center justify-between px-4 py-5">
         <Image
           src="/Updated Primary Logo.png"
@@ -75,8 +87,9 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto px-3 py-4">
         <ul className="space-y-0.5">
-          {NAV_ITEMS.map(item => {
-            const active = pathname === item.href || pathname.startsWith(item.href + '/')
+          {visibleItems.map(item => {
+            const active     = pathname === item.href || pathname.startsWith(item.href + '/')
+            const comingSoon = visibility.athlete[item.moduleKey]?.comingSoon === true
             return (
               <li key={item.href}>
                 <Link
@@ -92,9 +105,15 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
                   <item.icon
                     size={18}
                     strokeWidth={1.75}
-                    style={active ? { color: '#6BA3D6' } : {}}
+                    style={active ? { color: ACCENT } : {}}
                   />
-                  <span>{item.label}</span>
+                  <span className="flex-1">{item.label}</span>
+                  {comingSoon && (
+                    <span className="flex items-center gap-1 rounded-full bg-amber-500/20 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-400">
+                      <IconClock size={9} />
+                      Soon
+                    </span>
+                  )}
                 </Link>
               </li>
             )
@@ -132,14 +151,14 @@ export default function AthleteSidebar() {
         <SidebarContent />
       </div>
 
-      {/* Mobile hamburger button */}
+      {/* Mobile hamburger */}
       <button
         onClick={() => setMobileOpen(true)}
         className="fixed left-4 top-4 z-40 flex h-9 w-9 items-center justify-center rounded-lg shadow-md md:hidden"
         style={{ backgroundColor: '#1a1a1a' }}
         aria-label="Open menu"
       >
-        <IconMenu2 size={20} strokeWidth={1.75} style={{ color: '#6BA3D6' }} />
+        <IconMenu2 size={20} strokeWidth={1.75} style={{ color: ACCENT }} />
       </button>
 
       {/* Mobile overlay + drawer */}

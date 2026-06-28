@@ -76,7 +76,6 @@ const NAV: NavSection[] = [
         ],
       },
       { label: 'Pricing & Payments',          href: '/pricing',             icon: IconCreditCard },
-      { label: 'Settings',                    href: '/settings',            icon: IconSettings },
       { label: 'Social Media & Advertising',  href: '/social-media',        icon: IconSpeakerphone },
       { label: 'To Do',                       href: '/todo',                icon: IconChecklist },
     ],
@@ -347,6 +346,22 @@ export default function Sidebar() {
             {session.user.email}
           </p>
         )}
+        <Link
+          href="/settings"
+          className={[
+            'flex w-full items-center gap-3 rounded-lg border-l-2 px-3 py-2.5 text-sm font-medium transition-all duration-150',
+            pathname === '/settings' || pathname.startsWith('/settings/')
+              ? 'border-[#6BA3D6] bg-[#6BA3D6]/10 text-white'
+              : 'border-transparent text-gray-400 hover:bg-white/[0.06] hover:text-gray-100',
+          ].join(' ')}
+        >
+          <IconSettings
+            size={18}
+            strokeWidth={1.75}
+            style={pathname === '/settings' || pathname.startsWith('/settings/') ? { color: '#6BA3D6' } : {}}
+          />
+          Settings
+        </Link>
         <button
           onClick={() => signOut({ callbackUrl: '/login' })}
           className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-gray-400 transition-colors hover:bg-white/[0.06] hover:text-gray-100"
