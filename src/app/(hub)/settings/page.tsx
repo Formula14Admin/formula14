@@ -35,6 +35,7 @@ import {
   type FinanceRecipient,
 } from '@/lib/notification-settings'
 import type { TemplateName } from '@/lib/email-templates'
+import EmailTemplatesSection from '@/components/settings/EmailTemplatesSection'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -1189,7 +1190,7 @@ export default function SettingsPage() {
 
         {/* ── Notifications ────────────────────────────────────────────────── */}
         {activeTab === 'notifications' && (
-          <>
+          <div className="space-y-6">
             {loadingNotif ? (
               <div className="flex items-center justify-center py-20">
                 <div className="h-6 w-6 animate-spin rounded-full border-2 border-gray-200" style={{ borderTopColor: ACCENT }} />
@@ -1203,7 +1204,8 @@ export default function SettingsPage() {
                 onPatch={patchNotif}
               />
             )}
-          </>
+            <EmailTemplatesSection />
+          </div>
         )}
 
         {/* ── Integrations (placeholder) ────────────────────────────────────── */}
