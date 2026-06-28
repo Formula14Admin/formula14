@@ -38,6 +38,10 @@ export default async function middleware(request: NextRequest) {
 
   // Athletes/parents: ONLY /athlete/* routes
   if (role === 'athlete') {
+    const mustChangePassword = token.mustChangePassword as boolean | undefined
+    if (mustChangePassword && pathname !== '/athlete/change-password') {
+      return NextResponse.redirect(new URL('/athlete/change-password', request.url))
+    }
     if (!isAthleteRoute) {
       return NextResponse.redirect(new URL('/athlete/dashboard', request.url))
     }

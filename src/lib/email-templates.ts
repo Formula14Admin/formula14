@@ -80,34 +80,51 @@ function infoTable(rows: [string, string][]): string {
 // ─── 1. Athlete Invitation ─────────────────────────────────────────────────────
 
 export interface AthleteInvitationData {
-  firstName: string
-  lastName:  string
-  email:     string
-  loginUrl?: string
+  firstName:          string
+  lastName:           string
+  email:              string
+  temporaryPassword:  string
+  membershipPlan?:    string  // e.g. "Gold — $75/week"
+  loginUrl?:          string
 }
 
 export function athleteInvitation(d: AthleteInvitationData): { subject: string; html: string } {
   const url = d.loginUrl ?? 'https://formula14.com.au/login'
+  const credRows: [string, string][] = [
+    ['Email',              d.email],
+    ['Temporary password', d.temporaryPassword],
+    ['Login page',         'formula14.com.au/login'],
+  ]
+  if (d.membershipPlan) credRows.splice(2, 0, ['Membership plan', d.membershipPlan])
   return {
-    subject: "You've been invited to Formula14",
+    subject: 'Welcome to Formula14 — your account is ready',
     html: layout(`
       ${h1(`Welcome to Formula14, ${d.firstName}!`)}
-      ${p(`You've been added to the Formula14 athlete app by our coaching team. You can now log in to manage your bookings, track your goals, journal your progress, and stay connected with your coaches.`)}
-      ${infoTable([
-        ['Email',    d.email],
-        ['App',      'formula14.com.au/login'],
-      ])}
-      ${p(`First time logging in? Click the button below and use the email address above. If it&rsquo;s your first visit you&rsquo;ll be prompted to set your password.`, true)}
-      ${btn('Log in to Formula14', url)}
+      ${p(`Your Formula14 athlete account has been created by our coaching team. Use the login details below to access the app — you will be asked to set a new password when you first sign in.`)}
+      <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:20px 24px;margin:20px 0;">
+        <p style="margin:0 0 12px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#0369a1;">Your Login Details</p>
+        <table cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;">
+          ${credRows.map(([l, v]) => `<tr>
+            <td style="padding:5px 0;font-size:13px;font-weight:600;color:#64748b;width:40%;">${l}</td>
+            <td style="padding:5px 0;font-size:14px;color:#0f172a;font-weight:600;font-family:monospace;">${v}</td>
+          </tr>`).join('\n')}
+        </table>
+      </div>
+      <div style="background:#fef9c3;border:1px solid #fde047;border-radius:8px;padding:12px 16px;margin:16px 0;">
+        <p style="margin:0;font-size:13px;color:#92400e;">🔒 For security, please change your password after your first login. You will be prompted to do this automatically.</p>
+      </div>
+      ${btn('Log In Now', url)}
       ${divider()}
       ${p(`Once you&rsquo;re in, you can:`, true)}
       <ul style="margin:8px 0;padding-left:20px;color:#6b7280;font-size:14px;line-height:1.8;">
-        <li>Book sessions and view your schedule</li>
-        <li>Track your weekly credits and membership details</li>
+        <li>Book training sessions and view your schedule</li>
+        <li>Track your membership credits and billing</li>
         <li>Set goals and daily habits</li>
-        <li>Journal your training</li>
+        <li>Journal your training progress</li>
         <li>Complete wellbeing check-ins</li>
       </ul>
+      ${divider()}
+      ${p(`Questions? Contact us at <a href="mailto:admin@formula14.com.au" style="color:${ACCENT};">admin@formula14.com.au</a>`, true)}
     `),
   }
 }

@@ -2,7 +2,6 @@
 
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
-import { sendEmail } from '@/lib/send-email'
 import {
   IconX,
   IconSearch,
@@ -83,6 +82,7 @@ interface Athlete {
   emergency: { name: string; phone: string; relationship: string }
   recentSessions: RecentSession[]
   inviteStatus?: 'invited' | 'accepted' | null
+  lastLoginAt:   string | null
   isActive: boolean
 }
 
@@ -360,7 +360,7 @@ const INIT_ATHLETES: Athlete[] = (([
       { date: '2026-06-10', type: 'Casual Shooting',     coach: 'Jade', space: 'Shooting Bay' },
     ],
   },
-]) as Omit<Athlete, 'isActive'>[]).map(a => ({ ...a, isActive: true }))
+]) as Omit<Athlete, 'isActive' | 'lastLoginAt'>[]).map(a => ({ ...a, isActive: true, lastLoginAt: null }))
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -751,6 +751,7 @@ function dbToAthlete(row: any): Athlete {
     },
     recentSessions: [],
     inviteStatus: (row.invite_status as 'invited' | 'accepted' | null) ?? null,
+    lastLoginAt:  (row.last_login_at as string | null) ?? null,
     isActive: row.is_active ?? true,
   }
 }
@@ -772,20 +773,28 @@ export default function AthletesPage() {
   const [showAddModal, setShowAddModal] = useState(false)
   const [form, setForm] = useState<NewAthleteForm>(blankForm())
 
-  // Add Member modal
+  // Add Member modal — 3-step: (1) account details, (2) plan, (3) card
   const [showAddMemberModal, setShowAddMemberModal] = useState(false)
   const [newFirst, setNewFirst] = useState('')
   const [newLast, setNewLast] = useState('')
   const [newEmail, setNewEmail] = useState('')
+  const [newDob, setNewDob] = useState('')
+  const [newPhone, setNewPhone] = useState('')
   const [newPlan, setNewPlan] = useState<MembershipPlan>('bronze')
   const [newStarted, setNewStarted] = useState('')
   const [newMemberNotes, setNewMemberNotes] = useState('')
-  // Step 2 — card collection
-  const [addMemberStep, setAddMemberStep] = useState<1 | 2>(1)
+  const [addMemberStep, setAddMemberStep] = useState<1 | 2 | 3>(1)
   const [addMemberLoading, setAddMemberLoading] = useState(false)
   const [addMemberSetupSecret, setAddMemberSetupSecret] = useState<string | null>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [addMemberInsertedData, setAddMemberInsertedData] = useState<any>(null)
+  const [addMemberExistingAthlete, setAddMemberExistingAthlete] = useState<Athlete | null>(null)
+
+  // Detail panel: account status actions
+  const [resendingInvite, setResendingInvite] = useState(false)
+  const [inviteResent, setInviteResent] = useState(false)
+  const [resettingPassword, setResettingPassword] = useState(false)
+  const [passwordResetSent, setPasswordResetSent] = useState(false)
 
   // Convert to Member modal — step 2 card (when athlete has no PM)
   const [convertSetupSecret, setConvertSetupSecret] = useState<string | null>(null)
@@ -1041,95 +1050,148 @@ export default function AthletesPage() {
   async function handleAddAthlete() {
     if (!form.firstName.trim() || !form.lastName.trim()) return
     const hasEmail = form.email.trim() !== ''
-    const { data, error } = await supabase.rpc('invite_athlete', {
-      p_email:           form.email.trim() || null,
-      p_first_name:      form.firstName.trim(),
-      p_last_name:       form.lastName.trim(),
-      p_phone:           form.phone.trim() || null,
-      p_dob:             form.dob || null,
-      p_position:        form.position || null,
-      p_school:          form.school.trim() || null,
-      p_goals:           form.goals.trim() || null,
-      p_coach_notes:     form.notes.trim() || null,
-      p_emergency_name:  form.emergencyName.trim() || null,
-      p_emergency_phone: form.emergencyPhone.trim() || null,
-      p_emergency_rel:   form.emergencyRel.trim() || null,
+
+    const res = await fetch('/api/athletes/create-account', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        firstName:     form.firstName.trim(),
+        lastName:      form.lastName.trim(),
+        email:         form.email.trim() || null,
+        phone:         form.phone.trim() || null,
+        dob:           form.dob || null,
+        position:      form.position || null,
+        school:        form.school.trim() || null,
+        goals:         form.goals.trim() || null,
+        coachNotes:    form.notes.trim() || null,
+        emergencyName:  form.emergencyName.trim() || null,
+        emergencyPhone: form.emergencyPhone.trim() || null,
+        emergencyRel:   form.emergencyRel.trim() || null,
+      }),
     })
-    const newId: string = (!error && data && data[0]?.athlete_id) ? data[0].athlete_id : uid()
+    const d = await res.json() as { athleteId?: string; created?: boolean; emailSent?: boolean; error?: string }
+
+    if (d.error) { showToast('Failed to create athlete — ' + d.error); return }
+
     const newAthlete: Athlete = {
-      id: newId, firstName: form.firstName.trim(), lastName: form.lastName.trim(),
-      email: form.email.trim(), phone: form.phone.trim(), dob: form.dob,
-      gender: form.gender, position: form.position, repClub: form.repClub.trim(),
-      school: form.school.trim(), joined: new Date().toISOString().slice(0, 10),
-      membership: { plan: null, status: null },
-      membershipStarted: null, nextBillingDate: null, outstandingBalance: 0, billingRecords: [],
+      id:          d.athleteId ?? uid(),
+      firstName:   form.firstName.trim(),
+      lastName:    form.lastName.trim(),
+      email:       form.email.trim(),
+      phone:       form.phone.trim(),
+      dob:         form.dob,
+      gender:      form.gender,
+      position:    form.position,
+      repClub:     form.repClub.trim(),
+      school:      form.school.trim(),
+      joined:      new Date().toISOString().slice(0, 10),
+      membership:  { plan: null, status: null },
+      membershipStarted: null, nextBillingDate: null,
+      outstandingBalance: 0, billingRecords: [],
       sessionsTotal: 0, sessionsThisMonth: 0, lastSession: null,
-      goals: form.goals.trim(), coachNotes: form.notes.trim(),
-      emergency: { name: form.emergencyName.trim(), phone: form.emergencyPhone.trim(), relationship: form.emergencyRel.trim() },
-      recentSessions: [], inviteStatus: hasEmail ? 'invited' : null, isActive: true,
+      goals:       form.goals.trim(),
+      coachNotes:  form.notes.trim(),
+      emergency:   { name: form.emergencyName.trim(), phone: form.emergencyPhone.trim(), relationship: form.emergencyRel.trim() },
+      recentSessions: [],
+      inviteStatus:  hasEmail ? 'invited' : null,
+      lastLoginAt:   null,
+      isActive:      true,
     }
-    if (error) console.error('[invite_athlete] error:', error)
+
     setAthletes(prev => [...prev, newAthlete])
     setShowAddModal(false)
     setForm(blankForm())
+
     if (hasEmail) {
-      const email = form.email.trim()
-      sendEmail({
-        template: 'athlete-invitation',
-        to: email,
-        data: { firstName: form.firstName.trim(), lastName: form.lastName.trim(), email },
-      }).catch(console.error)
-      setInviteToast(`Invitation sent to ${email}`)
-      setTimeout(() => setInviteToast(null), 4000)
+      const msg = d.emailSent
+        ? `Athlete account created — invitation email sent to ${form.email.trim()}`
+        : `Athlete added — account created for ${form.email.trim()}`
+      setInviteToast(msg)
+      setTimeout(() => setInviteToast(null), 5000)
+    } else {
+      showToast(`${form.firstName.trim()} ${form.lastName.trim()} added.`)
     }
   }
 
   function resetAddMemberModal() {
-    setNewFirst(''); setNewLast(''); setNewEmail('')
+    setNewFirst(''); setNewLast(''); setNewEmail(''); setNewDob(''); setNewPhone('')
     setNewPlan('bronze'); setNewStarted(''); setNewMemberNotes('')
     setAddMemberStep(1); setAddMemberSetupSecret(null); setAddMemberInsertedData(null)
+    setAddMemberExistingAthlete(null); setAddMemberLoading(false)
+  }
+
+  // Step 1 → Step 2: validate account details + check for existing athlete by email
+  async function handleAddMemberDetailsNext() {
+    if (!newFirst.trim() || !newLast.trim() || !newEmail.trim()) return
+    setAddMemberLoading(true)
+    // Check if athlete already exists with this email
+    const { data: existing } = await supabase
+      .from('athletes')
+      .select('*')
+      .eq('email', newEmail.trim())
+      .maybeSingle()
+    if (existing) {
+      setAddMemberExistingAthlete(dbToAthlete(existing))
+    } else {
+      setAddMemberExistingAthlete(null)
+    }
+    setAddMemberStep(2)
     setAddMemberLoading(false)
   }
 
-  // Step 1 → Step 2: insert athlete + create SetupIntent
-  async function handleAddMemberNext() {
-    if (!newFirst.trim() || !newLast.trim() || !newEmail.trim() || !newStarted) return
+  // Step 2 → Step 3: create/update athlete record + create Stripe SetupIntent
+  async function handleAddMemberPlanNext() {
+    if (!newStarted) return
     setAddMemberLoading(true)
-    const firstCharge = nextMondayFrom(newStarted)
+    const firstCharge    = nextMondayFrom(newStarted)
     const billingRecord: BillingRecord = { id: uid(), date: firstCharge, amount: PLAN_INFO[newPlan].price, status: 'upcoming' }
-    const payload = {
-      first_name:              newFirst.trim(),
-      last_name:               newLast.trim(),
-      email:                   newEmail.trim(),
+    const membershipPatch = {
       membership_tier:         newPlan,
       membership_status:       'active',
       membership_started_date: newStarted,
       next_billing_date:       firstCharge,
       outstanding_balance:     0,
       billing_records:         [billingRecord],
-      sessions_this_month:     0,
-      sessions_total:          0,
       coach_notes:             newMemberNotes.trim() || null,
     }
-    const { data, error } = await supabase.from('athletes').insert(payload).select().single()
-    if (error) {
-      console.error('[athletes] add member failed:', error)
-      showToast('Failed to add member — ' + (error.message ?? 'unknown error'))
-      setAddMemberLoading(false)
-      return
+
+    let inserted: Record<string, unknown>
+
+    if (addMemberExistingAthlete) {
+      // Upgrade existing athlete to member
+      const { data, error } = await supabase
+        .from('athletes')
+        .update(membershipPatch)
+        .eq('id', addMemberExistingAthlete.id)
+        .select()
+        .single()
+      if (error) { showToast('Failed to upgrade athlete — ' + error.message); setAddMemberLoading(false); return }
+      inserted = data as Record<string, unknown>
+    } else {
+      // Create new athlete record (user account created after card saved)
+      const payload = {
+        first_name:  newFirst.trim(), last_name: newLast.trim(),
+        email: newEmail.trim(), phone: newPhone.trim() || null,
+        date_of_birth: newDob || null,
+        ...membershipPatch,
+      }
+      const { data, error } = await supabase.from('athletes').insert(payload).select().single()
+      if (error) { showToast('Failed to add member — ' + error.message); setAddMemberLoading(false); return }
+      inserted = data as Record<string, unknown>
     }
-    setAddMemberInsertedData(data)
-    // Create Stripe customer + SetupIntent
+
+    setAddMemberInsertedData(inserted)
+
+    // Create Stripe SetupIntent
     try {
       const res = await fetch('/api/stripe/create-setup-intent', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ athleteId: data.id }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ athleteId: inserted.id }),
       })
-      const d = await res.json()
+      const d = await res.json() as { clientSecret?: string; error?: string }
       if (d.error) throw new Error(d.error)
-      setAddMemberSetupSecret(d.clientSecret)
-      setAddMemberStep(2)
+      setAddMemberSetupSecret(d.clientSecret ?? null)
+      setAddMemberStep(3)
     } catch (err) {
       console.error('[stripe] create-setup-intent:', err)
       showToast('Stripe error — please try again.')
@@ -1137,30 +1199,55 @@ export default function AthletesPage() {
     setAddMemberLoading(false)
   }
 
-  // Step 2: card saved → create subscription, close modal
+  // Step 3: card saved → save PM, create subscription, create user account, close modal
   const handleAddMemberCardSaved = useCallback(async (paymentMethodId: string) => {
     const inserted = addMemberInsertedData
     if (!inserted) return
-    // Save PM to Supabase and set as default
+
     await fetch('/api/stripe/save-payment-method', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ athleteId: inserted.id, paymentMethodId }),
     })
-    // Create subscription — now has a default PM so it goes active immediately
     fetch('/api/stripe/create-subscription', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ athleteId: inserted.id, plan: newPlan }),
     }).then(r => r.json()).then(d => {
-      if (d.error) console.error('[stripe] create-subscription:', d.error)
+      if ((d as { error?: string }).error) console.error('[stripe] create-subscription:', (d as { error: string }).error)
     }).catch(console.error)
-    setAthletes(prev => [...prev, dbToAthlete(inserted)])
+
+    // Create user account + send invitation email (if new athlete; existing has account already)
+    if (!addMemberExistingAthlete) {
+      const planLabel = `${PLAN_INFO[newPlan].label} — $${PLAN_INFO[newPlan].price}/week`
+      fetch('/api/athletes/create-account', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          firstName: inserted.first_name, lastName: inserted.last_name,
+          email: inserted.email, membershipPlan: planLabel,
+        }),
+      }).then(r => r.json()).then(d => {
+        if ((d as { error?: string }).error) console.error('[create-account]', (d as { error: string }).error)
+      }).catch(console.error)
+    }
+
+    const label = addMemberExistingAthlete
+      ? `${addMemberExistingAthlete.firstName} upgraded to ${PLAN_INFO[newPlan].label} member!`
+      : `${inserted.first_name as string} ${inserted.last_name as string} added as a member — invitation email sent.`
+
+    if (addMemberExistingAthlete) {
+      setAthletes(prev => prev.map(a =>
+        a.id === addMemberExistingAthlete.id
+          ? { ...a, membership: { plan: newPlan, status: 'active' } }
+          : a
+      ))
+    } else {
+      setAthletes(prev => [...prev, dbToAthlete(inserted)])
+    }
+
     setShowAddMemberModal(false)
     resetAddMemberModal()
-    showToast(`${inserted.first_name as string} ${inserted.last_name as string} added as a member!`)
+    showToast(label)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [addMemberInsertedData, newPlan])
+  }, [addMemberInsertedData, newPlan, addMemberExistingAthlete])
 
   async function handleConvertToMember() {
     const athlete = athletes.find(a => a.id === convertAthleteId)
@@ -1223,6 +1310,35 @@ export default function AthletesPage() {
     showToast('Card saved — membership is now active!')
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [convertAthleteForCard, convertPlan])
+
+  async function handleResendInvitation(athleteId: string) {
+    setResendingInvite(true)
+    setInviteResent(false)
+    const res = await fetch('/api/athletes/resend-invitation', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ athleteId }),
+    })
+    const d = await res.json() as { success?: boolean; error?: string }
+    setResendingInvite(false)
+    if (d.error) { showToast('Failed to resend: ' + d.error); return }
+    setInviteResent(true)
+    setAthletes(prev => prev.map(a => a.id === athleteId ? { ...a, inviteStatus: 'invited' } : a))
+    setTimeout(() => setInviteResent(false), 4000)
+  }
+
+  async function handleResetPassword(athleteId: string) {
+    setResettingPassword(true)
+    setPasswordResetSent(false)
+    const res = await fetch('/api/athletes/resend-invitation', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ athleteId }),
+    })
+    const d = await res.json() as { success?: boolean; error?: string }
+    setResettingPassword(false)
+    if (d.error) { showToast('Failed to send reset: ' + d.error); return }
+    setPasswordResetSent(true)
+    setTimeout(() => setPasswordResetSent(false), 4000)
+  }
 
   function handleChangePlan(plan: MembershipPlan) {
     if (!selected) return
@@ -1635,6 +1751,80 @@ export default function AthletesPage() {
                     </div>
                   </section>
 
+                  {/* Account Status */}
+                  {a.email && (() => {
+                    const hasAccount   = !!a.inviteStatus || !!a.lastLoginAt
+                    const hasLoggedIn  = a.inviteStatus === 'accepted' || !!a.lastLoginAt
+                    const accountLabel = !hasAccount ? 'No Account' : hasLoggedIn ? 'Active' : 'Invited'
+                    const labelStyle   = !hasAccount
+                      ? { bg: '#f3f4f6', color: '#6b7280', dot: '#9ca3af' }
+                      : hasLoggedIn
+                        ? { bg: '#dcfce7', color: '#15803d', dot: '#22c55e' }
+                        : { bg: '#fef3c7', color: '#92400e', dot: '#f59e0b' }
+                    return (
+                      <section>
+                        <h3 className="mb-3 text-xs font-bold uppercase tracking-wider text-gray-400">App Account</h3>
+                        <div className="space-y-3 rounded-xl border border-gray-100 bg-gray-50 p-4">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-gray-500">Status</span>
+                            <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold"
+                              style={{ backgroundColor: labelStyle.bg, color: labelStyle.color }}>
+                              <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: labelStyle.dot }} />
+                              {accountLabel}
+                            </span>
+                          </div>
+                          {a.lastLoginAt && (
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm text-gray-500">Last login</span>
+                              <span className="text-sm font-medium text-gray-800">
+                                {new Date(a.lastLoginAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}
+                              </span>
+                            </div>
+                          )}
+                          <div className="flex gap-2 pt-1">
+                            {(accountLabel === 'Invited' || accountLabel === 'Active') && (
+                              <button type="button"
+                                onClick={() => void handleResendInvitation(a.id)}
+                                disabled={resendingInvite}
+                                className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-gray-200 py-2 text-xs font-semibold text-gray-600 transition hover:bg-white disabled:opacity-50">
+                                {inviteResent
+                                  ? <><IconCheck size={12} style={{ color: '#22c55e' }} /> Sent!</>
+                                  : resendingInvite ? 'Sending…' : <><IconMail size={12} /> {accountLabel === 'Invited' ? 'Resend Invite' : 'Resend Login'}</>}
+                              </button>
+                            )}
+                            {!hasAccount && (
+                              <button type="button"
+                                onClick={() => {
+                                  void fetch('/api/athletes/create-account', {
+                                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ firstName: a.firstName, lastName: a.lastName, email: a.email }),
+                                  }).then(r => r.json()).then(d => {
+                                    if ((d as { error?: string }).error) { showToast('Failed: ' + (d as { error: string }).error); return }
+                                    setAthletes(prev => prev.map(x => x.id === a.id ? { ...x, inviteStatus: 'invited' } : x))
+                                    showToast(`Account created — invitation sent to ${a.email}`)
+                                  })
+                                }}
+                                className="flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold text-white transition hover:opacity-90"
+                                style={{ backgroundColor: ACCENT }}>
+                                <IconMail size={12} /> Create Account
+                              </button>
+                            )}
+                            {hasAccount && (
+                              <button type="button"
+                                onClick={() => void handleResetPassword(a.id)}
+                                disabled={resettingPassword}
+                                className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-gray-200 py-2 text-xs font-semibold text-gray-600 transition hover:bg-white disabled:opacity-50">
+                                {passwordResetSent
+                                  ? <><IconCheck size={12} style={{ color: '#22c55e' }} /> Reset Sent!</>
+                                  : resettingPassword ? 'Sending…' : 'Reset Password'}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </section>
+                    )
+                  })()}
+
                   {/* Membership (members only) */}
                   {a.membership.plan && a.membership.status && (
                     <>
@@ -2035,16 +2225,23 @@ export default function AthletesPage() {
               <div>
                 <h2 className="text-base font-bold text-gray-900">Add Member</h2>
                 <div className="mt-1 flex items-center gap-2">
-                  {[1, 2].map(step => (
-                    <div key={step} className="flex items-center gap-1.5">
+                  {([
+                    { n: 1, label: 'Account' },
+                    { n: 2, label: 'Plan' },
+                    { n: 3, label: 'Payment' },
+                  ]).map(({ n, label }) => (
+                    <div key={n} className="flex items-center gap-1.5">
                       <div className="flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold"
-                        style={{ backgroundColor: addMemberStep === step ? ACCENT : '#e5e7eb', color: addMemberStep === step ? 'white' : '#9ca3af' }}>
-                        {step}
+                        style={{
+                          backgroundColor: addMemberStep > n ? '#22c55e' : addMemberStep === n ? ACCENT : '#e5e7eb',
+                          color: addMemberStep >= n ? 'white' : '#9ca3af',
+                        }}>
+                        {addMemberStep > n ? '✓' : n}
                       </div>
-                      <span className="text-xs" style={{ color: addMemberStep === step ? '#1f2937' : '#9ca3af' }}>
-                        {step === 1 ? 'Details' : 'Payment'}
+                      <span className="text-xs" style={{ color: addMemberStep === n ? '#1f2937' : '#9ca3af' }}>
+                        {label}
                       </span>
-                      {step < 2 && <span className="text-gray-200">→</span>}
+                      {n < 3 && <span className="text-gray-200">→</span>}
                     </div>
                   ))}
                 </div>
@@ -2053,19 +2250,54 @@ export default function AthletesPage() {
                 className="rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100"><IconX size={18} /></button>
             </div>
 
-            {addMemberStep === 1 ? (
+            {/* Step 1 — Account Details */}
+            {addMemberStep === 1 && (
               <>
                 <div className="space-y-4 px-6 py-5">
                   <div className="grid grid-cols-2 gap-3">
-                    <div><label className={LABEL}>First Name</label>
+                    <div><label className={LABEL}>First Name *</label>
                       <input type="text" value={newFirst} onChange={e => setNewFirst(e.target.value)} placeholder="Jordan" className={INPUT} /></div>
-                    <div><label className={LABEL}>Last Name</label>
+                    <div><label className={LABEL}>Last Name *</label>
                       <input type="text" value={newLast} onChange={e => setNewLast(e.target.value)} placeholder="Mitchell" className={INPUT} /></div>
                   </div>
-                  <div><label className={LABEL}>Email</label>
+                  <div><label className={LABEL}>Email Address * <span className="normal-case font-normal text-gray-400">(becomes their login)</span></label>
                     <input type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="athlete@example.com" className={INPUT} /></div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div><label className={LABEL}>Date of Birth</label>
+                      <input type="date" value={newDob} onChange={e => setNewDob(e.target.value)} className={INPUT} /></div>
+                    <div><label className={LABEL}>Phone <span className="normal-case font-normal text-gray-400">(optional)</span></label>
+                      <input type="tel" value={newPhone} onChange={e => setNewPhone(e.target.value)} placeholder="0412 345 678" className={INPUT} /></div>
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2 border-t border-gray-100 px-6 py-4">
+                  <button type="button" onClick={() => { setShowAddMemberModal(false); resetAddMemberModal() }}
+                    className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50">Cancel</button>
+                  <button type="button" onClick={() => void handleAddMemberDetailsNext()}
+                    disabled={!newFirst.trim() || !newLast.trim() || !newEmail.trim() || addMemberLoading}
+                    className="flex items-center gap-1.5 rounded-xl px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-40"
+                    style={{ backgroundColor: ACCENT }}>
+                    {addMemberLoading ? 'Checking…' : 'Next → Plan'}
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* Step 2 — Plan Selection */}
+            {addMemberStep === 2 && (
+              <>
+                <div className="space-y-4 px-6 py-5">
+                  {addMemberExistingAthlete ? (
+                    <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+                      <strong>{addMemberExistingAthlete.firstName} {addMemberExistingAthlete.lastName}</strong> already exists as an athlete.
+                      Select a plan to upgrade them to a member.
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500">
+                      Creating a new account for <strong>{newFirst} {newLast}</strong>. They&apos;ll receive an invitation email with their login details after payment is confirmed.
+                    </p>
+                  )}
                   <div>
-                    <label className={LABEL}>Plan</label>
+                    <label className={LABEL}>Membership Plan</label>
                     <div className="grid grid-cols-2 gap-2">
                       {(['bronze', 'silver', 'gold', 'platinum'] as MembershipPlan[]).map(p => (
                         <PlanCard key={p} plan={p} selected={newPlan === p} onClick={() => setNewPlan(p)} />
@@ -2086,33 +2318,40 @@ export default function AthletesPage() {
                       placeholder="Any notes about this member…" className={INPUT + ' resize-none'} /></div>
                 </div>
                 <div className="flex justify-end gap-2 border-t border-gray-100 px-6 py-4">
-                  <button type="button" onClick={() => { setShowAddMemberModal(false); resetAddMemberModal() }}
-                    className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50">Cancel</button>
-                  <button type="button" onClick={handleAddMemberNext}
-                    disabled={!newFirst.trim() || !newLast.trim() || !newEmail.trim() || !newStarted || addMemberLoading}
+                  <button type="button" onClick={() => setAddMemberStep(1)}
+                    className="flex items-center gap-1.5 rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50">
+                    <IconArrowLeft size={14} /> Back
+                  </button>
+                  <button type="button" onClick={() => void handleAddMemberPlanNext()}
+                    disabled={!newStarted || addMemberLoading}
                     className="flex items-center gap-1.5 rounded-xl px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-40"
                     style={{ backgroundColor: ACCENT }}>
                     {addMemberLoading ? 'Setting up…' : 'Next → Payment'}
                   </button>
                 </div>
               </>
-            ) : addMemberSetupSecret ? (
+            )}
+
+            {/* Step 3 — Card Collection */}
+            {addMemberStep === 3 && addMemberSetupSecret && (
               <div className="px-6 py-5">
                 <p className="mb-4 text-sm text-gray-500">
-                  Enter a payment card for <strong>{newFirst} {newLast}</strong>. This will be charged weekly for their {PLAN_INFO[newPlan].label} membership.
+                  Enter a payment card for <strong>{addMemberExistingAthlete ? `${addMemberExistingAthlete.firstName} ${addMemberExistingAthlete.lastName}` : `${newFirst} ${newLast}`}</strong>.
+                  This will be charged <strong>${PLAN_INFO[newPlan].price}/week</strong> for their {PLAN_INFO[newPlan].label} membership.
                 </p>
-                <button type="button" onClick={() => setAddMemberStep(1)}
+                <button type="button" onClick={() => { setAddMemberStep(2); setAddMemberSetupSecret(null) }}
                   className="mb-4 flex items-center gap-1.5 text-xs font-semibold text-gray-400 transition hover:text-gray-600">
-                  <IconArrowLeft size={13} /> Back to details
+                  <IconArrowLeft size={13} /> Back to plan
                 </button>
                 <StripeCardStep
                   clientSecret={addMemberSetupSecret}
                   onSuccess={handleAddMemberCardSaved}
-                  onBack={() => setAddMemberStep(1)}
+                  onBack={() => { setAddMemberStep(2); setAddMemberSetupSecret(null) }}
                   submitLabel="Activate Membership"
                 />
               </div>
-            ) : (
+            )}
+            {addMemberStep === 3 && !addMemberSetupSecret && (
               <div className="px-6 py-8 text-center text-sm text-gray-400">Setting up payment…</div>
             )}
           </div>

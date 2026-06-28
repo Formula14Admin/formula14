@@ -41,10 +41,11 @@ export const authOptions: NextAuthOptions = {
           if (!error && data && data.length > 0) {
             const u = data[0]
             return {
-              id:   u.id,
-              name: `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim() || u.email,
-              email: u.email,
-              role:  u.role,
+              id:                  u.id,
+              name:                `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim() || u.email,
+              email:               u.email,
+              role:                u.role,
+              mustChangePassword:  u.must_change_password ?? false,
             }
           }
         } catch {
@@ -120,17 +121,19 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        token.id   = user.id
-        token.name = user.name
-        token.role = user.role
+        token.id                 = user.id
+        token.name               = user.name
+        token.role               = user.role
+        token.mustChangePassword = user.mustChangePassword
       }
       return token
     },
     async session({ session, token }) {
       if (session.user) {
-        session.user.id   = token.sub ?? token.id
-        session.user.name = token.name as string
-        session.user.role = token.role
+        session.user.id                 = token.sub ?? token.id
+        session.user.name               = token.name as string
+        session.user.role               = token.role
+        session.user.mustChangePassword = token.mustChangePassword
       }
       return session
     },
