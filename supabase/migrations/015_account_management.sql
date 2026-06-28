@@ -11,7 +11,8 @@ ALTER TABLE athletes
   ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ;
 
 -- ── authenticate_user (updated) ───────────────────────────────────────────────
--- Now also updates last_login_at on users + athletes, and returns must_change_password.
+-- Drop first because OUT parameter set changed (added must_change_password).
+DROP FUNCTION IF EXISTS authenticate_user(TEXT, TEXT);
 
 CREATE OR REPLACE FUNCTION authenticate_user(p_email TEXT, p_password TEXT)
 RETURNS TABLE(
