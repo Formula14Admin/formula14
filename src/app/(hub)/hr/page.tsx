@@ -751,59 +751,67 @@ function AvailabilityTab({ staff }: { staff: StaffMember[] }) {
   useEffect(() => {
     void (async () => {
       setLoading(true)
-      const [{ data: cd }, { data: fd }, { data: ex }] = await Promise.all([
-        supabase.from('coach_availability').select('*').order('day_of_week'),
-        supabase.from('facility_availability').select('*').order('day_of_week'),
-        supabase.from('availability_exceptions').select('*').order('date'),
-      ])
+      try {
+        const [{ data: cd, error: ce }, { data: fd, error: fe }, { data: ex, error: ee }] = await Promise.all([
+          supabase.from('coach_availability').select('*').order('day_of_week'),
+          supabase.from('facility_availability').select('*').order('day_of_week'),
+          supabase.from('availability_exceptions').select('*').order('date'),
+        ])
+        if (ce) console.error('[availability] coach_availability:', ce)
+        if (fe) console.error('[availability] facility_availability:', fe)
+        if (ee) console.error('[availability] availability_exceptions:', ee)
 
-      const coachParsed: CoachDayRow[] = (cd ?? []).map((r: Record<string, unknown>) => ({
-        id:                  r.id as string,
-        coachId:             r.coach_id as string,
-        dayOfWeek:           r.day_of_week as number,
-        startTime:           timeStr(r.start_time as string),
-        endTime:             timeStr(r.end_time as string),
-        sessionTypesEnabled: (r.session_types_enabled as string[]) ?? [],
-      }))
+        const coachParsed: CoachDayRow[] = (cd ?? []).map((r: Record<string, unknown>) => ({
+          id:                  r.id as string,
+          coachId:             r.coach_id as string,
+          dayOfWeek:           r.day_of_week as number,
+          startTime:           timeStr(r.start_time as string),
+          endTime:             timeStr(r.end_time as string),
+          sessionTypesEnabled: (r.session_types_enabled as string[]) ?? [],
+        }))
 
-      const facParsed: FacilityDayRow[] = (fd ?? []).map((r: Record<string, unknown>) => ({
-        id:                   r.id as string,
-        dayOfWeek:            r.day_of_week as number,
-        startTime:            timeStr(r.start_time as string),
-        endTime:              timeStr(r.end_time as string),
-        disabledSessionTypes: (r.disabled_session_types as string[]) ?? [],
-      }))
+        const facParsed: FacilityDayRow[] = (fd ?? []).map((r: Record<string, unknown>) => ({
+          id:                   r.id as string,
+          dayOfWeek:            r.day_of_week as number,
+          startTime:            timeStr(r.start_time as string),
+          endTime:              timeStr(r.end_time as string),
+          disabledSessionTypes: (r.disabled_session_types as string[]) ?? [],
+        }))
 
-      const exParsed: ExceptionRow[] = (ex ?? []).map((r: Record<string, unknown>) => ({
-        id:            r.id as string,
-        appliesTo:     r.applies_to as string,
-        exceptionType: r.exception_type as 'block' | 'extra',
-        date:          r.date as string,
-        startTime:     timeStr(r.start_time as string | null) || null,
-        endTime:       timeStr(r.end_time as string | null) || null,
-        reason:        (r.reason as string | null) ?? null,
-      }))
+        const exParsed: ExceptionRow[] = (ex ?? []).map((r: Record<string, unknown>) => ({
+          id:            r.id as string,
+          appliesTo:     r.applies_to as string,
+          exceptionType: r.exception_type as 'block' | 'extra',
+          date:          r.date as string,
+          startTime:     timeStr(r.start_time as string | null) || null,
+          endTime:       timeStr(r.end_time as string | null) || null,
+          reason:        (r.reason as string | null) ?? null,
+        }))
 
-      setCoachRows(coachParsed)
-      setFacilityRows(facParsed)
-      setExceptions(exParsed)
+        setCoachRows(coachParsed)
+        setFacilityRows(facParsed)
+        setExceptions(exParsed)
 
-      // Initialise edit state from DB
-      const coachMap: Record<string, CoachDayRow[]> = {}
-      for (const s of staff) {
-        const days = coachParsed.filter(r => r.coachId === s.id)
-        coachMap[s.id] = DOW_JS.map((jsDow, idx) => {
-          const ex = days.find(r => r.dayOfWeek === jsDow)
-          return ex ?? { coachId: s.id, dayOfWeek: jsDow, startTime: '06:00', endTime: '21:00', sessionTypesEnabled: [...COACHED_TYPE_IDS] }
-        })
+        // Initialise edit state from DB.
+        // Days with no DB row default to OFF (empty startTime/endTime).
+        const coachMap: Record<string, CoachDayRow[]> = {}
+        for (const s of staff) {
+          const dbDays = coachParsed.filter(r => r.coachId === s.id)
+          coachMap[s.id] = DOW_JS.map(jsDow => {
+            const match = dbDays.find(r => r.dayOfWeek === jsDow)
+            return match ?? { coachId: s.id, dayOfWeek: jsDow, startTime: '', endTime: '', sessionTypesEnabled: [] }
+          })
+        }
+        setCoachEdits(coachMap)
+        setFacilityEdits(DOW_JS.map(jsDow => {
+          const match = facParsed.find(r => r.dayOfWeek === jsDow)
+          return match ?? { dayOfWeek: jsDow, startTime: '', endTime: '', disabledSessionTypes: [] }
+        }))
+      } catch (err) {
+        console.error('[availability] load error:', err)
+      } finally {
+        setLoading(false)
       }
-      setCoachEdits(coachMap)
-      setFacilityEdits(DOW_JS.map((jsDow) => {
-        const ex = facParsed.find(r => r.dayOfWeek === jsDow)
-        return ex ?? { dayOfWeek: jsDow, startTime: '', endTime: '', disabledSessionTypes: [] }
-      }))
-
-      setLoading(false)
     })()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
