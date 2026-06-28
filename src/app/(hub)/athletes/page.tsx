@@ -1067,7 +1067,17 @@ export default function AthletesPage() {
     }
     const { data, error } = await supabase.from('athletes').insert(payload).select().single()
     if (error) { console.error('[athletes] add member failed:', error); showToast('Failed to add member'); return }
-    if (data) setAthletes(prev => [...prev, dbToAthlete(data)])
+    if (data) {
+      setAthletes(prev => [...prev, dbToAthlete(data)])
+      // Create Stripe subscription (non-blocking — webhook confirms billing)
+      fetch('/api/stripe/create-subscription', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ athleteId: data.id, plan: newPlan }),
+      }).then(r => r.json()).then(d => {
+        if (d.error) console.error('[stripe] create-subscription:', d.error)
+      }).catch(console.error)
+    }
     setShowAddMemberModal(false)
     setNewFirst(''); setNewLast(''); setNewEmail('')
     setNewPlan('bronze'); setNewStarted(''); setNewMemberNotes('')
@@ -1086,6 +1096,14 @@ export default function AthletesPage() {
       billingRecords: [billingRecord],
     }
     updateAthlete(athlete.id, patch)
+    // Create Stripe subscription (non-blocking — webhook confirms billing)
+    fetch('/api/stripe/create-subscription', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ athleteId: athlete.id, plan: convertPlan }),
+    }).then(r => r.json()).then(d => {
+      if (d.error) console.error('[stripe] create-subscription:', d.error)
+    }).catch(console.error)
     setConvertAthleteId(null)
     setConvertStarted('')
     setConvertPlan('bronze')
@@ -1097,12 +1115,31 @@ export default function AthletesPage() {
     updateAthlete(selected.id, { membership: { ...selected.membership, plan } })
     setShowChangePlan(false)
     showToast(`Plan changed to ${PLAN_INFO[plan].label}.`)
+    // Update Stripe subscription to the new price (non-blocking)
+    fetch('/api/stripe/update-subscription', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ athleteId: selected.id, action: 'change-plan', newPlan: plan }),
+    }).then(r => r.json()).then(d => {
+      if (d.error) console.error('[stripe] update-subscription change-plan:', d.error)
+    }).catch(console.error)
   }
 
   function handleToggleCancel() {
     if (!selected || !selected.membership.status) return
     const next: MembershipStatus = selected.membership.status === 'cancelling' ? 'active' : 'cancelling'
     updateAthlete(selected.id, { membership: { ...selected.membership, status: next } })
+    // Cancel or reactivate the Stripe subscription (non-blocking)
+    fetch('/api/stripe/update-subscription', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        athleteId: selected.id,
+        action: next === 'cancelling' ? 'cancel' : 'reactivate',
+      }),
+    }).then(r => r.json()).then(d => {
+      if (d.error) console.error('[stripe] update-subscription cancel/reactivate:', d.error)
+    }).catch(console.error)
   }
 
   function handleResendPayment() {
