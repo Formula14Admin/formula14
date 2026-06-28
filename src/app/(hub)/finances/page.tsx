@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import {
-  IconLayoutDashboard, IconReceipt, IconChartBar, IconUser,
+  IconLayoutDashboard, IconReceipt, IconReceipt2, IconChartBar, IconUser,
   IconSparkles, IconSend, IconMail, IconX, IconCheck,
   IconPlus, IconChevronDown,
 } from '@tabler/icons-react'
@@ -19,16 +19,18 @@ import { TransactionsTab }  from './_transactions'
 import { ReportsTab }       from './_reports'
 import { PersonalTab }      from './_personal'
 import { AskClaudeTab }     from './_claude'
+import { ReceiptsTab }      from './_receipts'
 import { loadRecipients, type Recipient } from '@/lib/finances-recipients'
 import { sendEmail } from '@/lib/send-email'
 
 // ─── Tab config ────────────────────────────────────────────────────────────────
 
-type TabId = 'overview' | 'transactions' | 'reports' | 'personal' | 'claude'
+type TabId = 'overview' | 'transactions' | 'receipts' | 'reports' | 'personal' | 'claude'
 
 const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: 'overview',      label: 'Overview',      icon: <IconLayoutDashboard size={15} /> },
   { id: 'transactions',  label: 'Transactions',  icon: <IconReceipt size={15} /> },
+  { id: 'receipts',      label: 'Receipts',      icon: <IconReceipt2 size={15} /> },
   { id: 'reports',       label: 'Reports',       icon: <IconChartBar size={15} /> },
   { id: 'personal',      label: 'Personal',      icon: <IconUser size={15} /> },
   { id: 'claude',        label: 'Ask Claude',    icon: <IconSparkles size={15} /> },
@@ -319,6 +321,7 @@ export default function FinancesPage() {
       <div className="p-6">
         {tab === 'overview'     && <OverviewTab     transactions={transactions} />}
         {tab === 'transactions' && <TransactionsTab transactions={transactions} onAdd={addTransaction} onDelete={delTransaction} showAddModalProp={showAddTx} onAddModalClose={() => setShowAddTx(false)} />}
+        {tab === 'receipts'     && <ReceiptsTab />}
         {tab === 'reports'      && <ReportsTab      transactions={transactions} />}
         {tab === 'personal'     && <PersonalTab     txns={personalTxns} goals={goals} onAddTx={addPersonalTx} onAddGoal={addGoal} />}
         {tab === 'claude'       && <AskClaudeTab    transactions={transactions} personalTxns={personalTxns} />}
