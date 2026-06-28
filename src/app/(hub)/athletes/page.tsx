@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
+import { sendEmail } from '@/lib/send-email'
 import {
   IconX,
   IconSearch,
@@ -1034,7 +1035,13 @@ export default function AthletesPage() {
     setShowAddModal(false)
     setForm(blankForm())
     if (hasEmail) {
-      setInviteToast(`Invitation queued for ${form.email.trim()}`)
+      const email = form.email.trim()
+      sendEmail({
+        template: 'athlete-invitation',
+        to: email,
+        data: { firstName: form.firstName.trim(), lastName: form.lastName.trim(), email },
+      }).catch(console.error)
+      setInviteToast(`Invitation sent to ${email}`)
       setTimeout(() => setInviteToast(null), 4000)
     }
   }

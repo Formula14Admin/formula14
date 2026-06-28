@@ -20,6 +20,7 @@ import { ReportsTab }       from './_reports'
 import { PersonalTab }      from './_personal'
 import { AskClaudeTab }     from './_claude'
 import { loadRecipients, type Recipient } from '@/lib/finances-recipients'
+import { sendEmail } from '@/lib/send-email'
 
 // ─── Tab config ────────────────────────────────────────────────────────────────
 
@@ -64,9 +65,11 @@ function pLabel(p: SummaryPeriod, f: string, t: string) {
   return 'Custom Range'
 }
 
+type SummaryRecipient = { name: string; email: string }
+
 function SendSummaryModal({ onClose, onSend }: {
   onClose: () => void
-  onSend: (names: string[]) => void
+  onSend: (recipients: SummaryRecipient[], subject: string, period: string, includes: string[], notes: string) => void
 }) {
   const [recipients, setRecipients] = useState<Recipient[]>([])
   const [selected,   setSelected]   = useState<Set<string>>(new Set())
@@ -83,8 +86,12 @@ function SendSummaryModal({ onClose, onSend }: {
   function toggleInc(id: string) { setIncludes(prev => { const n=new Set(prev); n.has(id)?n.delete(id):n.add(id); return n }) }
 
   const subject = `Formula14 Financial Summary — ${pLabel(period, customFrom, customTo)}`
-  const selectedNames = [...recipients.filter(r=>selected.has(r.id)).map(r=>r.name), ...(customEmail.trim()?[customEmail.trim()]:[]) ]
-  const canSend = selectedNames.length > 0
+  const selectedRecipients: SummaryRecipient[] = [
+    ...recipients.filter(r => selected.has(r.id)).map(r => ({ name: r.name, email: r.email })),
+    ...(customEmail.trim() ? [{ name: customEmail.trim(), email: customEmail.trim() }] : []),
+  ]
+  const selectedNames = selectedRecipients.map(r => r.name)
+  const canSend = selectedRecipients.length > 0
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -189,7 +196,7 @@ function SendSummaryModal({ onClose, onSend }: {
           <p className="text-xs text-gray-400">{canSend ? `Sending to ${selectedNames.length} recipient${selectedNames.length!==1?'s':''}` : 'Select at least one recipient'}</p>
           <div className="flex gap-2">
             <button type="button" onClick={onClose} className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50">Cancel</button>
-            <button type="button" onClick={() => onSend(selectedNames)} disabled={!canSend}
+            <button type="button" onClick={() => onSend(selectedRecipients, subject, pLabel(period, customFrom, customTo), [...includes], notes)} disabled={!canSend}
               className="flex items-center gap-2 rounded-xl px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-40"
               style={{ backgroundColor: ACCENT }}>
               <IconSend size={15} /> Send
@@ -242,9 +249,28 @@ export default function FinancesPage() {
 
   const triggerToast = useCallback((msg: string) => setToast(msg), [])
 
-  function handleSend(names: string[]) {
+  async function handleSend(
+    summaryRecipients: SummaryRecipient[],
+    subject: string,
+    period: string,
+    includes: string[],
+    notes: string,
+  ) {
     setShowSend(false)
-    triggerToast(`Summary queued for ${names.join(', ')} — requires Resend integration to deliver`)
+    const now = new Date().toLocaleString('en-AU', { dateStyle: 'long', timeStyle: 'short' })
+    const includeLabels = INCLUDE_OPTS.filter(o => includes.includes(o.id)).map(o => o.label)
+    try {
+      await Promise.all(summaryRecipients.map(r =>
+        sendEmail({
+          template: 'finance-summary',
+          to: r.email,
+          data: { recipientName: r.name, period, includes: includeLabels, notes: notes || undefined, generatedAt: now },
+        })
+      ))
+      triggerToast(`Financial summary sent to ${summaryRecipients.map(r => r.name).join(', ')}`)
+    } catch {
+      triggerToast('Error sending summary — please try again')
+    }
   }
 
   return (

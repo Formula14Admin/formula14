@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
+import { sendEmail } from '@/lib/send-email'
 import {
   IconBriefcase,
   IconUsers,
@@ -313,6 +314,19 @@ function PeopleTab({ staff, setStaff, appRoles, setAppRoles }: {
     setForm({ ...EMPTY_STAFF })
     setInvited(true)
     setTimeout(() => setInvited(false), 3000)
+    if (member.email) {
+      sendEmail({
+        template: 'staff-invitation',
+        to: member.email,
+        data: {
+          firstName: member.firstName,
+          lastName:  member.lastName,
+          email:     member.email,
+          role:      member.role || 'Coach',
+          appRole:   form.appRole || 'coach',
+        },
+      }).catch(console.error)
+    }
   }
 
   const ADD_SECTIONS = ['personal', 'employment', 'compensation', 'banking', 'tax', 'documents', 'notes']

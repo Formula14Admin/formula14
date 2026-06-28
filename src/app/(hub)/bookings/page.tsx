@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase } from '@/lib/supabase'
+import { sendEmail } from '@/lib/send-email'
 import { CANONICAL_SESSION_TYPES } from '@/lib/sessionTypes'
 import {
   IconChevronLeft,
@@ -1087,6 +1088,21 @@ export default function BookingsPage() {
     }])
   }
 
+  // ── Athlete email lookup (best-effort — name-based for existing schema) ────────
+  async function getAthleteEmail(fullName: string): Promise<string | null> {
+    const parts = fullName.trim().split(' ')
+    if (parts.length < 2) return null
+    const firstName = parts[0]
+    const lastName  = parts.slice(1).join(' ')
+    const { data } = await supabase
+      .from('athletes')
+      .select('email')
+      .ilike('first_name', firstName)
+      .ilike('last_name', lastName)
+      .maybeSingle()
+    return data?.email ?? null
+  }
+
   // ── Join Request actions ──────────────────────────────────────────────────────
   function acceptJoinRequest(bookingId: string, requestId: string, athleteName: string) {
     setBookings(prev => prev.map(b => {
@@ -1094,6 +1110,24 @@ export default function BookingsPage() {
       const updatedRequests = (b.joinRequests ?? []).map(jr =>
         jr.id === requestId ? { ...jr, status: 'accepted' as const } : jr
       )
+      // Send approval email (fire-and-forget)
+      const booking = prev.find(x => x.id === bookingId)
+      if (booking) {
+        getAthleteEmail(athleteName).then(email => {
+          if (!email) return
+          sendEmail({
+            template: 'join-request-approved',
+            to: email,
+            data: {
+              athleteName,
+              sessionType: booking.sessionType,
+              date: parse(booking.date).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
+              time: fmtTime(booking.startMins),
+              space: SPACES.find(s => s.id === booking.spaceId)?.label ?? booking.spaceId,
+            },
+          })
+        }).catch(console.error)
+      }
       return { ...b, athletes: [...b.athletes, athleteName], joinRequests: updatedRequests }
     }))
   }
@@ -1101,8 +1135,24 @@ export default function BookingsPage() {
   function declineJoinRequest(bookingId: string, requestId: string) {
     setBookings(prev => prev.map(b => {
       if (b.id !== bookingId) return b
-      const updatedRequests = (b.joinRequests ?? []).map(jr =>
-        jr.id === requestId ? { ...jr, status: 'declined' as const } : jr
+      const jr = (b.joinRequests ?? []).find(r => r.id === requestId)
+      if (jr) {
+        // Send decline email (fire-and-forget)
+        getAthleteEmail(jr.athleteName).then(email => {
+          if (!email) return
+          sendEmail({
+            template: 'join-request-declined',
+            to: email,
+            data: {
+              athleteName: jr.athleteName,
+              sessionType: b.sessionType,
+              date: parse(b.date).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
+            },
+          })
+        }).catch(console.error)
+      }
+      const updatedRequests = (b.joinRequests ?? []).map(r =>
+        r.id === requestId ? { ...r, status: 'declined' as const } : r
       )
       return { ...b, joinRequests: updatedRequests }
     }))
@@ -1394,6 +1444,46 @@ export default function BookingsPage() {
     if (bumpMsg) showToast(bumpMsg)
     if (firstNewJoinLink) setJoinLinkModal(firstNewJoinLink)
 
+    // Send booking confirmation emails for new bookings
+    for (const item of itemsWithCodes) {
+      if (item.id) continue // skip edits
+      const dateLabel = parse(item.date).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+      const timeLabel = fmtTime(item.startMins)
+      const spaceLabel = SPACES.find(s => s.id === item.spaceId)?.label ?? item.spaceId
+      const coachLabel = item.coach === 'matt' ? 'Matt Brasser' : item.coach === 'jade' ? 'Jade Brasser' : item.coach ? 'Coach TBD' : 'N/A'
+      for (const athleteName of item.athletes) {
+        getAthleteEmail(athleteName).then(email => {
+          if (!email) return
+          sendEmail({
+            template: 'booking-confirmation',
+            to: email,
+            data: { athleteName, sessionType: item.sessionType, date: dateLabel, time: timeLabel, space: spaceLabel, coach: coachLabel },
+          })
+        }).catch(console.error)
+      }
+    }
+
+    // Send bump notification to the athlete who was removed
+    if (bumpedIdsForDeletion.length > 0) {
+      const bumpedBookings = bookings.filter(b => bumpedIdsForDeletion.includes(b.id))
+      for (const bumped of bumpedBookings) {
+        const athleteName = bumped.athletes[0]
+        if (!athleteName) continue
+        getAthleteEmail(athleteName).then(email => {
+          if (!email) return
+          sendEmail({
+            template: 'casual-shooting-bump',
+            to: email,
+            data: {
+              athleteName,
+              date: parse(bumped.date).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
+              time: fmtTime(bumped.startMins),
+            },
+          })
+        }).catch(console.error)
+      }
+    }
+
     // Track credit usage for new member bookings
     const wk = getMondayKey(new Date())
     itemsWithCodes.forEach(item => {
@@ -1410,6 +1500,7 @@ export default function BookingsPage() {
   }
 
   async function handleDelete(id: string) {
+    const booking = bookings.find(b => b.id === id)
     const { error } = await supabase.from('bookings').delete().eq('id', id)
     if (error) {
       console.error('[bookings] delete failed:', error)
@@ -1418,6 +1509,21 @@ export default function BookingsPage() {
     }
     setBookings(prev => prev.filter(b => b.id !== id))
     setModal(null)
+    // Send cancellation emails
+    if (booking) {
+      const dateLabel = parse(booking.date).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+      const timeLabel = fmtTime(booking.startMins)
+      for (const athleteName of booking.athletes) {
+        getAthleteEmail(athleteName).then(email => {
+          if (!email) return
+          sendEmail({
+            template: 'booking-cancellation',
+            to: email,
+            data: { athleteName, sessionType: booking.sessionType, date: dateLabel, time: timeLabel },
+          })
+        }).catch(console.error)
+      }
+    }
   }
 
   async function handleDeleteFrom(seriesId: string, fromDate: string) {

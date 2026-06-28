@@ -3,6 +3,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { signIn, getSession } from 'next-auth/react'
+import { sendEmail } from '@/lib/send-email'
 import { useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 
@@ -57,8 +58,13 @@ function LoginForm() {
   async function handleForgotSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setForgotLoading(true)
-    // Resend integration pending — show confirmation immediately
-    await new Promise(r => setTimeout(r, 800))
+    const resetToken = Math.random().toString(36).slice(2) + Date.now().toString(36)
+    const resetUrl = `${window.location.origin}/reset-password?token=${resetToken}&email=${encodeURIComponent(forgotEmail)}`
+    await sendEmail({
+      template: 'password-reset',
+      to: forgotEmail,
+      data: { email: forgotEmail, resetUrl, expiresIn: '1 hour' },
+    }).catch(console.error)
     setForgotLoading(false)
     setForgotSent(true)
   }
