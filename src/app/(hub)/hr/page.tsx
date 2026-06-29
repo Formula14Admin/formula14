@@ -685,27 +685,15 @@ function ModalSelect({ label, value, onChange, options }: {
 // ── Availability Tab ───────────────────────────────────────────────────────────
 
 // day_of_week: 0=Sun,1=Mon,2=Tue,3=Wed,4=Thu,5=Fri,6=Sat (JS Date.getDay() convention)
-const DAYS_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-const DOW_JS     = [1, 2, 3, 4, 5, 6, 0]  // maps DAYS_SHORT index → JS day-of-week
-const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
+const DAYS_SHORT  = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+const DOW_JS      = [1, 2, 3, 4, 5, 6, 0]  // maps DAYS_SHORT index → JS day-of-week
+const AVAIL_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
 
 const COACHED_TYPE_IDS = CANONICAL_SESSION_TYPES.filter(t => !t.selfServe).map(t => t.id)
 
-interface CoachDayRow {
-  id?: string
-  coachId: string
-  dayOfWeek: number
-  startTime: string  // 'HH:MM'
-  endTime: string
-  sessionTypesEnabled: string[]
-}
-
-interface FacilityDayRow {
-  id?: string
-  dayOfWeek: number
-  startTime: string
-  endTime: string
-  disabledSessionTypes: string[]
+function timeStr(raw: string | null | undefined): string {
+  if (!raw) return ''
+  return raw.slice(0, 5)
 }
 
 interface ExceptionRow {
@@ -718,97 +706,210 @@ interface ExceptionRow {
   reason: string | null
 }
 
-function timeStr(raw: string | null | undefined): string {
-  if (!raw) return ''
-  return raw.slice(0, 5) // '06:00:00' → '06:00'
+// ── Per-coach schedule editor ──────────────────────────────────────────────────
+
+interface DaySlot {
+  dow:       number    // JS day-of-week
+  label:     string
+  available: boolean
+  start:     string   // 'HH:MM'
+  end:       string
+  types:     string[]
 }
 
-function AvailabilityTab({ staff }: { staff: StaffMember[] }) {
-  const [sub, setSub] = useState<AvailSub>('overview')
-  const [calMonth, setCalMonth] = useState(() => new Date())
+function CoachScheduleEditor({ coachId, coachName }: { coachId: string; coachName: string }) {
+  const blank = (): DaySlot[] =>
+    DAYS_SHORT.map((label, i) => ({
+      dow: DOW_JS[i], label, available: false,
+      start: '06:00', end: '21:00', types: [...COACHED_TYPE_IDS],
+    }))
 
-  // ── DB state ────────────────────────────────────────────────────────────────
-  const [coachRows,    setCoachRows]    = useState<CoachDayRow[]>([])
-  const [facilityRows, setFacilityRows] = useState<FacilityDayRow[]>([])
-  const [exceptions,   setExceptions]   = useState<ExceptionRow[]>([])
-  const [loading,      setLoading]      = useState(true)
+  const [days,    setDays]    = useState<DaySlot[]>(blank)
+  const [loading, setLoading] = useState(true)
+  const [saving,  setSaving]  = useState(false)
+  const [saved,   setSaved]   = useState(false)
+  const [error,   setError]   = useState<string | null>(null)
 
-  // Local edit state (coach schedules)
-  const [coachEdits,    setCoachEdits]    = useState<Record<string, CoachDayRow[]>>({})
-  const [savingCoach,   setSavingCoach]   = useState<string | null>(null)
-  const [coachSaved,    setCoachSaved]    = useState<string | null>(null)
-
-  // Local edit state (facility)
-  const [facilityEdits, setFacilityEdits] = useState<FacilityDayRow[]>([])
-  const [savingFacility, setSavingFacility] = useState(false)
-  const [facilitySaved,  setFacilitySaved]  = useState(false)
-
-  // Exception form
-  const [exForm, setExForm] = useState({ appliesTo: 'facility', exType: 'block', date: '', startTime: '', endTime: '', reason: '' })
-  const [savingEx, setSavingEx] = useState(false)
-
-  // ── Load from Supabase ───────────────────────────────────────────────────────
   useEffect(() => {
     void (async () => {
-      setLoading(true)
       try {
-        const [{ data: cd, error: ce }, { data: fd, error: fe }, { data: ex, error: ee }] = await Promise.all([
-          supabase.from('coach_availability').select('*').order('day_of_week'),
-          supabase.from('facility_availability').select('*').order('day_of_week'),
-          supabase.from('availability_exceptions').select('*').order('date'),
-        ])
-        if (ce) console.error('[availability] coach_availability:', ce)
-        if (fe) console.error('[availability] facility_availability:', fe)
-        if (ee) console.error('[availability] availability_exceptions:', ee)
-
-        const coachParsed: CoachDayRow[] = (cd ?? []).map((r: Record<string, unknown>) => ({
-          id:                  r.id as string,
-          coachId:             r.coach_id as string,
-          dayOfWeek:           r.day_of_week as number,
-          startTime:           timeStr(r.start_time as string),
-          endTime:             timeStr(r.end_time as string),
-          sessionTypesEnabled: (r.session_types_enabled as string[]) ?? [],
+        const { data, error: err } = await supabase
+          .from('coach_availability').select('*').eq('coach_id', coachId)
+        if (err) throw err
+        setDays(blank().map(slot => {
+          const row = (data ?? []).find((r: Record<string, unknown>) => r.day_of_week === slot.dow)
+          if (!row) return slot
+          return {
+            ...slot,
+            available: true,
+            start: timeStr(row.start_time as string) || '06:00',
+            end:   timeStr(row.end_time   as string) || '21:00',
+            types: (row.session_types_enabled as string[]) ?? [...COACHED_TYPE_IDS],
+          }
         }))
+      } catch (e) {
+        setError('Failed to load schedule.')
+        console.error('[CoachScheduleEditor]', e)
+      } finally {
+        setLoading(false)
+      }
+    })()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coachId])
 
-        const facParsed: FacilityDayRow[] = (fd ?? []).map((r: Record<string, unknown>) => ({
-          id:                   r.id as string,
-          dayOfWeek:            r.day_of_week as number,
-          startTime:            timeStr(r.start_time as string),
-          endTime:              timeStr(r.end_time as string),
-          disabledSessionTypes: (r.disabled_session_types as string[]) ?? [],
+  function toggle(idx: number) {
+    setDays(prev => prev.map((d, i) => i === idx ? { ...d, available: !d.available } : d))
+  }
+  function setStart(idx: number, v: string) {
+    setDays(prev => prev.map((d, i) => i === idx ? { ...d, start: v } : d))
+  }
+  function setEnd(idx: number, v: string) {
+    setDays(prev => prev.map((d, i) => i === idx ? { ...d, end: v } : d))
+  }
+  function toggleType(idx: number, typeId: string) {
+    setDays(prev => prev.map((d, i) => {
+      if (i !== idx) return d
+      const types = d.types.includes(typeId) ? d.types.filter(t => t !== typeId) : [...d.types, typeId]
+      return { ...d, types }
+    }))
+  }
+
+  async function save() {
+    setSaving(true)
+    setError(null)
+    try {
+      const offDows = days.filter(d => !d.available).map(d => d.dow)
+      if (offDows.length > 0) {
+        const { error: de } = await supabase.from('coach_availability')
+          .delete().eq('coach_id', coachId).in('day_of_week', offDows)
+        if (de) throw de
+      }
+      for (const d of days.filter(d => d.available)) {
+        const { error: ue } = await supabase.from('coach_availability').upsert({
+          coach_id:              coachId,
+          day_of_week:           d.dow,
+          start_time:            d.start,
+          end_time:              d.end,
+          session_types_enabled: d.types,
+        }, { onConflict: 'coach_id,day_of_week' })
+        if (ue) throw ue
+      }
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2500)
+    } catch (e) {
+      setError('Save failed — check console.')
+      console.error('[CoachScheduleEditor save]', e)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const INPUT = 'rounded-lg border border-gray-200 px-2 py-1 text-xs focus:border-[#6BA3D6] focus:outline-none focus:ring-1 focus:ring-[#6BA3D6]/20'
+
+  if (loading) return <p className="py-4 text-sm text-gray-400">Loading {coachName}&apos;s schedule…</p>
+
+  return (
+    <div>
+      {error && <p className="mb-3 text-xs text-red-500">{error}</p>}
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse text-sm">
+          <thead>
+            <tr className="border-b border-gray-100 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+              <th className="pb-2 pr-4 w-12">Day</th>
+              <th className="pb-2 pr-4 w-28">Available</th>
+              <th className="pb-2 pr-6">Hours</th>
+              <th className="pb-2">Session types they coach</th>
+            </tr>
+          </thead>
+          <tbody>
+            {days.map((d, idx) => (
+              <tr key={d.label} className="border-b border-gray-50">
+                <td className="py-2.5 pr-4 font-semibold text-gray-700">{d.label}</td>
+                <td className="py-2.5 pr-4">
+                  <label className="flex cursor-pointer items-center gap-2">
+                    <input type="checkbox" checked={d.available} onChange={() => toggle(idx)}
+                      className="h-4 w-4 cursor-pointer rounded border-gray-300 accent-[#6BA3D6]" />
+                    <span className={`text-xs font-medium ${d.available ? 'text-green-600' : 'text-gray-400'}`}>
+                      {d.available ? 'Available' : 'Off'}
+                    </span>
+                  </label>
+                </td>
+                <td className="py-2.5 pr-6">
+                  {d.available
+                    ? <div className="flex items-center gap-1.5">
+                        <input type="time" value={d.start} onChange={e => setStart(idx, e.target.value)} className={INPUT} />
+                        <span className="text-gray-400">–</span>
+                        <input type="time" value={d.end}   onChange={e => setEnd(idx, e.target.value)}   className={INPUT} />
+                      </div>
+                    : <span className="text-xs text-gray-300">—</span>
+                  }
+                </td>
+                <td className="py-2.5">
+                  {d.available
+                    ? <div className="flex flex-wrap gap-1.5">
+                        {CANONICAL_SESSION_TYPES.filter(t => !t.selfServe).map(t => {
+                          const on = d.types.includes(t.id)
+                          return (
+                            <label key={t.id} className="flex cursor-pointer items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold transition"
+                              style={on ? { backgroundColor: '#EBF3FB', color: '#6BA3D6' } : { backgroundColor: '#f3f4f6', color: '#9ca3af' }}>
+                              <input type="checkbox" checked={on} onChange={() => toggleType(idx, t.id)}
+                                className="h-3 w-3 cursor-pointer accent-[#6BA3D6]" />
+                              {t.label}
+                            </label>
+                          )
+                        })}
+                      </div>
+                    : <span className="text-xs text-gray-300">—</span>
+                  }
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="mt-4 flex items-center justify-end gap-3">
+        {saved && <span className="text-xs text-green-600 font-medium">Schedule saved ✓</span>}
+        <button type="button" onClick={() => void save()} disabled={saving}
+          className="rounded-lg px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
+          style={{ backgroundColor: '#6BA3D6' }}>
+          {saving ? 'Saving…' : 'Save Schedule'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ── Facility hours editor ──────────────────────────────────────────────────────
+
+interface FacilitySlot { dow: number; label: string; open: boolean; start: string; end: string }
+
+function FacilityScheduleEditor() {
+  const blank = (): FacilitySlot[] =>
+    DAYS_SHORT.map((label, i) => ({ dow: DOW_JS[i], label, open: false, start: '06:00', end: '21:00' }))
+
+  const [days,    setDays]    = useState<FacilitySlot[]>(blank)
+  const [loading, setLoading] = useState(true)
+  const [saving,  setSaving]  = useState(false)
+  const [saved,   setSaved]   = useState(false)
+  const [error,   setError]   = useState<string | null>(null)
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const { data, error: err } = await supabase.from('facility_availability').select('*')
+        if (err) throw err
+        setDays(blank().map(slot => {
+          const row = (data ?? []).find((r: Record<string, unknown>) => r.day_of_week === slot.dow)
+          if (!row) return slot
+          return {
+            ...slot, open: true,
+            start: timeStr(row.start_time as string) || '06:00',
+            end:   timeStr(row.end_time   as string) || '21:00',
+          }
         }))
-
-        const exParsed: ExceptionRow[] = (ex ?? []).map((r: Record<string, unknown>) => ({
-          id:            r.id as string,
-          appliesTo:     r.applies_to as string,
-          exceptionType: r.exception_type as 'block' | 'extra',
-          date:          r.date as string,
-          startTime:     timeStr(r.start_time as string | null) || null,
-          endTime:       timeStr(r.end_time as string | null) || null,
-          reason:        (r.reason as string | null) ?? null,
-        }))
-
-        setCoachRows(coachParsed)
-        setFacilityRows(facParsed)
-        setExceptions(exParsed)
-
-        // Initialise edit state from DB.
-        // Days with no DB row default to OFF (empty startTime/endTime).
-        const coachMap: Record<string, CoachDayRow[]> = {}
-        for (const s of staff) {
-          const dbDays = coachParsed.filter(r => r.coachId === s.id)
-          coachMap[s.id] = DOW_JS.map(jsDow => {
-            const match = dbDays.find(r => r.dayOfWeek === jsDow)
-            return match ?? { coachId: s.id, dayOfWeek: jsDow, startTime: '', endTime: '', sessionTypesEnabled: [] }
-          })
-        }
-        setCoachEdits(coachMap)
-        setFacilityEdits(DOW_JS.map(jsDow => {
-          const match = facParsed.find(r => r.dayOfWeek === jsDow)
-          return match ?? { dayOfWeek: jsDow, startTime: '', endTime: '', disabledSessionTypes: [] }
-        }))
-      } catch (err) {
-        console.error('[availability] load error:', err)
+      } catch (e) {
+        setError('Failed to load facility hours.')
+        console.error('[FacilityScheduleEditor]', e)
       } finally {
         setLoading(false)
       }
@@ -816,7 +917,138 @@ function AvailabilityTab({ staff }: { staff: StaffMember[] }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // ── Overview calendar helpers ────────────────────────────────────────────────
+  function toggle(idx: number) {
+    setDays(prev => prev.map((d, i) => i === idx ? { ...d, open: !d.open } : d))
+  }
+  function setStart(idx: number, v: string) {
+    setDays(prev => prev.map((d, i) => i === idx ? { ...d, start: v } : d))
+  }
+  function setEnd(idx: number, v: string) {
+    setDays(prev => prev.map((d, i) => i === idx ? { ...d, end: v } : d))
+  }
+
+  async function save() {
+    setSaving(true)
+    setError(null)
+    try {
+      const closedDows = days.filter(d => !d.open).map(d => d.dow)
+      if (closedDows.length > 0) {
+        const { error: de } = await supabase.from('facility_availability').delete().in('day_of_week', closedDows)
+        if (de) throw de
+      }
+      for (const d of days.filter(d => d.open)) {
+        const { error: ue } = await supabase.from('facility_availability').upsert({
+          day_of_week: d.dow, start_time: d.start, end_time: d.end, disabled_session_types: [],
+        }, { onConflict: 'day_of_week' })
+        if (ue) throw ue
+      }
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2500)
+    } catch (e) {
+      setError('Save failed — check console.')
+      console.error('[FacilityScheduleEditor save]', e)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const INPUT = 'rounded-lg border border-gray-200 px-2 py-1 text-xs focus:border-[#6BA3D6] focus:outline-none focus:ring-1 focus:ring-[#6BA3D6]/20'
+
+  if (loading) return <p className="py-4 text-sm text-gray-400">Loading facility hours…</p>
+
+  return (
+    <div>
+      {error && <p className="mb-3 text-xs text-red-500">{error}</p>}
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse text-sm">
+          <thead>
+            <tr className="border-b border-gray-100 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+              <th className="pb-2 pr-4 w-12">Day</th>
+              <th className="pb-2 pr-4 w-28">Open</th>
+              <th className="pb-2">Hours</th>
+            </tr>
+          </thead>
+          <tbody>
+            {days.map((d, idx) => (
+              <tr key={d.label} className="border-b border-gray-50">
+                <td className="py-2.5 pr-4 font-semibold text-gray-700">{d.label}</td>
+                <td className="py-2.5 pr-4">
+                  <label className="flex cursor-pointer items-center gap-2">
+                    <input type="checkbox" checked={d.open} onChange={() => toggle(idx)}
+                      className="h-4 w-4 cursor-pointer rounded border-gray-300 accent-[#6BA3D6]" />
+                    <span className={`text-xs font-medium ${d.open ? 'text-green-600' : 'text-gray-400'}`}>
+                      {d.open ? 'Open' : 'Closed'}
+                    </span>
+                  </label>
+                </td>
+                <td className="py-2.5">
+                  {d.open
+                    ? <div className="flex items-center gap-1.5">
+                        <input type="time" value={d.start} onChange={e => setStart(idx, e.target.value)} className={INPUT} />
+                        <span className="text-gray-400">–</span>
+                        <input type="time" value={d.end}   onChange={e => setEnd(idx, e.target.value)}   className={INPUT} />
+                      </div>
+                    : <span className="text-xs text-gray-300">Closed</span>
+                  }
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="mt-4 flex items-center justify-end gap-3">
+        {saved && <span className="text-xs text-green-600 font-medium">Hours saved ✓</span>}
+        <button type="button" onClick={() => void save()} disabled={saving}
+          className="rounded-lg px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
+          style={{ backgroundColor: '#6BA3D6' }}>
+          {saving ? 'Saving…' : 'Save Hours'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ── Availability Tab ───────────────────────────────────────────────────────────
+
+function AvailabilityTab({ staff }: { staff: StaffMember[] }) {
+  const [sub, setSub] = useState<AvailSub>('overview')
+
+  // Overview calendar state (loaded independently — coach editors own their own state)
+  const [calMonth,  setCalMonth]  = useState(() => new Date())
+  const [coachRows, setCoachRows] = useState<{ coachId: string; dayOfWeek: number }[]>([])
+  const [exceptions, setExceptions] = useState<ExceptionRow[]>([])
+
+  // Exception form
+  const [exForm,   setExForm]   = useState({ appliesTo: 'facility', exType: 'block', date: '', startTime: '', endTime: '', reason: '' })
+  const [savingEx, setSavingEx] = useState(false)
+
+  // Load overview data (coach availability + exceptions)
+  useEffect(() => {
+    void (async () => {
+      try {
+        const [{ data: cd }, { data: ex }] = await Promise.all([
+          supabase.from('coach_availability').select('coach_id, day_of_week'),
+          supabase.from('availability_exceptions').select('*').order('date'),
+        ])
+        setCoachRows((cd ?? []).map((r: Record<string, unknown>) => ({
+          coachId:   r.coach_id  as string,
+          dayOfWeek: r.day_of_week as number,
+        })))
+        setExceptions((ex ?? []).map((r: Record<string, unknown>) => ({
+          id:            r.id            as string,
+          appliesTo:     r.applies_to   as string,
+          exceptionType: r.exception_type as 'block' | 'extra',
+          date:          r.date          as string,
+          startTime:     timeStr(r.start_time as string | null) || null,
+          endTime:       timeStr(r.end_time   as string | null) || null,
+          reason:        (r.reason        as string | null) ?? null,
+        })))
+      } catch (e) {
+        console.error('[AvailabilityTab overview]', e)
+      }
+    })()
+  }, [])
+
   const monthDates = useMemo(() => {
     const y = calMonth.getFullYear(), m = calMonth.getMonth()
     const firstDow = ((new Date(y, m, 1).getDay() + 6) % 7)
@@ -830,95 +1062,31 @@ function AvailabilityTab({ staff }: { staff: StaffMember[] }) {
   }, [calMonth])
 
   const coachColors: Record<string, string> = { s1: '#6BA3D6', s2: '#6BAD6B', s3: '#D4A520' }
+  const INPUT_SM = 'rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs outline-none focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/20'
 
-  // ── Save coach schedule ──────────────────────────────────────────────────────
-  async function saveCoachSchedule(staffId: string) {
-    setSavingCoach(staffId)
-    const rows = coachEdits[staffId] ?? []
-    // enabledDays = rows where startTime and endTime are set
-    const enabledRows = rows.filter(r => r.startTime && r.endTime)
-    const disabledDows = rows.filter(r => !r.startTime || !r.endTime).map(r => r.dayOfWeek)
-
-    // Delete rows for disabled days
-    if (disabledDows.length > 0) {
-      await supabase.from('coach_availability').delete()
-        .eq('coach_id', staffId).in('day_of_week', disabledDows)
-    }
-    // Upsert enabled days
-    for (const row of enabledRows) {
-      await supabase.from('coach_availability').upsert({
-        ...(row.id ? { id: row.id } : {}),
-        coach_id:              staffId,
-        day_of_week:           row.dayOfWeek,
-        start_time:            row.startTime,
-        end_time:              row.endTime,
-        session_types_enabled: row.sessionTypesEnabled,
-      }, { onConflict: 'coach_id,day_of_week' })
-    }
-    setSavingCoach(null)
-    setCoachSaved(staffId)
-    setTimeout(() => setCoachSaved(null), 2000)
-  }
-
-  // ── Save facility schedule ───────────────────────────────────────────────────
-  async function saveFacilitySchedule() {
-    setSavingFacility(true)
-    const enabledRows  = facilityEdits.filter(r => r.startTime && r.endTime)
-    const disabledDows = facilityEdits.filter(r => !r.startTime || !r.endTime).map(r => r.dayOfWeek)
-
-    if (disabledDows.length > 0) {
-      await supabase.from('facility_availability').delete().in('day_of_week', disabledDows)
-    }
-    for (const row of enabledRows) {
-      await supabase.from('facility_availability').upsert({
-        ...(row.id ? { id: row.id } : {}),
-        day_of_week:             row.dayOfWeek,
-        start_time:              row.startTime,
-        end_time:                row.endTime,
-        disabled_session_types:  row.disabledSessionTypes,
-      }, { onConflict: 'day_of_week' })
-    }
-    setSavingFacility(false)
-    setFacilitySaved(true)
-    setTimeout(() => setFacilitySaved(false), 2000)
-  }
-
-  // ── Save exception ───────────────────────────────────────────────────────────
   async function saveException(e: React.FormEvent) {
     e.preventDefault()
     if (!exForm.date) return
     setSavingEx(true)
-    await supabase.from('availability_exceptions').insert({
-      applies_to:     exForm.appliesTo,
-      exception_type: exForm.exType,
-      date:           exForm.date,
-      start_time:     exForm.startTime || null,
-      end_time:       exForm.endTime   || null,
-      reason:         exForm.reason    || null,
-    })
-    const { data } = await supabase.from('availability_exceptions').select('*').order('date')
-    setExceptions((data ?? []).map((r: Record<string, unknown>) => ({
-      id: r.id as string, appliesTo: r.applies_to as string, exceptionType: r.exception_type as 'block' | 'extra',
-      date: r.date as string, startTime: timeStr(r.start_time as string | null) || null,
-      endTime: timeStr(r.end_time as string | null) || null, reason: (r.reason as string | null) ?? null,
-    })))
-    setExForm({ appliesTo: 'facility', exType: 'block', date: '', startTime: '', endTime: '', reason: '' })
-    setSavingEx(false)
+    try {
+      await supabase.from('availability_exceptions').insert({
+        applies_to: exForm.appliesTo, exception_type: exForm.exType, date: exForm.date,
+        start_time: exForm.startTime || null, end_time: exForm.endTime || null, reason: exForm.reason || null,
+      })
+      const { data } = await supabase.from('availability_exceptions').select('*').order('date')
+      setExceptions((data ?? []).map((r: Record<string, unknown>) => ({
+        id: r.id as string, appliesTo: r.applies_to as string, exceptionType: r.exception_type as 'block' | 'extra',
+        date: r.date as string, startTime: timeStr(r.start_time as string | null) || null,
+        endTime: timeStr(r.end_time as string | null) || null, reason: (r.reason as string | null) ?? null,
+      })))
+      setExForm({ appliesTo: 'facility', exType: 'block', date: '', startTime: '', endTime: '', reason: '' })
+    } catch (err) { console.error('[saveException]', err) }
+    finally { setSavingEx(false) }
   }
 
   async function deleteException(id: string) {
     await supabase.from('availability_exceptions').delete().eq('id', id)
     setExceptions(prev => prev.filter(e => e.id !== id))
-  }
-
-  const INPUT_SM = 'rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs outline-none focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/20'
-
-  if (loading) {
-    return (
-      <div className="flex flex-1 items-center justify-center p-10 text-sm text-gray-400">
-        Loading availability…
-      </div>
-    )
   }
 
   return (
@@ -934,13 +1102,13 @@ function AvailabilityTab({ staff }: { staff: StaffMember[] }) {
         ))}
       </div>
 
-      {/* Overview — monthly calendar */}
+      {/* ── Overview ── */}
       {sub === 'overview' && (
         <div className="flex-1 overflow-y-auto rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
           <div className="mb-4 flex items-center justify-between">
             <button onClick={() => setCalMonth(p => { const d = new Date(p); d.setMonth(d.getMonth() - 1); return d })}
               className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100"><IconChevronLeft size={18} /></button>
-            <h2 className="text-base font-bold text-gray-900">{MONTHS[calMonth.getMonth()]} {calMonth.getFullYear()}</h2>
+            <h2 className="text-base font-bold text-gray-900">{AVAIL_MONTHS[calMonth.getMonth()]} {calMonth.getFullYear()}</h2>
             <button onClick={() => setCalMonth(p => { const d = new Date(p); d.setMonth(d.getMonth() + 1); return d })}
               className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100"><IconChevronRight size={18} /></button>
           </div>
@@ -950,16 +1118,16 @@ function AvailabilityTab({ staff }: { staff: StaffMember[] }) {
           <div className="grid grid-cols-7 gap-1">
             {monthDates.map((iso, i) => {
               if (!iso) return <div key={i} className="h-20 rounded-lg" />
-              const jsDow = new Date(iso + 'T12:00:00').getDay()
+              const jsDow   = new Date(iso + 'T12:00:00').getDay()
               const isToday = iso === TODAY_ISO
-              const day = parseInt(iso.slice(8), 10)
+              const day     = parseInt(iso.slice(8), 10)
               const present = staff.filter(s => coachRows.some(r => r.coachId === s.id && r.dayOfWeek === jsDow))
               const blocked = exceptions.some(e => e.exceptionType === 'block' && e.date === iso)
               return (
-                <div key={iso} className={`h-20 rounded-lg border p-1.5 ${blocked ? 'border-red-100 bg-red-50' : isToday ? 'border-[#6BA3D6] bg-[#6BA3D6]/5' : 'border-gray-100 bg-white hover:bg-gray-50'}`}>
+                <div key={iso} className={`h-20 rounded-lg border p-1.5 ${blocked ? 'border-red-100 bg-red-50' : isToday ? 'border-[#6BA3D6] bg-[#6BA3D6]/5' : 'border-gray-100 bg-white'}`}>
                   <p className={`mb-1 text-xs font-bold ${isToday ? 'text-[#6BA3D6]' : blocked ? 'text-red-400' : 'text-gray-600'}`}>{day}</p>
                   {blocked
-                    ? <div className="text-[9px] text-red-400">Closed</div>
+                    ? <span className="text-[9px] text-red-400">Closed</span>
                     : <div className="flex flex-wrap gap-0.5">
                         {present.map(s => (
                           <div key={s.id} title={`${s.firstName} ${s.lastName}`}
@@ -978,181 +1146,34 @@ function AvailabilityTab({ staff }: { staff: StaffMember[] }) {
                 <span className="text-xs text-gray-500">{s.firstName} {s.lastName}</span>
               </div>
             ))}
-            <div className="flex items-center gap-1.5">
-              <div className="h-2.5 w-2.5 rounded-full bg-red-300" />
-              <span className="text-xs text-gray-500">Blocked</span>
-            </div>
           </div>
         </div>
       )}
 
-      {/* Coach schedules — editable */}
+      {/* ── Coach Schedules ── */}
       {sub === 'coach' && (
         <div className="flex-1 overflow-y-auto space-y-5">
-          {staff.map(s => {
-            const days = coachEdits[s.id] ?? []
-            return (
-              <div key={s.id} className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-                <div className="mb-4 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Avatar firstName={s.firstName} lastName={s.lastName} size={36} />
-                    <div>
-                      <p className="text-sm font-bold text-gray-900">{s.firstName} {s.lastName}</p>
-                      <p className="text-xs text-gray-500">{s.role} · {EMPLOYMENT_LABELS[s.employmentType]}</p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => void saveCoachSchedule(s.id)}
-                    disabled={savingCoach === s.id}
-                    className="rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
-                    style={{ backgroundColor: coachSaved === s.id ? '#10b981' : ACCENT }}>
-                    {savingCoach === s.id ? 'Saving…' : coachSaved === s.id ? 'Saved ✓' : 'Save Changes'}
-                  </button>
-                </div>
-
-                <div className="space-y-3">
-                  {DAYS_SHORT.map((dayLabel, idx) => {
-                    const jsDow = DOW_JS[idx]
-                    const row   = days.find(r => r.dayOfWeek === jsDow) ?? { coachId: s.id, dayOfWeek: jsDow, startTime: '', endTime: '', sessionTypesEnabled: [] }
-                    const isOn  = !!(row.startTime && row.endTime)
-
-                    function updateRow(patch: Partial<CoachDayRow>) {
-                      setCoachEdits(prev => {
-                        const updated = (prev[s.id] ?? []).map(r => r.dayOfWeek === jsDow ? { ...r, ...patch } : r)
-                        if (!updated.find(r => r.dayOfWeek === jsDow)) {
-                          updated.push({ coachId: s.id, dayOfWeek: jsDow, startTime: '', endTime: '', sessionTypesEnabled: [...COACHED_TYPE_IDS], ...patch })
-                        }
-                        return { ...prev, [s.id]: updated }
-                      })
-                    }
-
-                    return (
-                      <div key={dayLabel} className={`rounded-xl border px-4 py-3 transition ${isOn ? 'border-gray-200 bg-white' : 'border-gray-100 bg-gray-50'}`}>
-                        <div className="flex flex-wrap items-center gap-3">
-                          <button
-                            type="button"
-                            onClick={() => updateRow(isOn ? { startTime: '', endTime: '' } : { startTime: '06:00', endTime: '21:00', sessionTypesEnabled: [...COACHED_TYPE_IDS] })}
-                            className={`relative h-5 w-9 rounded-full transition-colors ${isOn ? 'bg-green-500' : 'bg-gray-300'}`}>
-                            <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${isOn ? 'translate-x-4' : 'translate-x-0.5'}`} />
-                          </button>
-                          <span className={`w-9 text-xs font-bold ${isOn ? 'text-gray-700' : 'text-gray-400'}`}>{dayLabel}</span>
-
-                          {isOn && (
-                            <>
-                              <input type="time" value={row.startTime} onChange={e => updateRow({ startTime: e.target.value })}
-                                className={INPUT_SM} />
-                              <span className="text-xs text-gray-400">–</span>
-                              <input type="time" value={row.endTime} onChange={e => updateRow({ endTime: e.target.value })}
-                                className={INPUT_SM} />
-                              <span className="ml-auto hidden sm:flex flex-wrap gap-1.5">
-                                {CANONICAL_SESSION_TYPES.filter(t => !t.selfServe).map(t => {
-                                  const on = row.sessionTypesEnabled.includes(t.id)
-                                  return (
-                                    <button key={t.id} type="button"
-                                      onClick={() => {
-                                        const next = on
-                                          ? row.sessionTypesEnabled.filter(x => x !== t.id)
-                                          : [...row.sessionTypesEnabled, t.id]
-                                        updateRow({ sessionTypesEnabled: next })
-                                      }}
-                                      className="rounded-full px-2 py-0.5 text-[10px] font-semibold transition"
-                                      style={on
-                                        ? { backgroundColor: `${ACCENT}20`, color: ACCENT, border: `1px solid ${ACCENT}40` }
-                                        : { backgroundColor: '#f3f4f6', color: '#9ca3af', border: '1px solid #e5e7eb' }}>
-                                      {t.label}
-                                    </button>
-                                  )
-                                })}
-                              </span>
-                            </>
-                          )}
-                          {!isOn && <span className="text-xs text-gray-400">Unavailable</span>}
-                        </div>
-                        {isOn && (
-                          <div className="mt-2 flex sm:hidden flex-wrap gap-1.5">
-                            {CANONICAL_SESSION_TYPES.filter(t => !t.selfServe).map(t => {
-                              const on = row.sessionTypesEnabled.includes(t.id)
-                              return (
-                                <button key={t.id} type="button"
-                                  onClick={() => {
-                                    const next = on
-                                      ? row.sessionTypesEnabled.filter(x => x !== t.id)
-                                      : [...row.sessionTypesEnabled, t.id]
-                                    updateRow({ sessionTypesEnabled: next })
-                                  }}
-                                  className="rounded-full px-2 py-0.5 text-[10px] font-semibold transition"
-                                  style={on
-                                    ? { backgroundColor: `${ACCENT}20`, color: ACCENT, border: `1px solid ${ACCENT}40` }
-                                    : { backgroundColor: '#f3f4f6', color: '#9ca3af', border: '1px solid #e5e7eb' }}>
-                                  {t.label}
-                                </button>
-                              )
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
+          {staff.map(s => (
+            <div key={s.id} className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+              <div className="mb-5 flex items-center gap-3">
+                <Avatar firstName={s.firstName} lastName={s.lastName} size={36} />
+                <div>
+                  <p className="text-sm font-bold text-gray-900">{s.firstName} {s.lastName}</p>
+                  <p className="text-xs text-gray-500">{s.role} · {EMPLOYMENT_LABELS[s.employmentType]}</p>
                 </div>
               </div>
-            )
-          })}
+              <CoachScheduleEditor coachId={s.id} coachName={`${s.firstName} ${s.lastName}`} />
+            </div>
+          ))}
         </div>
       )}
 
-      {/* Facility settings — editable */}
+      {/* ── Facility Settings ── */}
       {sub === 'facility' && (
         <div className="flex-1 overflow-y-auto space-y-5">
-          {/* Hours editor */}
           <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-sm font-bold text-gray-900">Facility Hours</h3>
-              <button type="button" onClick={() => void saveFacilitySchedule()} disabled={savingFacility}
-                className="rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
-                style={{ backgroundColor: facilitySaved ? '#10b981' : ACCENT }}>
-                {savingFacility ? 'Saving…' : facilitySaved ? 'Saved ✓' : 'Save Changes'}
-              </button>
-            </div>
-            <div className="space-y-3">
-              {DAYS_SHORT.map((dayLabel, idx) => {
-                const jsDow = DOW_JS[idx]
-                const row   = facilityEdits.find(r => r.dayOfWeek === jsDow) ?? { dayOfWeek: jsDow, startTime: '', endTime: '', disabledSessionTypes: [] }
-                const isOn  = !!(row.startTime && row.endTime)
-
-                function updateFac(patch: Partial<FacilityDayRow>) {
-                  setFacilityEdits(prev => {
-                    const updated = prev.map(r => r.dayOfWeek === jsDow ? { ...r, ...patch } : r)
-                    if (!updated.find(r => r.dayOfWeek === jsDow)) {
-                      updated.push({ dayOfWeek: jsDow, startTime: '', endTime: '', disabledSessionTypes: [], ...patch })
-                    }
-                    return updated
-                  })
-                }
-
-                return (
-                  <div key={dayLabel} className={`rounded-xl border px-4 py-3 transition ${isOn ? 'border-gray-200 bg-white' : 'border-gray-100 bg-gray-50'}`}>
-                    <div className="flex flex-wrap items-center gap-3">
-                      <button type="button"
-                        onClick={() => updateFac(isOn ? { startTime: '', endTime: '' } : { startTime: '06:00', endTime: '21:00' })}
-                        className={`relative h-5 w-9 rounded-full transition-colors ${isOn ? 'bg-green-500' : 'bg-gray-300'}`}>
-                        <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${isOn ? 'translate-x-4' : 'translate-x-0.5'}`} />
-                      </button>
-                      <span className={`w-9 text-xs font-bold ${isOn ? 'text-gray-700' : 'text-gray-400'}`}>{dayLabel}</span>
-                      {isOn ? (
-                        <>
-                          <input type="time" value={row.startTime} onChange={e => updateFac({ startTime: e.target.value })} className={INPUT_SM} />
-                          <span className="text-xs text-gray-400">–</span>
-                          <input type="time" value={row.endTime} onChange={e => updateFac({ endTime: e.target.value })} className={INPUT_SM} />
-                        </>
-                      ) : (
-                        <span className="text-xs text-gray-400">Closed</span>
-                      )}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
+            <h3 className="mb-5 text-sm font-bold text-gray-900">Facility Hours</h3>
+            <FacilityScheduleEditor />
           </div>
 
           {/* Exceptions */}
@@ -1162,10 +1183,12 @@ function AvailabilityTab({ staff }: { staff: StaffMember[] }) {
               <div className="mb-4 space-y-2">
                 {exceptions.map(ex => (
                   <div key={ex.id} className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 px-4 py-2.5">
-                    <div className={`h-2 w-2 rounded-full shrink-0 ${ex.exceptionType === 'block' ? 'bg-red-400' : 'bg-green-500'}`} />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-gray-700">{ex.date} — <span className="font-normal">{ex.appliesTo === 'facility' ? 'Facility' : `Coach: ${ex.appliesTo.replace('coach:', '')}`}</span></p>
-                      {ex.reason && <p className="text-xs text-gray-400">{ex.reason}</p>}
+                    <div className={`h-2 w-2 shrink-0 rounded-full ${ex.exceptionType === 'block' ? 'bg-red-400' : 'bg-green-500'}`} />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-semibold text-gray-700">
+                        {ex.date} — <span className="font-normal">{ex.appliesTo === 'facility' ? 'Facility' : `Coach: ${ex.appliesTo.replace('coach:', '')}`}</span>
+                      </p>
+                      {ex.reason    && <p className="text-xs text-gray-400">{ex.reason}</p>}
                       {ex.startTime && <p className="text-xs text-gray-400">{ex.startTime} – {ex.endTime}</p>}
                     </div>
                     <button type="button" onClick={() => void deleteException(ex.id)} className="shrink-0 rounded-lg p-1 text-gray-300 hover:text-red-400">
@@ -1175,7 +1198,6 @@ function AvailabilityTab({ staff }: { staff: StaffMember[] }) {
                 ))}
               </div>
             )}
-
             <form onSubmit={e => void saveException(e)} className="space-y-2">
               <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Add Exception</p>
               <div className="flex flex-wrap gap-2">
@@ -1188,9 +1210,9 @@ function AvailabilityTab({ staff }: { staff: StaffMember[] }) {
                   <option value="extra">Extra hours</option>
                 </select>
                 <input type="date" required value={exForm.date} onChange={e => setExForm(p => ({ ...p, date: e.target.value }))} className={INPUT_SM} />
-                <input type="time" placeholder="Start (optional)" value={exForm.startTime} onChange={e => setExForm(p => ({ ...p, startTime: e.target.value }))} className={INPUT_SM} />
-                <input type="time" placeholder="End (optional)" value={exForm.endTime} onChange={e => setExForm(p => ({ ...p, endTime: e.target.value }))} className={INPUT_SM} />
-                <input type="text" placeholder="Reason (optional)" value={exForm.reason} onChange={e => setExForm(p => ({ ...p, reason: e.target.value }))} className={`${INPUT_SM} min-w-[160px] flex-1`} />
+                <input type="time" value={exForm.startTime} onChange={e => setExForm(p => ({ ...p, startTime: e.target.value }))} className={INPUT_SM} />
+                <input type="time" value={exForm.endTime}   onChange={e => setExForm(p => ({ ...p, endTime:   e.target.value }))} className={INPUT_SM} />
+                <input type="text" placeholder="Reason (optional)" value={exForm.reason} onChange={e => setExForm(p => ({ ...p, reason: e.target.value }))} className={`${INPUT_SM} min-w-[140px] flex-1`} />
                 <button type="submit" disabled={savingEx || !exForm.date}
                   className="rounded-lg px-3 py-1 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
                   style={{ backgroundColor: ACCENT }}>
