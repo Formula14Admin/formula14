@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect } from 'react'
+import { supabase } from '@/lib/supabase'
 import {
   IconArrowUpRight,
   IconArrowDownLeft,
@@ -63,78 +64,6 @@ const ACCENT = '#6BA3D6'
 const LABEL = 'mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500'
 const INPUT = 'w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-[#6BA3D6] focus:ring-2 focus:ring-[#6BA3D6]/10'
 
-// Hardcoded Jan–Apr chart history (no individual transactions stored)
-const CHART_HISTORY = [
-  { label: 'Jan', ym: '2026-01', income: 1800, expenses: 5200 },
-  { label: 'Feb', ym: '2026-02', income: 2100, expenses: 5300 },
-  { label: 'Mar', ym: '2026-03', income: 2450, expenses: 5450 },
-  { label: 'Apr', ym: '2026-04', income: 2900, expenses: 5550 },
-]
-
-// ─── Sample transactions (May + June 2026) ────────────────────────────────────
-
-function uid() { return Math.random().toString(36).slice(2) }
-
-const INIT_TRANSACTIONS: Transaction[] = [
-  // ── June 2026 Income ──────────────────────────────────────────────────────
-  { id: 'j01', date: '2026-06-01', description: 'Membership fees — weekly billing',         type: 'income',  category: 'membership',   amount: 275.00, reference: 'WK-2026-06-01', notes: 'Jordan $79, Mia $59, Tyler $39, Emma $59, Liam $39' },
-  { id: 'j02', date: '2026-06-02', description: 'Casual session — Tyler Ross',               type: 'income',  category: 'casual',       amount:  45.00, reference: '',              notes: '' },
-  { id: 'j03', date: '2026-06-04', description: 'Casual session — Devon Knox',               type: 'income',  category: 'casual',       amount:  45.00, reference: '',              notes: '' },
-  { id: 'j04', date: '2026-06-05', description: 'Casual session — Kai Okafor',               type: 'income',  category: 'casual',       amount:  45.00, reference: '',              notes: '' },
-  { id: 'j05', date: '2026-06-06', description: 'Program package — Aisha Thompson (8-wk)',   type: 'income',  category: 'program',      amount: 320.00, reference: 'PROG-AT-001',  notes: '8-week individual development program' },
-  { id: 'j06', date: '2026-06-07', description: 'Court hire — external booking',             type: 'income',  category: 'court-hire',   amount: 150.00, reference: 'CH-0607',       notes: 'Saturday morning, 2 hrs' },
-  { id: 'j07', date: '2026-06-08', description: 'Membership fees — weekly billing',          type: 'income',  category: 'membership',   amount: 275.00, reference: 'WK-2026-06-08', notes: '' },
-  { id: 'j08', date: '2026-06-09', description: 'Casual sessions × 2',                      type: 'income',  category: 'casual',       amount:  90.00, reference: '',              notes: '' },
-  { id: 'j09', date: '2026-06-11', description: 'Court hire — external booking',             type: 'income',  category: 'court-hire',   amount: 150.00, reference: 'CH-0611',       notes: 'Thursday evening, 2 hrs' },
-  { id: 'j10', date: '2026-06-12', description: 'Casual session — Marcus Davies',            type: 'income',  category: 'casual',       amount:  45.00, reference: '',              notes: '' },
-  { id: 'j11', date: '2026-06-14', description: 'Casual sessions × 2',                      type: 'income',  category: 'casual',       amount:  90.00, reference: '',              notes: '' },
-  { id: 'j12', date: '2026-06-15', description: 'Membership fees — weekly billing',          type: 'income',  category: 'membership',   amount: 236.00, reference: 'WK-2026-06-15', notes: 'Tyler Brooks payment failed — $39 outstanding' },
-  { id: 'j13', date: '2026-06-16', description: 'Program package — Marcus Davies (6-wk)',    type: 'income',  category: 'program',      amount: 280.00, reference: 'PROG-MD-001',  notes: '6-week post-training conditioning program' },
-  { id: 'j14', date: '2026-06-17', description: 'Casual sessions × 3',                      type: 'income',  category: 'casual',       amount: 135.00, reference: '',              notes: '' },
-  { id: 'j15', date: '2026-06-18', description: 'Merchandise — training apparel',            type: 'income',  category: 'merchandise',  amount:  95.00, reference: 'MERCH-001',     notes: 'F14 singlets × 2, shorts × 1' },
-
-  // ── June 2026 Expenses ────────────────────────────────────────────────────
-  { id: 'j20', date: '2026-06-01', description: 'Matt Brasser — coaching wages',             type: 'expense', category: 'wages',        amount: 1200.00, reference: 'PAY-MB-0601',  notes: 'Fortnightly — 1–14 Jun' },
-  { id: 'j21', date: '2026-06-01', description: 'Jade Brasser — coaching wages',              type: 'expense', category: 'wages',        amount:  850.00, reference: 'PAY-JW-0601',  notes: 'Fortnightly — 1–14 Jun' },
-  { id: 'j22', date: '2026-06-01', description: 'Facility hire — gymnasium (June)',          type: 'expense', category: 'facility',     amount:  800.00, reference: 'FACIL-2406',    notes: 'Monthly lease, Oakleigh facility' },
-  { id: 'j23', date: '2026-06-02', description: 'Public liability insurance — June',         type: 'expense', category: 'insurance',    amount:  185.00, reference: 'INS-2406',      notes: '' },
-  { id: 'j24', date: '2026-06-06', description: 'Training equipment — cones & balls',        type: 'expense', category: 'equipment',    amount:  340.00, reference: 'EQ-001',        notes: '12 agility cones, 4 training balls' },
-  { id: 'j25', date: '2026-06-08', description: 'Meta Ads — social media marketing',         type: 'expense', category: 'marketing',    amount:  150.00, reference: 'MKT-0608',      notes: 'Jun 8–21 campaign' },
-  { id: 'j26', date: '2026-06-12', description: 'Admin software subscription',               type: 'expense', category: 'admin',        amount:  149.00, reference: 'ADMIN-JUN',     notes: 'Monthly SaaS tools' },
-  { id: 'j27', date: '2026-06-15', description: 'Matt Brasser — coaching wages',             type: 'expense', category: 'wages',        amount: 1200.00, reference: 'PAY-MB-0615',  notes: 'Fortnightly — 15–28 Jun' },
-  { id: 'j28', date: '2026-06-15', description: 'Jade Brasser — coaching wages',              type: 'expense', category: 'wages',        amount:  850.00, reference: 'PAY-JW-0615',  notes: 'Fortnightly — 15–28 Jun' },
-  { id: 'j29', date: '2026-06-18', description: 'Electricity — facility share',              type: 'expense', category: 'utilities',    amount:  220.00, reference: 'UTIL-JUN',      notes: 'Pro-rata electricity for training space' },
-
-  // ── May 2026 Income ───────────────────────────────────────────────────────
-  { id: 'm01', date: '2026-05-04', description: 'Membership fees — weekly billing',          type: 'income',  category: 'membership',   amount: 275.00, reference: 'WK-2026-05-04', notes: '' },
-  { id: 'm02', date: '2026-05-05', description: 'Casual session — Liam Carter',              type: 'income',  category: 'casual',       amount:  45.00, reference: '',              notes: '' },
-  { id: 'm03', date: '2026-05-07', description: 'Program package — Tyler Ross (6-wk)',       type: 'income',  category: 'program',      amount: 240.00, reference: 'PROG-TR-001',  notes: '6-week ball-handling program' },
-  { id: 'm04', date: '2026-05-07', description: 'Court hire — external booking',             type: 'income',  category: 'court-hire',   amount: 150.00, reference: 'CH-0507',       notes: '' },
-  { id: 'm05', date: '2026-05-11', description: 'Membership fees — weekly billing',          type: 'income',  category: 'membership',   amount: 275.00, reference: 'WK-2026-05-11', notes: '' },
-  { id: 'm06', date: '2026-05-12', description: 'Casual sessions × 2',                      type: 'income',  category: 'casual',       amount:  90.00, reference: '',              notes: '' },
-  { id: 'm07', date: '2026-05-14', description: 'Casual session — Devon Knox',               type: 'income',  category: 'casual',       amount:  45.00, reference: '',              notes: '' },
-  { id: 'm08', date: '2026-05-18', description: 'Membership fees — weekly billing',          type: 'income',  category: 'membership',   amount: 275.00, reference: 'WK-2026-05-18', notes: '' },
-  { id: 'm09', date: '2026-05-19', description: 'Casual sessions × 3',                      type: 'income',  category: 'casual',       amount: 135.00, reference: '',              notes: '' },
-  { id: 'm10', date: '2026-05-20', description: 'Court hire — external booking',             type: 'income',  category: 'court-hire',   amount: 150.00, reference: 'CH-0520',       notes: '' },
-  { id: 'm11', date: '2026-05-21', description: 'Casual session — Priya Mehta',              type: 'income',  category: 'casual',       amount:  45.00, reference: '',              notes: '' },
-  { id: 'm12', date: '2026-05-22', description: 'Merchandise — singlets & shorts',           type: 'income',  category: 'merchandise',  amount: 120.00, reference: 'MERCH-005',     notes: 'F14 singlets × 3, shorts × 2' },
-  { id: 'm13', date: '2026-05-25', description: 'Membership fees — weekly billing',          type: 'income',  category: 'membership',   amount: 275.00, reference: 'WK-2026-05-25', notes: '' },
-  { id: 'm14', date: '2026-05-26', description: 'Court hire — external booking',             type: 'income',  category: 'court-hire',   amount: 150.00, reference: 'CH-0526',       notes: '' },
-  { id: 'm15', date: '2026-05-27', description: 'Casual sessions × 2',                      type: 'income',  category: 'casual',       amount:  90.00, reference: '',              notes: '' },
-  { id: 'm16', date: '2026-05-28', description: 'Program package — Zara Obi (4-wk)',        type: 'income',  category: 'program',      amount: 160.00, reference: 'PROG-ZO-001',  notes: '4-week fundamentals introduction' },
-
-  // ── May 2026 Expenses ─────────────────────────────────────────────────────
-  { id: 'm20', date: '2026-05-01', description: 'Matt Brasser — coaching wages',             type: 'expense', category: 'wages',        amount: 1200.00, reference: 'PAY-MB-0501',  notes: 'Fortnightly — 1–14 May' },
-  { id: 'm21', date: '2026-05-01', description: 'Jade Brasser — coaching wages',              type: 'expense', category: 'wages',        amount:  850.00, reference: 'PAY-JW-0501',  notes: 'Fortnightly — 1–14 May' },
-  { id: 'm22', date: '2026-05-01', description: 'Facility hire — gymnasium (May)',           type: 'expense', category: 'facility',     amount:  800.00, reference: 'FACIL-2405',    notes: 'Monthly lease, Oakleigh facility' },
-  { id: 'm23', date: '2026-05-02', description: 'Public liability insurance — May',          type: 'expense', category: 'insurance',    amount:  185.00, reference: 'INS-2405',      notes: '' },
-  { id: 'm24', date: '2026-05-10', description: 'Marketing — print flyers & signage',        type: 'expense', category: 'marketing',    amount:  120.00, reference: 'MKT-0510',      notes: '500 A5 flyers + 2 corflute signs' },
-  { id: 'm25', date: '2026-05-12', description: 'Admin software subscription',               type: 'expense', category: 'admin',        amount:  149.00, reference: 'ADMIN-MAY',     notes: '' },
-  { id: 'm26', date: '2026-05-15', description: 'Matt Brasser — coaching wages',             type: 'expense', category: 'wages',        amount: 1200.00, reference: 'PAY-MB-0515',  notes: 'Fortnightly — 15–28 May' },
-  { id: 'm27', date: '2026-05-15', description: 'Jade Brasser — coaching wages',              type: 'expense', category: 'wages',        amount:  850.00, reference: 'PAY-JW-0515',  notes: 'Fortnightly — 15–28 May' },
-  { id: 'm28', date: '2026-05-20', description: 'Electricity — facility share',              type: 'expense', category: 'utilities',    amount:  195.00, reference: 'UTIL-MAY',      notes: '' },
-  { id: 'm29', date: '2026-05-28', description: 'Equipment — basketball tape & pump',        type: 'expense', category: 'equipment',    amount:   75.00, reference: 'EQ-002',        notes: '' },
-]
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -306,7 +235,7 @@ function StatCard({
 
 interface AddModalProps {
   onClose: () => void
-  onAdd: (t: Transaction) => void
+  onAdd: (t: Omit<Transaction, 'id'>) => void
 }
 
 function AddModal({ onClose, onAdd }: AddModalProps) {
@@ -332,7 +261,6 @@ function AddModal({ onClose, onAdd }: AddModalProps) {
     const amt = parseFloat(amount)
     if (!date || !description.trim() || isNaN(amt) || amt <= 0) return
     onAdd({
-      id: uid(),
       date,
       description: description.trim(),
       type,
@@ -459,19 +387,37 @@ const PERIOD_OPTIONS = [
 ]
 
 export default function BookkeepingPage() {
-  const [transactions, setTransactions] = useState<Transaction[]>(() => {
-    if (typeof window === 'undefined') return []
-    try { const r = localStorage.getItem('f14_transactions'); return r ? JSON.parse(r) : [] } catch { return [] }
-  })
+  const [transactions, setTransactions] = useState<Transaction[]>([])
   const [period, setPeriod] = useState('2026-06')
   const [typeFilter, setTypeFilter] = useState<'all' | 'income' | 'expense'>('all')
   const [search, setSearch] = useState('')
   const [showAddModal, setShowAddModal] = useState(false)
 
   useEffect(() => {
-    if (typeof window === 'undefined') return
-    localStorage.setItem('f14_transactions', JSON.stringify(transactions))
-  }, [transactions])
+    void (async () => {
+      try {
+        const { data } = await supabase
+          .from('transactions')
+          .select('*')
+          .order('created_at', { ascending: false })
+        if (data) {
+          setTransactions((data as unknown[]).map(rawRow => {
+            const r = rawRow as { id: string; created_at: string; description: string; type: string; category: string; amount: number; reference: string; notes: string }
+            return {
+              id:          r.id,
+              date:        r.created_at.slice(0, 10),
+              description: (r.description ?? '') as string,
+              type:        (r.type === 'credit' ? 'income' : 'expense') as TxType,
+              category:    (r.category ?? 'other-income') as TxCategory,
+              amount:      r.amount,
+              reference:   (r.reference ?? '') as string,
+              notes:       (r.notes ?? '') as string,
+            }
+          }))
+        }
+      } catch (e) { console.error('[bookkeeping] load failed:', e) }
+    })()
+  }, [])
 
   // ── Derived data ──────────────────────────────────────────────────────────
 
@@ -498,26 +444,61 @@ export default function BookkeepingPage() {
   const totalExpenses = periodTransactions.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0)
   const netPnL        = totalIncome - totalExpenses
 
-  // YTD (always computed from all transactions + Jan–Apr hardcoded)
-  const ytdHistIncome   = CHART_HISTORY.reduce((s, m) => s + m.income, 0)
-  const ytdHistExpenses = CHART_HISTORY.reduce((s, m) => s + m.expenses, 0)
-  const ytdIncome   = ytdHistIncome   + monthTotal(transactions, '2026-05', 'income')   + monthTotal(transactions, '2026-06', 'income')
-  const ytdExpenses = ytdHistExpenses + monthTotal(transactions, '2026-05', 'expense')  + monthTotal(transactions, '2026-06', 'expense')
+  // YTD: computed from all real transactions
+  const ytdIncome   = transactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)
+  const ytdExpenses = transactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0)
   const ytdNet      = ytdIncome - ytdExpenses
 
-  // Chart data
-  const chartData: MonthBar[] = [
-    ...CHART_HISTORY,
-    { label: 'May', ym: '2026-05', income: monthTotal(transactions, '2026-05', 'income'), expenses: monthTotal(transactions, '2026-05', 'expense') },
-    { label: 'Jun', ym: '2026-06', income: monthTotal(transactions, '2026-06', 'income'), expenses: monthTotal(transactions, '2026-06', 'expense'), partial: true },
-  ]
+  // Chart data: group real transactions by month
+  const chartData: MonthBar[] = useMemo(() => {
+    const monthMap = new Map<string, { income: number; expenses: number }>()
+    transactions.forEach(t => {
+      const ym = t.date.slice(0, 7)
+      if (!monthMap.has(ym)) monthMap.set(ym, { income: 0, expenses: 0 })
+      const m = monthMap.get(ym)!
+      if (t.type === 'income') m.income += t.amount
+      else m.expenses += t.amount
+    })
+    return Array.from(monthMap.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([ym, { income, expenses }]) => {
+        const [y, mo] = ym.split('-')
+        const label = new Date(Number(y), Number(mo) - 1, 1).toLocaleDateString('en-AU', { month: 'short' })
+        return { label, ym, income, expenses }
+      })
+  }, [transactions])
 
-  function handleAddTransaction(t: Transaction) {
-    setTransactions((prev) => [...prev, t])
-    setShowAddModal(false)
+  async function handleAddTransaction(t: Omit<Transaction, 'id'>) {
+    const { data, error } = await supabase.from('transactions').insert({
+      description:    t.description,
+      type:           t.type === 'income' ? 'credit' : 'debit',
+      category:       t.category,
+      amount:         t.amount,
+      reference:      t.reference || null,
+      notes:          t.notes || null,
+      payment_status: 'completed',
+      created_at:     new Date(t.date + 'T12:00:00').toISOString(),
+    }).select().single()
+    if (error) { console.error('[bookkeeping] insert failed:', error); return }
+    if (data) {
+      const r = data as { id: string; created_at: string; description: string; type: string; category: string; amount: number; reference: string; notes: string }
+      const inserted: Transaction = {
+        id:          r.id,
+        date:        r.created_at.slice(0, 10),
+        description: (r.description ?? '') as string,
+        type:        (r.type === 'credit' ? 'income' : 'expense') as TxType,
+        category:    (r.category ?? 'other-income') as TxCategory,
+        amount:      r.amount,
+        reference:   (r.reference ?? '') as string,
+        notes:       (r.notes ?? '') as string,
+      }
+      setTransactions(prev => [inserted, ...prev])
+      setShowAddModal(false)
+    }
   }
 
-  function handleDelete(id: string) {
+  async function handleDelete(id: string) {
+    await supabase.from('transactions').delete().eq('id', id)
     setTransactions((prev) => prev.filter((t) => t.id !== id))
   }
 
@@ -584,8 +565,8 @@ export default function BookkeepingPage() {
         <div className="rounded-2xl bg-white p-5 shadow-sm">
           <div className="mb-4 flex items-center justify-between">
             <div>
-              <h2 className="text-sm font-bold text-gray-900">6-Month Overview</h2>
-              <p className="text-xs text-gray-400">Jan – Jun 2026 · * partial month</p>
+              <h2 className="text-sm font-bold text-gray-900">Monthly Overview</h2>
+              <p className="text-xs text-gray-400">{chartData.length === 0 ? 'No data yet' : `${chartData[0].label} – ${chartData[chartData.length - 1].label}`}</p>
             </div>
             {/* Legend */}
             <div className="flex items-center gap-4">
@@ -602,7 +583,7 @@ export default function BookkeepingPage() {
           <PnLChart months={chartData} />
 
           {/* Monthly summary row below chart */}
-          <div className="mt-3 grid grid-cols-6 gap-2">
+          <div className="mt-3 grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.max(chartData.length, 1)}, minmax(0, 1fr))` }}>
             {chartData.map((m) => {
               const net = m.income - m.expenses
               return (
@@ -692,6 +673,13 @@ export default function BookkeepingPage() {
         </div>
 
         {/* ── Transaction table ───────────────────────────────────────────────── */}
+        {transactions.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <svg className="mb-3 h-12 w-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z" /></svg>
+            <p className="text-sm font-semibold text-gray-400">No transactions yet</p>
+            <p className="mt-1 text-xs text-gray-400">Click &apos;Add Transaction&apos; to record your first entry</p>
+          </div>
+        ) : (
         <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
           {filtered.length === 0 ? (
             <div className="py-14 text-center text-sm text-gray-400">
@@ -710,7 +698,7 @@ export default function BookkeepingPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((t, i) => (
+                {filtered.map((t) => (
                   <tr
                     key={t.id}
                     className="group border-b border-gray-50 transition last:border-0 hover:bg-gray-50"
@@ -807,6 +795,7 @@ export default function BookkeepingPage() {
             </table>
           )}
         </div>
+        )}
 
       </div>
 

@@ -141,62 +141,6 @@ export const INIT_STAFF: StaffMember[] = [
   },
 ]
 
-export const INIT_PAY_RUNS: PayRun[] = [
-  {
-    id: 'pr1',
-    periodLabel: '1 May 2026 – 14 May 2026',
-    periodType: 'fortnightly',
-    processedDate: '2026-05-15',
-    status: 'processed',
-    totalAmount: 2050,
-    staffCount: 2,
-    entries: [
-      { staffId: 's1', staffName: 'Matt Brasser', sessions: 0, hours: 40, rate: 30, rateType: 'hourly', calculatedAmount: 1200, adjustedAmount: 1200, notes: '' },
-      { staffId: 's2', staffName: 'Jade Brasser',  sessions: 0, hours: 34, rate: 25, rateType: 'hourly', calculatedAmount:  850, adjustedAmount:  850, notes: '' },
-    ],
-  },
-  {
-    id: 'pr2',
-    periodLabel: '15 May 2026 – 28 May 2026',
-    periodType: 'fortnightly',
-    processedDate: '2026-05-29',
-    status: 'processed',
-    totalAmount: 2050,
-    staffCount: 2,
-    entries: [
-      { staffId: 's1', staffName: 'Matt Brasser', sessions: 0, hours: 40, rate: 30, rateType: 'hourly', calculatedAmount: 1200, adjustedAmount: 1200, notes: '' },
-      { staffId: 's2', staffName: 'Jade Brasser',  sessions: 0, hours: 34, rate: 25, rateType: 'hourly', calculatedAmount:  850, adjustedAmount:  850, notes: '' },
-    ],
-  },
-  {
-    id: 'pr3',
-    periodLabel: '1 Jun 2026 – 14 Jun 2026',
-    periodType: 'fortnightly',
-    processedDate: '2026-06-15',
-    status: 'processed',
-    totalAmount: 2050,
-    staffCount: 2,
-    entries: [
-      { staffId: 's1', staffName: 'Matt Brasser', sessions: 0, hours: 40, rate: 30, rateType: 'hourly', calculatedAmount: 1200, adjustedAmount: 1200, notes: '' },
-      { staffId: 's2', staffName: 'Jade Brasser',  sessions: 0, hours: 34, rate: 25, rateType: 'hourly', calculatedAmount:  850, adjustedAmount:  850, notes: '' },
-    ],
-  },
-  {
-    id: 'pr4',
-    periodLabel: '15 Jun 2026 – 28 Jun 2026',
-    periodType: 'fortnightly',
-    processedDate: null,
-    status: 'pending',
-    totalAmount: 2410,
-    staffCount: 3,
-    entries: [
-      { staffId: 's1', staffName: 'Matt Brasser', sessions: 0, hours: 40, rate: 30, rateType: 'hourly',      calculatedAmount: 1200, adjustedAmount: 1200, notes: '' },
-      { staffId: 's2', staffName: 'Jade Brasser',  sessions: 0, hours: 34, rate: 25, rateType: 'hourly',      calculatedAmount:  850, adjustedAmount:  850, notes: '' },
-      { staffId: 's3', staffName: 'Sam Torres',   sessions: 8, hours:  0, rate: 45, rateType: 'per-session', calculatedAmount:  360, adjustedAmount:  360, notes: '8 sessions 15–28 Jun' },
-    ],
-  },
-]
-
 // ─── Session history (would come from booking system in prod) ─────────────────
 
 interface SessionRecord {
@@ -319,12 +263,12 @@ export function saveStaff(staff: StaffMember[]): void {
 }
 
 export function loadPayRuns(): PayRun[] {
-  if (typeof window === 'undefined') return INIT_PAY_RUNS
+  if (typeof window === 'undefined') return []
   try {
     const raw = localStorage.getItem(PAY_RUN_KEY)
-    return raw ? (JSON.parse(raw) as PayRun[]) : INIT_PAY_RUNS
+    return raw ? (JSON.parse(raw) as PayRun[]) : []
   } catch {
-    return INIT_PAY_RUNS
+    return []
   }
 }
 

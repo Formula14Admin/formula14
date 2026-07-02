@@ -109,82 +109,6 @@ function padDate(y: number, m: number, d: number) {
   return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
 }
 
-// ─── Sample Data ─────────────────────────────────────────────────────────────
-
-const INIT_POSTS: SocialPost[] = [
-  { id:'sp1', platforms:['instagram'], date:'2026-06-23', time:'09:00', title:'Monday Morning Mindset', caption:"Start the week right 💪 Early morning sessions are where champions are made. Who's locking in today? #Formula14 #Basketball #MondayMotivation", postType:'story', status:'posted', notes:'' },
-  { id:'sp2', platforms:['instagram','facebook'], date:'2026-06-25', time:'18:00', title:'Wednesday Highlights Reel', caption:"Incredible energy in tonight's Small Group Session 🔥 These athletes are putting in the work every single week. #Formula14 #Training #Highlights", postType:'reel', status:'scheduled', notes:"Use clips from tonight's 6pm session" },
-  { id:'sp3', platforms:['tiktok'], date:'2026-06-26', time:'12:00', title:'3-Point Challenge', caption:"Who's got the purest stroke? 🎯 Tag your most lethal shooter. #Basketball #3Point #Challenge #Formula14", postType:'reel', status:'scheduled', notes:'' },
-  { id:'sp4', platforms:['instagram','facebook'], date:'2026-06-28', time:'10:00', title:'Weekend Workshop Promo', caption:"Still spots available for our July Intensive Weekend Workshop! 🏀 Two full days of skills development, film sessions and competitive play. Link in bio. #Formula14 #Workshop", postType:'feed', status:'scheduled', notes:'Include graphic with dates and pricing' },
-  { id:'sp5', platforms:['facebook'], date:'2026-06-30', time:'14:00', title:'Monthly Member Spotlight', caption:"Congratulations to our Member of the Month — the dedication you've shown this month has been outstanding. 🏆 #Formula14 #MemberSpotlight", postType:'feed', status:'scheduled', notes:'' },
-  { id:'sp6', platforms:['tiktok','instagram'], date:'2026-07-02', time:'17:00', title:'Dribble Series Part 1', caption:'Lesson 1: The foundation drill every player needs 👇 Save this for your next workout. #Basketball #Dribbling #Skills #Formula14', postType:'reel', status:'scheduled', notes:'Part 1 of 4-week series' },
-  // Ideas
-  { id:'sp7', platforms:['instagram'], date:null, time:null, title:"Coach Spotlight — Matt's Journey", caption:"From junior player to head coach — hear Matt's story and what drives him to develop the next generation of Australian basketball talent. #Formula14 #CoachSpotlight", postType:'feed', status:'idea', notes:'' },
-  { id:'sp8', platforms:['tiktok'], date:null, time:null, title:'Behind the Scenes: Session Setup', caption:'Ever wonder what goes into preparing for a Formula14 session? Come behind the scenes with us 👀 #Basketball #BehindTheScenes #Formula14', postType:'reel', status:'idea', notes:"Film during setup for Saturday's session" },
-  { id:'sp9', platforms:['instagram','facebook'], date:null, time:null, title:'Member Transformation Story', caption:'From never touching a basketball to hitting contested threes in 6 months — this is what consistent training does 🏀💪 #Transformation #Formula14', postType:'feed', status:'idea', notes:'Get permission from athlete before posting' },
-  { id:'sp10', platforms:['facebook'], date:null, time:null, title:'Winter Program Launch', caption:'Our Winter Development Program kicks off next month! Limited spots available across all skill levels. DM us or use the link in bio to register. ❄️🏀 #Formula14 #WinterProgram', postType:'feed', status:'idea', notes:'' },
-  { id:'sp11', platforms:['tiktok','instagram'], date:null, time:null, title:'Shooting Form Breakdown', caption:"The 3 things we fix in every shooter's form 🎯 Comment 'FORM' and we'll send you our full shooting guide. #Basketball #Shooting #Tips", postType:'reel', status:'idea', notes:'Can repurpose from last month coaching session content' },
-  { id:'sp12', platforms:['instagram'], date:null, time:null, title:'Facility Tour', caption:"Welcome to Formula14 — here's everything inside our training facility 🏟️ Primary court, secondary court, weight room, shooting machine and more. #Formula14 #Facility", postType:'reel', status:'idea', notes:'' },
-]
-
-const PLATINUM_DETAILS = `WHAT'S INCLUDED:
-
-• Primary court naming rights for all Formula14 training sessions
-• Logo prominently displayed on the primary court floor
-• Logo and branding on all team training jerseys and Formula14 training gear
-• 4 dedicated social media posts per month across all Formula14 platforms (Instagram, Facebook, TikTok)
-• Feature story/interview on the Formula14 website and social channels (once per year)
-• 10 complimentary training session passes per quarter (40 per year)
-• Premium logo and banner placement at all Formula14 events and competitions
-• Naming rights for one annual flagship event (e.g. "The [Sponsor] Formula14 Invitational")
-• Monthly reporting on social media reach and engagement data
-• Exclusive member discount offer promoted across all Formula14 channels
-• First right of refusal for renewal at the same tier each year`
-
-const GOLD_DETAILS = `WHAT'S INCLUDED:
-
-• Logo displayed on the secondary court
-• 2 dedicated social media posts per month across Formula14 platforms
-• Prominent logo placement on the Formula14 website (sponsors section)
-• 6 complimentary training session passes per quarter (24 per year)
-• Banner placement at all Formula14 events and competitions
-• Inclusion in the Formula14 monthly newsletter
-• Quarterly social media reach and engagement reporting`
-
-const SILVER_DETAILS = `WHAT'S INCLUDED:
-
-• Logo listed on the Formula14 website (sponsors page)
-• 1 dedicated social media post per month
-• 4 complimentary training session passes per quarter (16 per year)
-• Mention in the Formula14 quarterly newsletter
-• Certificate of partnership
-• Annual summary report`
-
-const BRONZE_DETAILS = `WHAT'S INCLUDED:
-
-• Logo listed on the Formula14 website (sponsors page)
-• 2 complimentary training session passes per quarter (8 per year)
-• Annual social media mention/shout-out (1 per year)
-• Certificate of partnership`
-
-const INIT_TIERS: SponsorTier[] = [
-  { id:'platinum', label:'Platinum', packageDetails: PLATINUM_DETAILS },
-  { id:'gold',     label:'Gold',     packageDetails: GOLD_DETAILS },
-  { id:'silver',   label:'Silver',   packageDetails: SILVER_DETAILS },
-  { id:'bronze',   label:'Bronze',   packageDetails: BRONZE_DETAILS },
-]
-
-const INIT_SPONSORS: Sponsor[] = [
-  { id:'ss1', tierId:'platinum', businessName:'Elite Sports Medicine', contactName:'Dr. Sarah Chen', contactEmail:'sarah@elitesportsmedicine.com.au', contactPhone:'0412 345 678', startDate:'2025-07-01', renewalDate:'2026-06-30', value:5000, notes:'Logo installed on primary court — see invoice #2025-147' },
-  { id:'ss2', tierId:'platinum', businessName:'Hoops Pro', contactName:'James Kowalski', contactEmail:'james@hoopspro.com.au', contactPhone:'0423 456 789', startDate:'2025-01-01', renewalDate:'2026-12-31', value:5000, notes:'Provides 20% equipment discount for all Formula14 athletes' },
-  { id:'ss3', tierId:'gold', businessName:'NextGen Nutrition', contactName:'Priya Sharma', contactEmail:'priya@nextgennutrition.com.au', contactPhone:'0434 567 890', startDate:'2025-07-01', renewalDate:'2026-06-30', value:2500, notes:'' },
-  { id:'ss4', tierId:'gold', businessName:'Zone Athletics', contactName:'Marcus Webb', contactEmail:'m.webb@zoneathletics.com.au', contactPhone:'0445 678 901', startDate:'2026-01-01', renewalDate:'2026-12-31', value:2500, notes:'Supplies training singlets for team training sessions' },
-  { id:'ss5', tierId:'silver', businessName:'The Athletes Kitchen', contactName:'Lucy Nguyen', contactEmail:'lucy@athleteskitchen.com.au', contactPhone:'0456 789 012', startDate:'2025-07-01', renewalDate:'2026-06-30', value:1200, notes:'Post-session meal deal for Formula14 members' },
-  { id:'ss6', tierId:'silver', businessName:'Precision Insurance', contactName:'Tom Bradley', contactEmail:'tbradley@precisioninsurance.com.au', contactPhone:'0467 890 123', startDate:'2026-01-01', renewalDate:'2026-12-31', value:1200, notes:'' },
-  { id:'ss7', tierId:'bronze', businessName:'City Hyundai', contactName:'Angela Park', contactEmail:'angela.park@cityhyundai.com.au', contactPhone:'0478 901 234', startDate:'2025-07-01', renewalDate:'2026-06-30', value:500, notes:'' },
-  { id:'ss8', tierId:'bronze', businessName:'Thunder Energy', contactName:'Ryan Fitzgerald', contactEmail:'ryan@thunderenergy.com.au', contactPhone:'0489 012 345', startDate:'2026-01-01', renewalDate:'2026-12-31', value:500, notes:'Product supplied for venue fridge — 2 cases/month' },
-]
-
 // ─── Post Modal ───────────────────────────────────────────────────────────────
 
 function PostModal({
@@ -460,8 +384,8 @@ export default function SocialMediaPage() {
 
   // ── Sponsorship state ─────────────────────────────────────────────────────
   const [tiers,          setTiers]         = useState<SponsorTier[]>(() => {
-    if (typeof window === 'undefined') return INIT_TIERS
-    try { const r = localStorage.getItem('f14_sponsor_tiers'); return r ? JSON.parse(r) : INIT_TIERS } catch { return INIT_TIERS }
+    if (typeof window === 'undefined') return []
+    try { const r = localStorage.getItem('f14_sponsor_tiers'); return r ? JSON.parse(r) : [] } catch { return [] }
   })
   const [sponsors,       setSponsors]      = useState<Sponsor[]>(() => {
     if (typeof window === 'undefined') return []
@@ -662,8 +586,17 @@ export default function SocialMediaPage() {
             </div>
           </div>
 
+          {/* ── Empty state ── */}
+          {posts.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-20 text-center">
+              <svg className="mb-3 h-12 w-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
+              <p className="text-sm font-semibold text-gray-400">No posts yet</p>
+              <p className="mt-1 text-xs text-gray-400">Create your first post idea or draft</p>
+            </div>
+          )}
+
           {/* ── Calendar view ── */}
-          {viewMode === 'calendar' && (
+          {posts.length > 0 && viewMode === 'calendar' && (
             <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
               {/* Day headers */}
               <div className="grid grid-cols-7 border-b border-gray-200">
@@ -732,7 +665,7 @@ export default function SocialMediaPage() {
           )}
 
           {/* ── List view ── */}
-          {viewMode === 'list' && (
+          {posts.length > 0 && viewMode === 'list' && (
             <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
               {scheduledPosts.length === 0 ? (
                 <div className="px-6 py-12 text-center text-sm text-gray-400">No scheduled posts yet.</div>
@@ -785,7 +718,7 @@ export default function SocialMediaPage() {
           )}
 
           {/* ── Post Ideas ── */}
-          <div>
+          {posts.length > 0 && <div>
             <div className="mb-3 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <IconBulb size={16} className="text-amber-500" />
@@ -847,7 +780,7 @@ export default function SocialMediaPage() {
                 })}
               </div>
             )}
-          </div>
+          </div>}
         </div>
       )}
 

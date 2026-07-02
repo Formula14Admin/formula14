@@ -286,98 +286,7 @@ const INIT_SETTINGS: PricingSettings = {
 
 const PRICING_CONFIGS_LS  = 'f14_pricing_configs'
 
-const INIT_SESSIONS: Session[] = [
-  // Upcoming — Small Group, 2pm today. Lockout at noon (1h away at 11am).
-  {
-    id: 's1',
-    date: '2026-06-20',
-    startTime: '14:00',
-    sessionType: 'small-group',
-    athletes: [
-      { athleteId: 'a1', attendanceStatus: null, paymentStatus: 'pending', lockedPrice: null },
-      { athleteId: 'a2', attendanceStatus: null, paymentStatus: 'pending', lockedPrice: null },
-      { athleteId: 'a3', attendanceStatus: null, paymentStatus: 'pending', lockedPrice: null },
-    ],
-    status: 'upcoming',
-    completedAt: null,
-    lockedPricePerAthlete: null,
-  },
-  // Locked — Individual Workout, noon today. Lockout was 10am (now 11am → LOCKED).
-  {
-    id: 's2',
-    date: '2026-06-20',
-    startTime: '12:00',
-    sessionType: 'individual',
-    athletes: [
-      { athleteId: 'a4', attendanceStatus: null, paymentStatus: 'pending', lockedPrice: 75 },
-    ],
-    status: 'locked',
-    completedAt: null,
-    lockedPricePerAthlete: 75,
-  },
-  // Locked — Small Group Session, 9am today (4 athletes → Small Group, not Team Training). Awaiting completion.
-  {
-    id: 's3',
-    date: '2026-06-20',
-    startTime: '09:00',
-    sessionType: 'small-group',
-    athletes: [
-      { athleteId: 'a5', attendanceStatus: null, paymentStatus: 'pending', lockedPrice: 35 },
-      { athleteId: 'a6', attendanceStatus: null, paymentStatus: 'pending', lockedPrice: 35 },
-      { athleteId: 'a7', attendanceStatus: null, paymentStatus: 'pending', lockedPrice: 35 },
-      { athleteId: 'a8', attendanceStatus: null, paymentStatus: 'pending', lockedPrice: 35 },
-    ],
-    status: 'locked',
-    completedAt: null,
-    lockedPricePerAthlete: 35,
-  },
-  // Upcoming — Casual Shooting, 10am tomorrow.
-  {
-    id: 's4',
-    date: '2026-06-21',
-    startTime: '10:00',
-    sessionType: 'casual-shooting',
-    athletes: [
-      { athleteId: 'a9',  attendanceStatus: null, paymentStatus: 'pending', lockedPrice: null },
-      { athleteId: 'a10', attendanceStatus: null, paymentStatus: 'pending', lockedPrice: null },
-    ],
-    status: 'upcoming',
-    completedAt: null,
-    lockedPricePerAthlete: null,
-  },
-  // Completed — Volume Shooting, June 18.
-  {
-    id: 's5',
-    date: '2026-06-18',
-    startTime: '15:00',
-    sessionType: 'volume-shooting',
-    athletes: [
-      { athleteId: 'a1', attendanceStatus: 'attended', paymentStatus: 'paid',               lockedPrice: 45 },
-      { athleteId: 'a2', attendanceStatus: 'attended', paymentStatus: 'payment-required',   lockedPrice: 45 },
-      { athleteId: 'a3', attendanceStatus: 'no-show',  paymentStatus: 'paid',               lockedPrice: 45 },
-      { athleteId: 'a4', attendanceStatus: 'attended', paymentStatus: 'paid',               lockedPrice: 45 },
-      { athleteId: 'a5', attendanceStatus: 'excused',  paymentStatus: 'waived',             lockedPrice: 45 },
-    ],
-    status: 'completed',
-    completedAt: '2026-06-18T16:30:00',
-    lockedPricePerAthlete: 45,
-  },
-  // Completed — Small Group Session, June 17.
-  {
-    id: 's6',
-    date: '2026-06-17',
-    startTime: '11:00',
-    sessionType: 'small-group',
-    athletes: [
-      { athleteId: 'a6', attendanceStatus: 'attended', paymentStatus: 'paid',             lockedPrice: 40 },
-      { athleteId: 'a7', attendanceStatus: 'attended', paymentStatus: 'payment-required', lockedPrice: 40 },
-      { athleteId: 'a8', attendanceStatus: 'no-show',  paymentStatus: 'waived',           lockedPrice: 40 },
-    ],
-    status: 'completed',
-    completedAt: '2026-06-17T12:15:00',
-    lockedPricePerAthlete: 40,
-  },
-]
+
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -484,7 +393,7 @@ export default function PricingPage() {
   const [addCardOpen, setAddCardOpen] = useState(false)
   const [newCardLabel, setNewCardLabel] = useState('')
   const [settings, setSettings] = useState<PricingSettings>(INIT_SETTINGS)
-  const [sessions, setSessions] = useState<Session[]>(INIT_SESSIONS)
+  const [sessions, setSessions] = useState<Session[]>([])
   const [tab, setTab] = useState<'sessions' | 'pricing'>('sessions')
   const [expandedSession, setExpandedSession] = useState<string | null>(null)
   const [sessionFilter, setSessionFilter] = useState<'all' | 'upcoming' | 'locked' | 'completed'>('upcoming')
@@ -1269,8 +1178,9 @@ export default function PricingPage() {
             })}
 
             {filtered.length === 0 && (
-              <div className="rounded-xl border border-gray-200 bg-white px-6 py-10 text-center text-sm text-gray-400">
-                No sessions match this filter.
+              <div className="py-16 text-center">
+                <p className="text-sm font-semibold text-gray-400">No sessions yet</p>
+                <p className="mt-1 text-xs text-gray-400">Sessions will appear here once bookings are created</p>
               </div>
             )}
           </div>

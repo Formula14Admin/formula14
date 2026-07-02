@@ -7,6 +7,7 @@ import {
   IconHeartbeat, IconChartBar, IconLink, IconPencil, IconChevronDown,
   IconChevronRight,
 } from '@tabler/icons-react'
+import { supabase } from '@/lib/supabase'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -93,208 +94,6 @@ function blankField(type: FieldType): FormField {
 
 const LABEL = 'mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500'
 const INPUT = 'w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-[#6BA3D6] focus:ring-2 focus:ring-[#6BA3D6]/10'
-
-// ─── Pre-built forms ──────────────────────────────────────────────────────────
-
-const FORMS_DATA: AppForm[] = [
-  {
-    id: 'f-intake', name: 'Athlete Intake Form',
-    description: 'New athlete registration covering personal details, basketball background, emergency contact and goals.',
-    category: 'intake', status: 'active', createdAt: '2025-11-01', updatedAt: '2026-03-12',
-    fields: [
-      { id: 'fi1',  type: 'heading',  label: 'Personal Information' },
-      { id: 'fi2',  type: 'text',     label: 'Full Name',            required: true,  placeholder: 'e.g. Jordan Mitchell' },
-      { id: 'fi3',  type: 'date',     label: 'Date of Birth',        required: true },
-      { id: 'fi4',  type: 'select',   label: 'Gender',               required: false, options: ['Male','Female','Non-binary','Prefer not to say'] },
-      { id: 'fi5',  type: 'text',     label: 'Email Address',        required: false, placeholder: 'e.g. jordan@email.com' },
-      { id: 'fi6',  type: 'text',     label: 'Phone Number',         required: false, placeholder: '04XX XXX XXX' },
-      { id: 'fi7',  type: 'heading',  label: 'Basketball Details' },
-      { id: 'fi8',  type: 'select',   label: 'Primary Position',     required: false, options: ['Point Guard','Shooting Guard','Small Forward','Power Forward','Centre'] },
-      { id: 'fi9',  type: 'text',     label: 'Current Club / School',required: false, placeholder: 'e.g. Oakleigh Panthers' },
-      { id: 'fi10', type: 'select',   label: 'Experience Level',     required: false, options: ['Beginner','Intermediate','Advanced','Elite'] },
-      { id: 'fi11', type: 'heading',  label: 'Emergency Contact' },
-      { id: 'fi12', type: 'text',     label: 'Emergency Contact Name',  required: true, placeholder: 'e.g. Sarah Mitchell' },
-      { id: 'fi13', type: 'text',     label: 'Relationship',            required: false, placeholder: 'e.g. Parent' },
-      { id: 'fi14', type: 'text',     label: 'Emergency Contact Phone', required: true, placeholder: '04XX XXX XXX' },
-      { id: 'fi15', type: 'heading',  label: 'Goals & Medical' },
-      { id: 'fi16', type: 'textarea', label: 'What are your basketball goals?', required: false, placeholder: 'e.g. Improve ball handling and make the school team' },
-      { id: 'fi17', type: 'textarea', label: 'Any injuries or medical conditions we should be aware of?', required: false },
-    ],
-  },
-  {
-    id: 'f-waiver', name: 'Liability Waiver',
-    description: 'Participation waiver and consent form. To be signed by athlete or parent/guardian for athletes under 18.',
-    category: 'waiver', status: 'active', createdAt: '2025-11-01', updatedAt: '2026-01-08',
-    fields: [
-      { id: 'fw1', type: 'heading',   label: 'Waiver & Release of Liability' },
-      { id: 'fw2', type: 'paragraph', label: '', content: 'I acknowledge that participation in basketball training activities at Formula14 involves inherent risks of physical injury. I voluntarily assume all risks associated with participation and agree to release Formula14, its coaches, staff, and agents from any liability arising from participation in these activities.' },
-      { id: 'fw3', type: 'text',      label: 'Participant Full Name',  required: true, placeholder: 'e.g. Jordan Mitchell' },
-      { id: 'fw4', type: 'date',      label: 'Date of Birth',          required: true },
-      { id: 'fw5', type: 'text',      label: 'Parent / Guardian Name (if under 18)', required: false, placeholder: 'Leave blank if 18+' },
-      { id: 'fw6', type: 'textarea',  label: 'Known medical conditions or allergies', required: false },
-      { id: 'fw7', type: 'heading',   label: 'Consent & Signature' },
-      { id: 'fw8', type: 'paragraph', label: '', content: 'By signing below I confirm I have read and understood this waiver and consent to participation in Formula14 training activities.' },
-      { id: 'fw9', type: 'esignature',label: 'Signature', required: true },
-      { id: 'fw10',type: 'date',      label: 'Date Signed', required: true },
-    ],
-  },
-  {
-    id: 'f-feedback', name: 'Session Feedback',
-    description: 'Post-session feedback form for athletes to rate their experience and provide suggestions.',
-    category: 'feedback', status: 'active', createdAt: '2026-01-15', updatedAt: '2026-04-20',
-    fields: [
-      { id: 'ff1',  type: 'heading',  label: 'Session Details' },
-      { id: 'ff2',  type: 'date',     label: 'Session Date',    required: true },
-      { id: 'ff3',  type: 'text',     label: 'Your Name',       required: false, placeholder: 'e.g. Jordan Mitchell' },
-      { id: 'ff4',  type: 'select',   label: 'Session Type',    required: false, options: ['Individual Training','Group Session','Team Practice','Program Session'] },
-      { id: 'ff5',  type: 'heading',  label: 'Ratings' },
-      { id: 'ff6',  type: 'radio',    label: 'Overall Session Rating', required: true, options: ['1 – Poor','2','3','4','5 – Excellent'] },
-      { id: 'ff7',  type: 'radio',    label: 'Coach Communication',    required: false, options: ['1 – Poor','2','3','4','5 – Excellent'] },
-      { id: 'ff8',  type: 'radio',    label: 'Facility Condition',     required: false, options: ['1 – Poor','2','3','4','5 – Excellent'] },
-      { id: 'ff9',  type: 'heading',  label: 'Your Thoughts' },
-      { id: 'ff10', type: 'textarea', label: 'What did you enjoy most?',  required: false },
-      { id: 'ff11', type: 'textarea', label: 'What could be improved?',   required: false },
-      { id: 'ff12', type: 'checkbox', label: 'General', required: false, options: ['I would recommend Formula14 to others'] },
-    ],
-  },
-  {
-    id: 'f-incident', name: 'Injury / Incident Report',
-    description: 'Document injuries or incidents that occur during training. Complete as soon as possible after the event.',
-    category: 'incident', status: 'active', createdAt: '2025-11-01', updatedAt: '2026-02-14',
-    fields: [
-      { id: 'fi1',  type: 'heading',  label: 'Incident Details' },
-      { id: 'fi2',  type: 'date',     label: 'Date of Incident', required: true },
-      { id: 'fi3',  type: 'text',     label: 'Athlete Name',     required: true, placeholder: 'e.g. Jordan Mitchell' },
-      { id: 'fi4',  type: 'text',     label: 'Approximate Time', required: false, placeholder: 'e.g. 4:30pm' },
-      { id: 'fi5',  type: 'select',   label: 'Incident Type',    required: true, options: ['Injury','Near Miss','Equipment Damage','Other'] },
-      { id: 'fi6',  type: 'heading',  label: 'Description' },
-      { id: 'fi7',  type: 'textarea', label: 'Describe what happened', required: true, placeholder: 'Provide a clear, factual description…' },
-      { id: 'fi8',  type: 'text',     label: 'Body part affected',    required: false, placeholder: 'e.g. Left ankle' },
-      { id: 'fi9',  type: 'select',   label: 'Severity',              required: true, options: ['Minor','Moderate','Serious','Requires Hospital'] },
-      { id: 'fi10', type: 'heading',  label: 'Response' },
-      { id: 'fi11', type: 'textarea', label: 'First aid / action taken', required: false },
-      { id: 'fi12', type: 'text',     label: 'Witness name(s)',          required: false },
-      { id: 'fi13', type: 'checkbox', label: 'Follow-up actions', required: false, options: ['Parent/guardian notified','Medical attention sought','Incident follow-up required'] },
-      { id: 'fi14', type: 'text',     label: 'Report completed by', required: true, placeholder: 'Staff name' },
-    ],
-  },
-  {
-    id: 'f-health', name: 'Health Questionnaire (PAR-Q)',
-    description: 'Pre-participation physical activity readiness questionnaire. Required before athletes begin training.',
-    category: 'health', status: 'active', createdAt: '2025-11-01', updatedAt: '2026-01-22',
-    fields: [
-      { id: 'fh1',  type: 'heading',   label: 'Physical Activity Readiness Questionnaire' },
-      { id: 'fh2',  type: 'paragraph', label: '', content: 'Please answer the following questions honestly. If you answer YES to any question, consult your doctor before participating in physical activity.' },
-      { id: 'fh3',  type: 'text',      label: 'Full Name',      required: true },
-      { id: 'fh4',  type: 'date',      label: 'Date of Birth',  required: true },
-      { id: 'fh5',  type: 'heading',   label: 'Health Screening Questions' },
-      { id: 'fh6',  type: 'radio',     label: 'Has your doctor ever said you have a heart condition?',                      required: true, options: ['Yes','No'] },
-      { id: 'fh7',  type: 'radio',     label: 'Do you feel pain in your chest during physical activity?',                  required: true, options: ['Yes','No'] },
-      { id: 'fh8',  type: 'radio',     label: 'Do you lose balance due to dizziness or lose consciousness?',               required: true, options: ['Yes','No'] },
-      { id: 'fh9',  type: 'radio',     label: 'Do you have a bone or joint problem aggravated by physical activity?',      required: true, options: ['Yes','No'] },
-      { id: 'fh10', type: 'radio',     label: 'Are you on prescribed medication for blood pressure or a heart condition?', required: true, options: ['Yes','No'] },
-      { id: 'fh11', type: 'radio',     label: 'Do you know of any other reason you should not participate in physical activity?', required: true, options: ['Yes','No'] },
-      { id: 'fh12', type: 'textarea',  label: 'If you answered YES to any question, please provide details', required: false },
-      { id: 'fh13', type: 'heading',   label: 'Declaration' },
-      { id: 'fh14', type: 'esignature',label: 'Signature',    required: true },
-      { id: 'fh15', type: 'date',      label: 'Date Signed',  required: true },
-    ],
-  },
-  {
-    id: 'f-assessment', name: 'Athlete Assessment',
-    description: 'Coach-completed skills and fitness assessment for tracking athlete development over time.',
-    category: 'assessment', status: 'active', createdAt: '2026-02-01', updatedAt: '2026-05-30',
-    fields: [
-      { id: 'fa1',  type: 'heading',  label: 'Assessment Details' },
-      { id: 'fa2',  type: 'text',     label: 'Athlete Name',        required: true },
-      { id: 'fa3',  type: 'date',     label: 'Assessment Date',     required: true },
-      { id: 'fa4',  type: 'text',     label: 'Assessed By (Coach)', required: true, placeholder: 'e.g. Matt Brasser' },
-      { id: 'fa5',  type: 'select',   label: 'Assessment Type',     required: true, options: ['Initial','Mid-season','End of Season','Ad Hoc'] },
-      { id: 'fa6',  type: 'heading',  label: 'Physical Attributes' },
-      { id: 'fa7',  type: 'text',     label: 'Height (cm)',  required: false },
-      { id: 'fa8',  type: 'text',     label: 'Weight (kg)',  required: false },
-      { id: 'fa9',  type: 'text',     label: 'Wingspan (cm)',required: false },
-      { id: 'fa10', type: 'heading',  label: 'Skill Ratings (1 = Developing, 5 = Elite)' },
-      { id: 'fa11', type: 'radio',    label: 'Ball Handling',  required: true, options: ['1','2','3','4','5'] },
-      { id: 'fa12', type: 'radio',    label: 'Shooting',       required: true, options: ['1','2','3','4','5'] },
-      { id: 'fa13', type: 'radio',    label: 'Passing',        required: true, options: ['1','2','3','4','5'] },
-      { id: 'fa14', type: 'radio',    label: 'Defending',      required: true, options: ['1','2','3','4','5'] },
-      { id: 'fa15', type: 'radio',    label: 'Athleticism',    required: true, options: ['1','2','3','4','5'] },
-      { id: 'fa16', type: 'radio',    label: 'Basketball IQ',  required: true, options: ['1','2','3','4','5'] },
-      { id: 'fa17', type: 'heading',  label: 'Written Assessment' },
-      { id: 'fa18', type: 'textarea', label: 'Strengths',                      required: false },
-      { id: 'fa19', type: 'textarea', label: 'Areas for Improvement',          required: false },
-      { id: 'fa20', type: 'textarea', label: 'Development Goals (next period)',required: false },
-      { id: 'fa21', type: 'textarea', label: 'Additional Coach Notes',         required: false },
-    ],
-  },
-]
-
-// ─── Sample submissions ───────────────────────────────────────────────────────
-
-const INIT_SUBMISSIONS: Submission[] = [
-  { id: 's01', formId: 'f-intake', submittedAt: '2026-06-02T09:14:00', submittedBy: 'Jordan Mitchell',
-    data: { fi2:'Jordan Mitchell',fi3:'2009-03-15',fi4:'Male',fi5:'jordan@email.com',fi6:'0412 345 678',
-      fi8:'Point Guard',fi9:'Oakleigh Panthers',fi10:'Advanced',fi12:'Sarah Mitchell',fi13:'Mother',fi14:'0412 999 111',
-      fi16:'Make the under-18 state team',fi17:'Previous left ankle sprain (2024)' } },
-  { id: 's02', formId: 'f-intake', submittedAt: '2026-06-10T14:22:00', submittedBy: 'Aisha Thompson',
-    data: { fi2:'Aisha Thompson',fi3:'2010-07-22',fi4:'Female',fi5:'aisha.t@email.com',fi6:'0423 456 789',
-      fi8:'Small Forward',fi9:'Melbourne Tigers',fi10:'Intermediate',fi12:'David Thompson',fi13:'Father',fi14:'0423 111 222',
-      fi16:'Improve shooting consistency and defensive footwork' } },
-  { id: 's03', formId: 'f-intake', submittedAt: '2026-06-14T11:05:00', submittedBy: 'Marcus Davies',
-    data: { fi2:'Marcus Davies',fi3:'2007-11-04',fi4:'Male',fi5:'marcus.d@email.com',fi6:'0434 567 890',
-      fi8:'Shooting Guard',fi9:'Dandenong Rangers',fi10:'Elite',fi12:'Linda Davies',fi13:'Mother',fi14:'0434 888 777',
-      fi16:'Get recruited to the NBL1 pathway program' } },
-
-  { id: 's04', formId: 'f-waiver', submittedAt: '2026-06-02T09:30:00', submittedBy: 'Jordan Mitchell',
-    data: { fw3:'Jordan Mitchell',fw4:'2009-03-15',fw5:'Sarah Mitchell (Parent)',fw6:'',fw9:'Sarah Mitchell',fw10:'2026-06-02' } },
-  { id: 's05', formId: 'f-waiver', submittedAt: '2026-06-10T14:45:00', submittedBy: 'Aisha Thompson',
-    data: { fw3:'Aisha Thompson',fw4:'2010-07-22',fw5:'David Thompson (Parent)',fw6:'Mild asthma — uses Ventolin inhaler',fw9:'David Thompson',fw10:'2026-06-10' } },
-  { id: 's06', formId: 'f-waiver', submittedAt: '2026-05-15T10:12:00', submittedBy: 'Mia Chen',
-    data: { fw3:'Mia Chen',fw4:'2008-09-30',fw5:'',fw6:'No known conditions',fw9:'Mia Chen',fw10:'2026-05-15' } },
-
-  { id: 's07', formId: 'f-feedback', submittedAt: '2026-06-12T17:45:00', submittedBy: 'Jordan Mitchell',
-    data: { ff2:'2026-06-12',ff3:'Jordan Mitchell',ff4:'Individual Training',ff6:'5 – Excellent',ff7:'5 – Excellent',ff8:'4',
-      ff10:'The pick-and-roll reads were really helpful — I feel much more confident on the move.',
-      ff11:'Maybe a bit more time on three-point shooting off the catch.',ff12:['I would recommend Formula14 to others'] } },
-  { id: 's08', formId: 'f-feedback', submittedAt: '2026-06-05T16:30:00', submittedBy: 'Aisha Thompson',
-    data: { ff2:'2026-06-05',ff3:'Aisha Thompson',ff4:'Group Session',ff6:'4',ff7:'5 – Excellent',ff8:'4',
-      ff10:'Great energy in the group, everyone was pushing each other.',
-      ff11:'The facility was a bit warm, better ventilation would help.',ff12:['I would recommend Formula14 to others'] } },
-  { id: 's09', formId: 'f-feedback', submittedAt: '2026-05-28T17:00:00', submittedBy: 'Marcus Davies',
-    data: { ff2:'2026-05-28',ff3:'Marcus Davies',ff4:'Individual Training',ff6:'5 – Excellent',ff7:'5 – Excellent',ff8:'5 – Excellent',
-      ff10:'Really detailed breakdown of my shooting mechanics — the slow-mo video analysis was great.',
-      ff11:'Would love more game-simulation drills.',ff12:['I would recommend Formula14 to others'] } },
-
-  { id: 's10', formId: 'f-incident', submittedAt: '2026-06-08T16:00:00', submittedBy: 'Staff – Matt Brasser',
-    data: { fi2:'2026-06-08',fi3:'Liam Carter',fi4:'3:45pm',fi5:'Injury',
-      fi7:'Athlete landed awkwardly after a layup attempt and rolled his right ankle. Immediate pain, unable to continue.',
-      fi8:'Right ankle',fi9:'Moderate',
-      fi11:'RICE protocol applied — Rest, Ice for 20 minutes, Compression bandage, leg elevated. Athlete monitored for 30 min.',
-      fi12:'Jade Brasser',fi13:['Parent/guardian notified','Incident follow-up required'],fi14:'Matt Brasser' } },
-
-  { id: 's11', formId: 'f-health', submittedAt: '2026-06-02T09:00:00', submittedBy: 'Jordan Mitchell',
-    data: { fh3:'Jordan Mitchell',fh4:'2009-03-15',fh6:'No',fh7:'No',fh8:'No',fh9:'No',fh10:'No',fh11:'No',
-      fh12:'',fh14:'Sarah Mitchell (Parent/Guardian)',fh15:'2026-06-02' } },
-  { id: 's12', formId: 'f-health', submittedAt: '2026-06-10T14:00:00', submittedBy: 'Aisha Thompson',
-    data: { fh3:'Aisha Thompson',fh4:'2010-07-22',fh6:'No',fh7:'No',fh8:'No',fh9:'No',fh10:'No',fh11:'Yes',
-      fh12:'Mild exercise-induced asthma. Uses Ventolin inhaler as needed. Has medical clearance from Dr. Chen.',
-      fh14:'David Thompson (Parent/Guardian)',fh15:'2026-06-10' } },
-
-  { id: 's13', formId: 'f-assessment', submittedAt: '2026-06-01T12:00:00', submittedBy: 'Coach – Matt Brasser',
-    data: { fa2:'Jordan Mitchell',fa3:'2026-06-01',fa4:'Matt Brasser',fa5:'Mid-season',
-      fa7:'183',fa8:'76',fa9:'192',fa11:'4',fa12:'4',fa13:'5',fa14:'3',fa15:'4',fa16:'5',
-      fa18:'Outstanding court vision and passing ability. High basketball IQ for his age — reads the game well.',
-      fa19:'Defensive positioning in pick-and-roll situations. Off-ball movement needs work.',
-      fa20:'Focus on defensive IQ and three-point consistency. Target: 35%+ from three.',
-      fa21:'Jordan has shown tremendous improvement this season. On track for state team consideration.' } },
-  { id: 's14', formId: 'f-assessment', submittedAt: '2026-05-15T11:30:00', submittedBy: 'Coach – Matt Brasser',
-    data: { fa2:'Mia Chen',fa3:'2026-05-15',fa4:'Matt Brasser',fa5:'Initial',
-      fa7:'172',fa8:'62',fa9:'178',fa11:'3',fa12:'5',fa13:'3',fa14:'4',fa15:'4',fa16:'4',
-      fa18:'Elite shooter with excellent footwork off screens. Strong defensive instincts.',
-      fa19:'Ball handling under pressure, especially when driving left.',
-      fa20:'Improve left-hand dribble and court vision.',fa21:'Highly motivated with great work ethic.' } },
-]
 
 // ─── Badges ───────────────────────────────────────────────────────────────────
 
@@ -983,11 +782,8 @@ const CAT_PILLS = [
 ]
 
 export default function FormsPage() {
-  const [forms, setForms] = useState<AppForm[]>(FORMS_DATA)
-  const [submissions, setSubmissions] = useState<Submission[]>(() => {
-    if (typeof window === 'undefined') return []
-    try { const r = localStorage.getItem('f14_form_submissions'); return r ? JSON.parse(r) : [] } catch { return [] }
-  })
+  const [forms, setForms] = useState<AppForm[]>([])
+  const [submissions, setSubmissions] = useState<Submission[]>([])
   const [selected, setSelected] = useState<AppForm | null>(null)
   const [fillTarget, setFillTarget] = useState<AppForm | null>(null)
   const [showNew, setShowNew] = useState(false)
@@ -995,9 +791,24 @@ export default function FormsPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [search, setSearch] = useState('')
 
+  // Load forms from Supabase on mount
   useEffect(() => {
-    if (typeof window !== 'undefined') localStorage.setItem('f14_form_submissions', JSON.stringify(submissions))
-  }, [submissions])
+    void (async () => {
+      try {
+        const { data } = await supabase.from('forms').select('*').order('created_at', { ascending: false })
+        if (data) setForms(data.map(r => ({
+          id: r.id as string,
+          name: (r.title as string) ?? '',
+          description: '',
+          category: ((r.folder as string) ?? 'custom') as FormCategory,
+          status: 'active' as FormStatus,
+          fields: Array.isArray(r.fields) ? r.fields as FormField[] : [],
+          createdAt: (r.created_at as string) ?? '',
+          updatedAt: (r.updated_at as string) ?? '',
+        })))
+      } catch (e) { console.error('[forms] load failed:', e) }
+    })()
+  }, [])
 
   const filtered = useMemo(() =>
     forms.filter(f => {
@@ -1020,15 +831,64 @@ export default function FormsPage() {
   const totalSubs    = submissions.length
   const monthSubs    = submissions.filter(s => s.submittedAt.startsWith('2026-06')).length
 
-  function addSubmission(s: Submission) {
-    setSubmissions(p => [...p, s])
-    setFillTarget(null)
+  async function loadResponses(formId: string) {
+    try {
+      const { data } = await supabase
+        .from('form_responses')
+        .select('*')
+        .eq('form_id', formId)
+        .order('submitted_at', { ascending: false })
+      if (data) {
+        const mapped: Submission[] = data.map(r => {
+          const resp = ((r.responses ?? {}) as Record<string, string | string[]>)
+          const submittedBy = typeof (resp as Record<string, unknown>)._by === 'string'
+            ? (resp as Record<string, unknown>)._by as string
+            : 'Anonymous'
+          const { _by: _b, ...formData } = resp as { _by?: string } & Record<string, string | string[]>
+          void _b
+          return {
+            id: r.id as string,
+            formId: r.form_id as string,
+            submittedAt: r.submitted_at as string,
+            submittedBy,
+            data: formData,
+          }
+        })
+        setSubmissions(prev => {
+          const filtered = prev.filter(s => s.formId !== formId)
+          return [...filtered, ...mapped]
+        })
+      }
+    } catch (e) { console.error('[forms] load responses failed:', e) }
   }
 
-  function addForm(form: AppForm) {
-    setForms(p => [...p, form])
-    setShowNew(false)
+  function selectForm(form: AppForm | null) {
     setSelected(form)
+    if (form) void loadResponses(form.id)
+  }
+
+  async function addSubmission(s: Submission) {
+    setSubmissions(p => [...p, s])
+    setFillTarget(null)
+    try {
+      const responses: Record<string, unknown> = { ...s.data, _by: s.submittedBy }
+      await supabase.from('form_responses').insert({ form_id: s.formId, responses })
+    } catch (e) { console.error('[forms] submit failed:', e) }
+  }
+
+  async function addForm(form: AppForm) {
+    try {
+      const { data, error } = await supabase
+        .from('forms')
+        .insert({ title: form.name, folder: form.category, fields: form.fields })
+        .select()
+        .single()
+      if (error) throw error
+      const saved: AppForm = { ...form, id: data.id as string }
+      setForms(p => [...p, saved])
+      setShowNew(false)
+      setSelected(saved)
+    } catch (e) { console.error('[forms] create failed:', e) }
   }
 
   function updateStatus(id: string, status: FormStatus) {
@@ -1036,9 +896,12 @@ export default function FormsPage() {
     setSelected(p => p?.id === id ? { ...p, status } : p)
   }
 
-  function deleteForm(id: string) {
-    setForms(p => p.filter(f => f.id !== id))
-    setSelected(null)
+  async function deleteForm(id: string) {
+    try {
+      await supabase.from('forms').delete().eq('id', id)
+      setForms(p => p.filter(f => f.id !== id))
+      setSelected(null)
+    } catch (e) { console.error('[forms] delete failed:', e) }
   }
 
   return (
@@ -1118,7 +981,13 @@ export default function FormsPage() {
         </div>
 
         {/* Grid */}
-        {filtered.length === 0 ? (
+        {forms.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <svg className="mb-3 h-12 w-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+            <p className="text-sm font-semibold text-gray-400">No forms yet</p>
+            <p className="mt-1 text-xs text-gray-400">Click &apos;New Form&apos; to create your first form</p>
+          </div>
+        ) : filtered.length === 0 ? (
           <div className="rounded-2xl bg-white py-16 text-center shadow-sm">
             <p className="text-sm text-gray-400">No forms match your filters</p>
           </div>
@@ -1127,7 +996,7 @@ export default function FormsPage() {
             {filtered.map(form => (
               <FormCard key={form.id} form={form}
                 submissionCount={subCounts[form.id] ?? 0}
-                onClick={() => setSelected(selected?.id === form.id ? null : form)}
+                onClick={() => selectForm(selected?.id === form.id ? null : form)}
                 onFill={e => { e.stopPropagation(); setFillTarget(form) }} />
             ))}
           </div>
@@ -1136,10 +1005,10 @@ export default function FormsPage() {
 
       {selected && (
         <DetailPanel form={selected} submissions={submissions}
-          onClose={() => setSelected(null)}
+          onClose={() => selectForm(null)}
           onFill={() => setFillTarget(selected)}
           onStatusChange={s => updateStatus(selected.id, s)}
-          onDelete={() => deleteForm(selected.id)} />
+          onDelete={() => { void deleteForm(selected.id) }} />
       )}
 
       {fillTarget && (

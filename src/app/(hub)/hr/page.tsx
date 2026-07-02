@@ -53,7 +53,6 @@ import {
   DocType,
   DocStatus,
   INIT_STAFF,
-  INIT_PAY_RUNS,
   loadStaff,
   saveStaff,
   loadPayRuns,
@@ -129,38 +128,6 @@ const ONBOARDING_TASKS: OnboardingTask[] = [
   { id: 'ot12', label: 'Attend first group session (shadow)',   category: 'Orientation',     dueDays: 14 },
 ]
 
-// Sample leave requests
-const INIT_LEAVE: LeaveRequest[] = [
-  { id: 'lr1', staffId: 's2', staffName: 'Jade Brasser',  type: 'annual',   startDate: '2026-07-07', endDate: '2026-07-11', days: 5,  reason: 'Family holiday',       status: 'pending',  submittedDate: '2026-06-20' },
-  { id: 'lr2', staffId: 's3', staffName: 'Sam Torres',   type: 'sick',     startDate: '2026-06-18', endDate: '2026-06-18', days: 1,  reason: 'Unwell',               status: 'approved', submittedDate: '2026-06-18' },
-  { id: 'lr3', staffId: 's1', staffName: 'Matt Brasser', type: 'personal', startDate: '2026-08-03', endDate: '2026-08-03', days: 1,  reason: 'Personal commitment',  status: 'pending',  submittedDate: '2026-06-22' },
-]
-
-// Sample performance reviews
-const INIT_REVIEWS: PerformanceReview[] = [
-  {
-    id: 'pr1', staffId: 's1', staffName: 'Matt Brasser', period: 'H1 2026',
-    rating: 5, selfAssessment: 'Strong season — athlete progress has been excellent across Elite and Individual programs. Systems are in place and running well.',
-    managerNotes: 'Outstanding leadership and commitment to athlete development.',
-    actionItems: ['Complete Level 3 coaching certification by Dec 2026', 'Onboard one additional casual coach by Aug 2026'],
-    completedDate: '2026-06-15',
-  },
-  {
-    id: 'pr2', staffId: 's2', staffName: 'Jade Brasser', period: 'H1 2026',
-    rating: 4, selfAssessment: 'Great group session results but I need to update my Level 1 cert which expired.',
-    managerNotes: 'Excellent with athletes, especially juniors. Must address qualification expiry as a priority.',
-    actionItems: ['Renew Level 1 coaching cert immediately', 'Lead at least 2 shooting clinics independently by Sep 2026'],
-    completedDate: '2026-06-16',
-  },
-  {
-    id: 'pr3', staffId: 's3', staffName: 'Sam Torres', period: 'H1 2026',
-    rating: 4, selfAssessment: 'Enjoyed working with the junior groups. Would love more hours if available.',
-    managerNotes: 'Reliable and great with kids. Consider increasing hours if program expands.',
-    actionItems: ['Complete first aid refresher by Aug 2026'],
-    completedDate: null,
-  },
-]
-
 // Superannuation rate
 const SUPER_RATE = 0.115
 
@@ -172,14 +139,14 @@ const LS_ONBOARD  = 'f14_hr_onboarding'
 const LS_APP_ROLE = 'f14_hr_app_roles'
 
 function loadLeave(): LeaveRequest[] {
-  if (typeof window === 'undefined') return INIT_LEAVE
-  try { const r = localStorage.getItem(LS_LEAVE); return r ? JSON.parse(r) : INIT_LEAVE } catch { return INIT_LEAVE }
+  if (typeof window === 'undefined') return []
+  try { const r = localStorage.getItem(LS_LEAVE); return r ? JSON.parse(r) : [] } catch { return [] }
 }
 function saveLeave(d: LeaveRequest[]): void { localStorage.setItem(LS_LEAVE, JSON.stringify(d)) }
 
 function loadReviews(): PerformanceReview[] {
-  if (typeof window === 'undefined') return INIT_REVIEWS
-  try { const r = localStorage.getItem(LS_REVIEWS); return r ? JSON.parse(r) : INIT_REVIEWS } catch { return INIT_REVIEWS }
+  if (typeof window === 'undefined') return []
+  try { const r = localStorage.getItem(LS_REVIEWS); return r ? JSON.parse(r) : [] } catch { return [] }
 }
 function saveReviews(d: PerformanceReview[]): void { localStorage.setItem(LS_REVIEWS, JSON.stringify(d)) }
 
@@ -1627,6 +1594,11 @@ function PerformanceTab({ staff }: { staff: StaffMember[] }) {
     <div className="flex h-full min-h-0 gap-5 p-6">
       {/* Left — review list */}
       <div className="w-72 shrink-0 overflow-y-auto space-y-2">
+        {reviews.length === 0 && (
+          <div className="py-12 text-center">
+            <p className="text-sm text-gray-400">No performance reviews yet</p>
+          </div>
+        )}
         {reviews.map(r => {
           const isSel = r.id === selected
           return (

@@ -50,53 +50,6 @@ const COURT_H = 470
 const BLUE = '#6BA3D6'
 const CATEGORIES = ['Offence', 'Defence', 'Out of Bounds', 'Press Break', 'Special Situations']
 
-const SAMPLE_PLAYS: SavedPlay[] = [
-  {
-    id: 'horns',
-    name: 'Horns Set',
-    category: 'Offence',
-    elements: [
-      { kind: 'marker', id: 'h1', type: 'offense', num: 1, x: 250, y: 295 },
-      { kind: 'marker', id: 'h2', type: 'offense', num: 2, x: 420, y: 340 },
-      { kind: 'marker', id: 'h3', type: 'offense', num: 3, x: 80, y: 340 },
-      { kind: 'marker', id: 'h4', type: 'offense', num: 4, x: 330, y: 195 },
-      { kind: 'marker', id: 'h5', type: 'offense', num: 5, x: 170, y: 195 },
-      { kind: 'marker', id: 'hb', type: 'ball', x: 250, y: 295 },
-      { kind: 'line', id: 'hl1', type: 'movement', x1: 250, y1: 295, x2: 330, y2: 195 },
-      { kind: 'line', id: 'hl2', type: 'pass', x1: 250, y1: 295, x2: 330, y2: 195 },
-      { kind: 'line', id: 'hl3', type: 'movement', x1: 170, y1: 195, x2: 80, y2: 310 },
-      { kind: 'line', id: 'hl4', type: 'movement', x1: 330, y1: 195, x2: 420, y2: 310 },
-    ],
-  },
-  {
-    id: 'zone131',
-    name: '1-3-1 Zone',
-    category: 'Defence',
-    elements: [
-      { kind: 'marker', id: 'z1', type: 'defense', num: 1, x: 250, y: 310 },
-      { kind: 'marker', id: 'z2', type: 'defense', num: 2, x: 75, y: 225 },
-      { kind: 'marker', id: 'z3', type: 'defense', num: 3, x: 250, y: 210 },
-      { kind: 'marker', id: 'z4', type: 'defense', num: 4, x: 425, y: 225 },
-      { kind: 'marker', id: 'z5', type: 'defense', num: 5, x: 250, y: 90 },
-    ],
-  },
-  {
-    id: 'box-oob',
-    name: 'Box Out of Bounds',
-    category: 'Out of Bounds',
-    elements: [
-      { kind: 'marker', id: 'b1', type: 'offense', num: 1, x: 250, y: 12 },
-      { kind: 'marker', id: 'b2', type: 'offense', num: 2, x: 196, y: 75 },
-      { kind: 'marker', id: 'b3', type: 'offense', num: 3, x: 304, y: 75 },
-      { kind: 'marker', id: 'b4', type: 'offense', num: 4, x: 196, y: 135 },
-      { kind: 'marker', id: 'b5', type: 'offense', num: 5, x: 304, y: 135 },
-      { kind: 'line', id: 'bl1', type: 'movement', x1: 304, y1: 75, x2: 420, y2: 180 },
-      { kind: 'line', id: 'bl2', type: 'movement', x1: 196, y1: 75, x2: 80, y2: 180 },
-      { kind: 'line', id: 'bl3', type: 'pass', x1: 250, y1: 12, x2: 304, y2: 75 },
-    ],
-  },
-]
-
 // ─── Half Court SVG ───────────────────────────────────────────────────────────
 
 function HalfCourt() {
@@ -274,12 +227,12 @@ export default function FormulaDrawPage() {
   const [linePreview, setLinePreview] = useState<{ x: number; y: number } | null>(null)
 
   const [savedPlays, setSavedPlays] = useState<SavedPlay[]>(() => {
-    if (typeof window === 'undefined') return SAMPLE_PLAYS
+    if (typeof window === 'undefined') return []
     try {
       const stored = localStorage.getItem('formulaDraw')
-      return stored ? JSON.parse(stored) : SAMPLE_PLAYS
+      return stored ? JSON.parse(stored) : []
     } catch {
-      return SAMPLE_PLAYS
+      return []
     }
   })
 

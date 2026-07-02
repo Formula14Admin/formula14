@@ -11,7 +11,7 @@ import {
   ACCENT, INPUT, LABEL,
   EMPLOYMENT_LABELS, STATUS_COLORS, DOC_TYPE_LABELS, DOC_STATUS_COLORS,
   uid, initials, avatarColor, maskSensitive, fmtDate, fmtDateShort, fmtMoney,
-  getStaffSessions, INIT_PAY_RUNS,
+  getStaffSessions, loadPayRuns,
 } from './_shared'
 
 // ─── Staff Card ───────────────────────────────────────────────────────────────
@@ -304,7 +304,7 @@ export function StaffDetailPanel({
   const [saved, setSaved] = useState(false)
   const color = avatarColor(`${member.firstName} ${member.lastName}`)
   const sessions = getStaffSessions(member.id)
-  const payHistory = INIT_PAY_RUNS.flatMap(r => r.entries.filter(e => e.staffId === member.id).map(e => ({ ...e, periodLabel: r.periodLabel, status: r.status, processedDate: r.processedDate })))
+  const payHistory = loadPayRuns().flatMap(r => r.entries.filter(e => e.staffId === member.id).map(e => ({ ...e, periodLabel: r.periodLabel, status: r.status, processedDate: r.processedDate })))
 
   function saveNotes() {
     onSaveNotes(member.id, notes)

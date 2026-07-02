@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import { supabase } from '@/lib/supabase'
 import {
   IconPlus, IconX, IconTrash, IconCheck, IconTag,
   IconCalendar, IconDotsVertical, IconArrowLeft,
@@ -99,88 +100,11 @@ function dueDateStyle(iso: string) {
   return { color: '#6b7280', bg: '#f3f4f6' }
 }
 
-// ─── Sample data ──────────────────────────────────────────────────────────────
+// ─── Card factory ─────────────────────────────────────────────────────────────
 
 function mk(o: Pick<KanbanCard,'id'|'title'> & Partial<KanbanCard>): KanbanCard {
-  return { description:'', labelIds:[], assignee:'', dueDate:'', priority:'medium', createdAt:'2026-06-01', ...o }
+  return { description:'', labelIds:[], assignee:'', dueDate:'', priority:'medium', createdAt: new Date().toISOString().split('T')[0], ...o }
 }
-
-const INIT_BOARDS: KanbanBoard[] = [
-  {
-    id:'b1', title:'Season Planning', color:'#6BA3D6',
-    description:'High-level planning for the training season, camps, and programs.',
-    createdAt:'2026-04-01',
-    columns:[
-      { id:'c1-1', title:'Ideas', color:'#f1f3f5', cards:[
-        mk({ id:'k11', title:'Design pre-season testing protocol', priority:'medium', labelIds:['l1'], assignee:'Matt Brasser' }),
-        mk({ id:'k12', title:'Research strength & conditioning methods', priority:'low', labelIds:['l3'] }),
-        mk({ id:'k13', title:'Create end-of-season review template', priority:'medium', labelIds:['l4'] }),
-      ]},
-      { id:'c1-2', title:'Planned', color:'#dbeafe', cards:[
-        mk({ id:'k14', title:'Book venue for July winter camp', priority:'high', dueDate:'2026-07-01', assignee:'Matt Brasser' }),
-        mk({ id:'k15', title:'Design skills assessment rubric', priority:'medium', labelIds:['l1'] }),
-        mk({ id:'k16', title:'Plan team bonding event', priority:'low', dueDate:'2026-07-15' }),
-      ]},
-      { id:'c1-3', title:'In Progress', color:'#fef3c7', cards:[
-        mk({ id:'k17', title:'Develop Q3 training schedule', priority:'high', labelIds:['l1'], assignee:'Matt Brasser', dueDate:'2026-06-30' }),
-        mk({ id:'k18', title:'Organise rep trials program', priority:'urgent', labelIds:['l7'], assignee:'Matt Brasser', dueDate:'2026-06-25' }),
-      ]},
-      { id:'c1-4', title:'Done', color:'#dcfce7', cards:[
-        mk({ id:'k19', title:'Complete summer training wrap-up', priority:'medium', assignee:'Matt Brasser', createdAt:'2026-05-01' }),
-        mk({ id:'k1a', title:'Onboard new athletes — June cohort', priority:'high', assignee:'Jade Brasser', createdAt:'2026-06-02' }),
-      ]},
-    ],
-  },
-  {
-    id:'b2', title:'Athlete Development', color:'#6BAD6B',
-    description:'Tracking individual athlete goals, skill targets, and development milestones.',
-    createdAt:'2026-04-15',
-    columns:[
-      { id:'c2-1', title:'Identified', color:'#f1f3f5', cards:[
-        mk({ id:'k21', title:'Jordan — defensive positioning', priority:'high', labelIds:['l2'], assignee:'Matt Brasser' }),
-        mk({ id:'k22', title:'Kai — left-hand drive development', priority:'medium', labelIds:['l2'] }),
-        mk({ id:'k23', title:'Sam — post footwork fundamentals', priority:'low', labelIds:['l2'] }),
-      ]},
-      { id:'c2-2', title:'Goal Set', color:'#dbeafe', cards:[
-        mk({ id:'k24', title:'Aisha — shooting off the dribble', priority:'high', labelIds:['l2'], dueDate:'2026-08-01', assignee:'Jade Brasser',
-          description:'Focus on pull-up jumper and floater. Target: 40% from mid-range off the dribble.' }),
-        mk({ id:'k25', title:'Marcus — off-ball movement & cutting', priority:'high', labelIds:['l2'], assignee:'Matt Brasser' }),
-      ]},
-      { id:'c2-3', title:'In Progress', color:'#fef3c7', cards:[
-        mk({ id:'k26', title:'Liam — ball handling fundamentals', priority:'medium', labelIds:['l2','l1'], assignee:'Matt Brasser',
-          description:'6-week program targeting weak-hand dribbling and change of direction.' }),
-        mk({ id:'k27', title:'Priya — three-point range extension', priority:'medium', labelIds:['l1'], dueDate:'2026-07-01', assignee:'Jade Brasser' }),
-        mk({ id:'k28', title:'Tyler — mid-range pull-up', priority:'medium', labelIds:['l2'], assignee:'Jade Brasser' }),
-      ]},
-      { id:'c2-4', title:'Achieved', color:'#dcfce7', cards:[
-        mk({ id:'k29', title:'Devon — layup package (both hands)', priority:'medium', labelIds:['l2'], assignee:'Matt Brasser', createdAt:'2026-05-10' }),
-        mk({ id:'k2a', title:'Zara — basic defensive stance & slides', priority:'medium', labelIds:['l2'], assignee:'Jade Brasser', createdAt:'2026-05-20' }),
-      ]},
-    ],
-  },
-  {
-    id:'b3', title:'Facility & Ops', color:'#D4A843',
-    description:'Facility maintenance, equipment purchases, and operational tasks.',
-    createdAt:'2026-05-01',
-    columns:[
-      { id:'c3-1', title:'To Do', color:'#f1f3f5', cards:[
-        mk({ id:'k31', title:'Replace court boundary tape', priority:'high', labelIds:['l5'], dueDate:'2026-06-30', assignee:'Matt Brasser' }),
-        mk({ id:'k32', title:'Service HVAC system', priority:'urgent', labelIds:['l6','l7'], dueDate:'2026-06-20' }),
-        mk({ id:'k33', title:'Order new training bibs (×20)', priority:'medium', labelIds:['l5'], assignee:'Matt Brasser' }),
-        mk({ id:'k34', title:'Install additional storage shelving', priority:'low', labelIds:['l6'] }),
-      ]},
-      { id:'c3-2', title:'In Progress', color:'#fef3c7', cards:[
-        mk({ id:'k35', title:'Update facility safety signage', priority:'high', labelIds:['l6'], assignee:'Jade Brasser' }),
-        mk({ id:'k36', title:'Repair scoreboard display', priority:'medium', labelIds:['l5'] }),
-      ]},
-      { id:'c3-3', title:'Done', color:'#dcfce7', cards:[
-        mk({ id:'k37', title:'Deep clean of changerooms', priority:'medium', labelIds:['l6'], assignee:'Jade Brasser', createdAt:'2026-06-01' }),
-        mk({ id:'k38', title:'Purchase new ball bag', priority:'low', labelIds:['l5'], createdAt:'2026-05-20' }),
-        mk({ id:'k39', title:'Renew public liability insurance', priority:'urgent', labelIds:['l7','l4'], assignee:'Matt Brasser', createdAt:'2026-05-15' }),
-      ]},
-    ],
-  },
-]
 
 // ─── Add-card inline form ─────────────────────────────────────────────────────
 
@@ -522,16 +446,35 @@ function BoardView({ board, onUpdate, onDelete, onBack }: {
 
   function mutate(fn: (b: KanbanBoard) => KanbanBoard) { onUpdate(fn(board)) }
 
-  function addCard(colId: string, title: string) {
+  async function persistColumns(updatedBoard: KanbanBoard) {
+    const colDefs = updatedBoard.columns.map(({ id, title, color, limit }) => ({ id, title, color, ...(limit !== undefined ? { limit } : {}) }))
+    await supabase.from('boards').update({
+      columns: { boardColor: updatedBoard.color, boardDescription: updatedBoard.description, cols: colDefs },
+    }).eq('id', updatedBoard.id)
+  }
+
+  async function addCard(colId: string, title: string) {
+    const { data } = await supabase.from('board_tasks').insert({
+      board_id: board.id, title, description: '', status: colId,
+    }).select('id, created_at').single()
+    const row = data as { id: string; created_at: string } | null
+    const newCard = mk({
+      id: row?.id ?? uid(),
+      title,
+      createdAt: row?.created_at?.split('T')[0] ?? new Date().toISOString().split('T')[0],
+    })
     mutate(b => ({
       ...b,
-      columns: b.columns.map(c => c.id !== colId ? c : {
-        ...c, cards: [...c.cards, mk({ id: uid(), title, createdAt: new Date().toISOString().split('T')[0] })]
-      })
+      columns: b.columns.map(c => c.id !== colId ? c : { ...c, cards: [...c.cards, newCard] })
     }))
   }
 
-  function updateCard(colId: string, cardId: string, patch: Partial<KanbanCard>) {
+  async function updateCard(colId: string, cardId: string, patch: Partial<KanbanCard>) {
+    await supabase.from('board_tasks').update({
+      ...(patch.title       !== undefined && { title: patch.title }),
+      ...(patch.description !== undefined && { description: patch.description }),
+      ...(patch.dueDate     !== undefined && { due_date: patch.dueDate || null }),
+    }).eq('id', cardId)
     mutate(b => ({
       ...b,
       columns: b.columns.map(c => c.id !== colId ? c : {
@@ -541,8 +484,9 @@ function BoardView({ board, onUpdate, onDelete, onBack }: {
     setSelectedCard(p => p?.card.id === cardId ? { ...p, card: { ...p.card, ...patch } } : p)
   }
 
-  function moveCard(cardId: string, fromColId: string, toColId: string) {
+  async function moveCard(cardId: string, fromColId: string, toColId: string) {
     if (fromColId === toColId) return
+    await supabase.from('board_tasks').update({ status: toColId }).eq('id', cardId)
     mutate(b => {
       const moving = b.columns.find(c => c.id === fromColId)?.cards.find(k => k.id === cardId)
       if (!moving) return b
@@ -557,21 +501,30 @@ function BoardView({ board, onUpdate, onDelete, onBack }: {
     })
   }
 
-  function deleteCard(colId: string, cardId: string) {
+  async function deleteCard(colId: string, cardId: string) {
+    await supabase.from('board_tasks').delete().eq('id', cardId)
     mutate(b => ({ ...b, columns: b.columns.map(c => c.id !== colId ? c : { ...c, cards: c.cards.filter(k => k.id !== cardId) }) }))
     setSelectedCard(null)
   }
 
-  function addColumn(title: string) {
-    mutate(b => ({ ...b, columns: [...b.columns, { id: uid(), title, color: '#f1f3f5', cards: [] }] }))
+  async function addColumn(title: string) {
+    const newCol: KanbanColumn = { id: uid(), title, color: '#f1f3f5', cards: [] }
+    const updatedBoard: KanbanBoard = { ...board, columns: [...board.columns, newCol] }
+    onUpdate(updatedBoard)
+    await persistColumns(updatedBoard)
   }
 
-  function deleteColumn(colId: string) {
-    mutate(b => ({ ...b, columns: b.columns.filter(c => c.id !== colId) }))
+  async function deleteColumn(colId: string) {
+    await supabase.from('board_tasks').delete().eq('board_id', board.id).eq('status', colId)
+    const updatedBoard: KanbanBoard = { ...board, columns: board.columns.filter(c => c.id !== colId) }
+    onUpdate(updatedBoard)
+    await persistColumns(updatedBoard)
   }
 
-  function renameColumn(colId: string, title: string) {
-    mutate(b => ({ ...b, columns: b.columns.map(c => c.id !== colId ? c : { ...c, title }) }))
+  async function renameColumn(colId: string, title: string) {
+    const updatedBoard: KanbanBoard = { ...board, columns: board.columns.map(c => c.id !== colId ? c : { ...c, title }) }
+    onUpdate(updatedBoard)
+    await persistColumns(updatedBoard)
   }
 
   const totalCards = board.columns.reduce((s, c) => s + c.cards.length, 0)
@@ -800,31 +753,83 @@ function BoardCard({ board, onClick }: { board: KanbanBoard; onClick: () => void
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function BoardsPage() {
-  const [boards, setBoards]           = useState<KanbanBoard[]>(() => {
-    if (typeof window === 'undefined') return []
-    try { const r = localStorage.getItem('f14_boards'); return r ? JSON.parse(r) : [] } catch { return [] }
-  })
+  const [boards, setBoards]           = useState<KanbanBoard[]>([])
   const [currentBoardId, setBoard]    = useState<string | null>(null)
   const [showNew, setShowNew]         = useState(false)
 
   useEffect(() => {
-    if (typeof window === 'undefined') return
-    localStorage.setItem('f14_boards', JSON.stringify(boards))
-  }, [boards])
+    void (async () => {
+      try {
+        const { data: boardRows } = await supabase.from('boards').select('*').order('created_at')
+        const { data: taskRows  } = await supabase.from('board_tasks').select('*').order('created_at')
+        if (boardRows) {
+          type ColDef = { id: string; title: string; color: string; limit?: number }
+          type ColsJson = { boardColor?: string; boardDescription?: string; cols?: ColDef[] }
+          type TaskRow = { id: string; board_id: string; title: string; description: string; status: string; due_date: string; created_at: string }
+          const loaded: KanbanBoard[] = (boardRows as unknown[]).map(rawRow => {
+            const row = rawRow as { id: string; name: string; columns: unknown; created_at: string }
+            const colsJson = row.columns as ColsJson | null
+            const colDefs  = colsJson?.cols ?? []
+            const boardColor = colsJson?.boardColor ?? BOARD_COLORS[0]
+            const boardDescription = colsJson?.boardDescription ?? ''
+            const boardTasks = ((taskRows ?? []) as unknown[] as TaskRow[]).filter(t => t.board_id === row.id)
+            const columns: KanbanColumn[] = colDefs.map(col => ({
+              id: col.id,
+              title: col.title,
+              color: col.color,
+              limit: col.limit,
+              cards: boardTasks
+                .filter(t => t.status === col.id)
+                .map(t => ({
+                  id: t.id,
+                  title: t.title ?? '',
+                  description: t.description ?? '',
+                  labelIds: [],
+                  assignee: '',
+                  dueDate: t.due_date ?? '',
+                  priority: 'medium' as Priority,
+                  createdAt: t.created_at?.split('T')[0] ?? '',
+                })),
+            }))
+            return {
+              id: row.id,
+              title: row.name ?? '',
+              description: boardDescription,
+              color: boardColor,
+              columns,
+              createdAt: row.created_at?.split('T')[0] ?? '',
+            }
+          })
+          setBoards(loaded)
+        }
+      } catch (e) { console.error('[boards] load failed:', e) }
+    })()
+  }, [])
 
   const currentBoard = boards.find(b => b.id === currentBoardId) ?? null
 
   function updateBoard(updated: KanbanBoard) {
     setBoards(p => p.map(b => b.id === updated.id ? updated : b))
   }
-  function deleteBoard(id: string) {
+  async function deleteBoard(id: string) {
+    await supabase.from('board_tasks').delete().eq('board_id', id)
+    await supabase.from('boards').delete().eq('id', id)
     setBoards(p => p.filter(b => b.id !== id))
     setBoard(null)
   }
-  function addBoard(b: KanbanBoard) {
-    setBoards(p => [...p, b])
-    setShowNew(false)
-    setBoard(b.id)
+  async function addBoard(b: KanbanBoard) {
+    const colDefs = b.columns.map(({ id, title, color, limit }) => ({ id, title, color, ...(limit !== undefined ? { limit } : {}) }))
+    const { data } = await supabase.from('boards').insert({
+      name: b.title,
+      columns: { boardColor: b.color, boardDescription: b.description, cols: colDefs },
+    }).select().single()
+    if (data) {
+      const row = data as { id: string; created_at: string }
+      const newBoard: KanbanBoard = { ...b, id: row.id, createdAt: row.created_at?.split('T')[0] ?? b.createdAt }
+      setBoards(p => [...p, newBoard])
+      setShowNew(false)
+      setBoard(newBoard.id)
+    }
   }
 
   if (currentBoard) {
@@ -870,6 +875,14 @@ export default function BoardsPage() {
             </div>
           ))}
         </div>
+
+        {boards.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <svg className="mb-3 h-12 w-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 0v10m0-10a2 2 0 012 2h2a2 2 0 012-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2z" /></svg>
+            <p className="text-sm font-semibold text-gray-400">No boards yet</p>
+            <p className="mt-1 text-xs text-gray-400">Click &apos;New Board&apos; to get started</p>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {boards.map(b => <BoardCard key={b.id} board={b} onClick={() => setBoard(b.id)} />)}
