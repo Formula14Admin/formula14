@@ -50,145 +50,27 @@ const SMART_LISTS = [
   { id: 'planned',   label: 'Planned',   color: '#6BA3D6' },
 ]
 
-const DEFAULT_LISTS: TaskList[] = [
-  { id: 'tasks',  name: 'Tasks',             color: '#6BA3D6' },
-  { id: 'admin',  name: 'Formula14 Admin',   color: '#8b5cf6' },
-  { id: 'coaching', name: 'Coaching',        color: '#10b981' },
-  { id: 'personal', name: 'Personal',        color: '#ec4899' },
-]
-
 function uid() { return Math.random().toString(36).slice(2, 10) }
-
-const DEFAULT_TASKS: Task[] = [
-  // Tasks (default)
-  {
-    id: 'tk1', title: 'Review athlete performance assessments',
-    completed: false, important: false, myDay: false, dueDate: null, notes: '', steps: [],
-    listId: 'tasks', createdAt: '2026-06-20T08:00:00',
-  },
-  {
-    id: 'tk2', title: 'Set up new athlete onboarding form',
-    completed: false, important: false, myDay: false, dueDate: '2026-06-28', notes: '', steps: [],
-    listId: 'tasks', createdAt: '2026-06-21T09:00:00',
-  },
-
-  // Formula14 Admin
-  {
-    id: 'ad1', title: 'Order new basketballs (×6)',
-    completed: false, important: false, myDay: false, dueDate: '2026-06-27', notes: 'Contact supplier — Spalding preferred', steps: [],
-    listId: 'admin', createdAt: '2026-06-22T10:00:00',
-  },
-  {
-    id: 'ad2', title: 'Send outstanding invoice reminders',
-    completed: false, important: true, myDay: true, dueDate: null, notes: '3 invoices still pending from June billing run', steps: [],
-    listId: 'admin', createdAt: '2026-06-23T07:30:00',
-  },
-  {
-    id: 'ad3', title: 'Book facility for July training camp',
-    completed: false, important: false, myDay: false, dueDate: '2026-06-30', notes: '', steps: [
-      { id: 's1', title: 'Check availability with venue', completed: true },
-      { id: 's2', title: 'Get quote from Oakleigh facility', completed: false },
-      { id: 's3', title: 'Confirm dates with athletes', completed: false },
-    ],
-    listId: 'admin', createdAt: '2026-06-20T11:00:00',
-  },
-  {
-    id: 'ad4', title: 'Renew public liability insurance',
-    completed: false, important: true, myDay: false, dueDate: '2026-07-01', notes: 'Annual renewal due. Contact broker for updated quote.', steps: [],
-    listId: 'admin', createdAt: '2026-06-18T09:00:00',
-  },
-  {
-    id: 'ad5', title: 'Prep Q2 financial report for accountant',
-    completed: false, important: true, myDay: true, dueDate: '2026-06-30', notes: 'Include Bookkeeping export + summary of outstanding payments', steps: [],
-    listId: 'admin', createdAt: '2026-06-24T08:00:00',
-  },
-  {
-    id: 'ad6', title: 'Update athlete contracts (July renewals)',
-    completed: false, important: false, myDay: false, dueDate: null, notes: '', steps: [],
-    listId: 'admin', createdAt: '2026-06-19T10:00:00',
-  },
-  {
-    id: 'ad7', title: 'Send June invoice to Aisha Thompson',
-    completed: true, important: false, myDay: false, dueDate: null, notes: '', steps: [],
-    listId: 'admin', createdAt: '2026-06-10T09:00:00',
-  },
-
-  // Coaching
-  {
-    id: 'co1', title: 'Prepare Elite Training session plan',
-    completed: false, important: true, myDay: true, dueDate: null, notes: 'Focus: transition offence + defensive rotations', steps: [
-      { id: 'cs1', title: 'Review last session notes', completed: true },
-      { id: 'cs2', title: 'Draft drill sequence', completed: false },
-      { id: 'cs3', title: 'Print session plan', completed: false },
-    ],
-    listId: 'coaching', createdAt: '2026-06-24T07:00:00',
-  },
-  {
-    id: 'co2', title: 'Film session analysis — Marcus Davies',
-    completed: false, important: false, myDay: true, dueDate: null, notes: '', steps: [],
-    listId: 'coaching', createdAt: '2026-06-23T15:00:00',
-  },
-  {
-    id: 'co3', title: 'Plan week 3 program for Liam Carr',
-    completed: false, important: false, myDay: false, dueDate: '2026-06-27', notes: '', steps: [],
-    listId: 'coaching', createdAt: '2026-06-22T11:00:00',
-  },
-  {
-    id: 'co4', title: 'Call Jordan W. re: training schedule change',
-    completed: false, important: false, myDay: true, dueDate: null, notes: '', steps: [],
-    listId: 'coaching', createdAt: '2026-06-24T08:30:00',
-  },
-  {
-    id: 'co5', title: 'Create new shooting drill variations',
-    completed: false, important: false, myDay: false, dueDate: null, notes: 'Ideas: corner threes, mid-range off the dribble', steps: [],
-    listId: 'coaching', createdAt: '2026-06-21T14:00:00',
-  },
-  {
-    id: 'co6', title: 'Update athlete progress reports — June',
-    completed: false, important: false, myDay: false, dueDate: '2026-06-28', notes: '', steps: [],
-    listId: 'coaching', createdAt: '2026-06-23T09:00:00',
-  },
-  {
-    id: 'co7', title: 'Update website with new session times',
-    completed: true, important: false, myDay: false, dueDate: null, notes: '', steps: [],
-    listId: 'coaching', createdAt: '2026-06-15T10:00:00',
-  },
-
-  // Personal
-  {
-    id: 'pe1', title: 'Book physio appointment',
-    completed: false, important: false, myDay: false, dueDate: '2026-06-26', notes: '', steps: [],
-    listId: 'personal', createdAt: '2026-06-22T09:00:00',
-  },
-  {
-    id: 'pe2', title: 'Renew coaching certification (Basketball Aus)',
-    completed: false, important: true, myDay: false, dueDate: '2026-07-15', notes: 'Complete Level 2 online modules before expiry', steps: [],
-    listId: 'personal', createdAt: '2026-06-20T10:00:00',
-  },
-  {
-    id: 'pe3', title: 'Pay quarterly BAS',
-    completed: false, important: true, myDay: false, dueDate: '2026-07-28', notes: '', steps: [],
-    listId: 'personal', createdAt: '2026-06-24T10:00:00',
-  },
-  {
-    id: 'pe4', title: 'Organise end-of-term team dinner',
-    completed: false, important: false, myDay: false, dueDate: null, notes: '', steps: [],
-    listId: 'personal', createdAt: '2026-06-23T12:00:00',
-  },
-]
 
 // ─── localStorage helpers ──────────────────────────────────────────────────────
 
 const TASKS_KEY = 'f14_todo_tasks'
 const LISTS_KEY = 'f14_todo_lists'
+const FLUSH_KEY = 'f14_todo_flushed_v2'
 
 function loadTasks(): Task[] {
-  if (typeof window === 'undefined') return DEFAULT_TASKS
-  try { const s = localStorage.getItem(TASKS_KEY); return s ? JSON.parse(s) : DEFAULT_TASKS } catch { return DEFAULT_TASKS }
+  if (typeof window === 'undefined') return []
+  // One-time migration: clear any seed data written by old code versions
+  if (!localStorage.getItem(FLUSH_KEY)) {
+    localStorage.removeItem(TASKS_KEY)
+    localStorage.removeItem(LISTS_KEY)
+    localStorage.setItem(FLUSH_KEY, '1')
+  }
+  try { const s = localStorage.getItem(TASKS_KEY); return s ? JSON.parse(s) : [] } catch { return [] }
 }
 function loadLists(): TaskList[] {
-  if (typeof window === 'undefined') return DEFAULT_LISTS
-  try { const s = localStorage.getItem(LISTS_KEY); return s ? JSON.parse(s) : DEFAULT_LISTS } catch { return DEFAULT_LISTS }
+  if (typeof window === 'undefined') return []
+  try { const s = localStorage.getItem(LISTS_KEY); return s ? JSON.parse(s) : [] } catch { return [] }
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
