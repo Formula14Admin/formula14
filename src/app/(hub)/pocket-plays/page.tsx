@@ -50,53 +50,6 @@ const COURT_H = 470
 const BLUE = '#6BA3D6'
 const CATEGORIES = ['Offence', 'Defence', 'Out of Bounds', 'Press Break', 'Special Situations']
 
-const SAMPLE_PLAYS: SavedPlay[] = [
-  {
-    id: 'horns',
-    name: 'Horns Set',
-    category: 'Offence',
-    elements: [
-      { kind: 'marker', id: 'h1', type: 'offense', num: 1, x: 250, y: 295 },
-      { kind: 'marker', id: 'h2', type: 'offense', num: 2, x: 420, y: 340 },
-      { kind: 'marker', id: 'h3', type: 'offense', num: 3, x: 80, y: 340 },
-      { kind: 'marker', id: 'h4', type: 'offense', num: 4, x: 330, y: 195 },
-      { kind: 'marker', id: 'h5', type: 'offense', num: 5, x: 170, y: 195 },
-      { kind: 'marker', id: 'hb', type: 'ball', x: 250, y: 295 },
-      { kind: 'line', id: 'hl1', type: 'movement', x1: 250, y1: 295, x2: 330, y2: 195 },
-      { kind: 'line', id: 'hl2', type: 'pass', x1: 250, y1: 295, x2: 330, y2: 195 },
-      { kind: 'line', id: 'hl3', type: 'movement', x1: 170, y1: 195, x2: 80, y2: 310 },
-      { kind: 'line', id: 'hl4', type: 'movement', x1: 330, y1: 195, x2: 420, y2: 310 },
-    ],
-  },
-  {
-    id: 'zone131',
-    name: '1-3-1 Zone',
-    category: 'Defence',
-    elements: [
-      { kind: 'marker', id: 'z1', type: 'defense', num: 1, x: 250, y: 310 },
-      { kind: 'marker', id: 'z2', type: 'defense', num: 2, x: 75, y: 225 },
-      { kind: 'marker', id: 'z3', type: 'defense', num: 3, x: 250, y: 210 },
-      { kind: 'marker', id: 'z4', type: 'defense', num: 4, x: 425, y: 225 },
-      { kind: 'marker', id: 'z5', type: 'defense', num: 5, x: 250, y: 90 },
-    ],
-  },
-  {
-    id: 'box-oob',
-    name: 'Box Out of Bounds',
-    category: 'Out of Bounds',
-    elements: [
-      { kind: 'marker', id: 'b1', type: 'offense', num: 1, x: 250, y: 12 },
-      { kind: 'marker', id: 'b2', type: 'offense', num: 2, x: 196, y: 75 },
-      { kind: 'marker', id: 'b3', type: 'offense', num: 3, x: 304, y: 75 },
-      { kind: 'marker', id: 'b4', type: 'offense', num: 4, x: 196, y: 135 },
-      { kind: 'marker', id: 'b5', type: 'offense', num: 5, x: 304, y: 135 },
-      { kind: 'line', id: 'bl1', type: 'movement', x1: 304, y1: 75, x2: 420, y2: 180 },
-      { kind: 'line', id: 'bl2', type: 'movement', x1: 196, y1: 75, x2: 80, y2: 180 },
-      { kind: 'line', id: 'bl3', type: 'pass', x1: 250, y1: 12, x2: 304, y2: 75 },
-    ],
-  },
-]
-
 // ─── Half Court SVG ───────────────────────────────────────────────────────────
 
 function HalfCourt() {
@@ -274,12 +227,12 @@ export default function PocketPlaysPage() {
   const [linePreview, setLinePreview] = useState<{ x: number; y: number } | null>(null)
 
   const [savedPlays, setSavedPlays] = useState<SavedPlay[]>(() => {
-    if (typeof window === 'undefined') return SAMPLE_PLAYS
+    if (typeof window === 'undefined') return [] as SavedPlay[]
     try {
       const stored = localStorage.getItem('pocketPlays')
-      return stored ? JSON.parse(stored) : SAMPLE_PLAYS
+      return stored ? JSON.parse(stored) : [] as SavedPlay[]
     } catch {
-      return SAMPLE_PLAYS
+      return [] as SavedPlay[]
     }
   })
 
@@ -669,7 +622,13 @@ export default function PocketPlaysPage() {
           {/* Plays list */}
           <div className="flex-1 overflow-y-auto">
             {filteredPlays.length === 0 ? (
-              <p className="px-4 py-6 text-center text-xs text-gray-400">No plays yet</p>
+              <div className="flex flex-col items-center justify-center py-20 text-center">
+                <svg className="mb-3 h-12 w-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <p className="text-sm font-semibold text-gray-400">No plays saved yet</p>
+                <p className="mt-1 text-xs text-gray-400">Save plays from Formula Draw to see them here</p>
+              </div>
             ) : (
               filteredPlays.map((play) => (
                 <div

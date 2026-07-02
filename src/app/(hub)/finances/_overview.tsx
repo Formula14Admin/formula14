@@ -3,10 +3,10 @@
 import { useMemo } from 'react'
 import {
   IconTrendingUp, IconTrendingDown, IconCurrencyDollar, IconReceipt,
-  IconCalendar, IconUsers, IconChartPie, IconPaperclip, IconAlertTriangle,
+  IconCalendar, IconChartPie, IconPaperclip, IconAlertTriangle,
 } from '@tabler/icons-react'
 import {
-  Transaction, INCOME_CATS, EXPENSE_CATS, CHART_HISTORY,
+  Transaction, INCOME_CATS, EXPENSE_CATS,
   StatCard, CatBadge, RevPieChart, fmtMoney, fmtK, fmtDateShort,
   monthTotal, ACCENT,
 } from './_shared'
@@ -23,8 +23,7 @@ export function OverviewTab({ transactions }: { transactions: Transaction[] }) {
   const mayExpenses = useMemo(() => monthTotal(transactions, PREV_YM, 'expense'),     [transactions])
 
   const ytdIncome = useMemo(() => {
-    const hist = CHART_HISTORY.reduce((s, m) => s + m.income, 0)
-    return hist + monthTotal(transactions, '2026-05', 'income') + monthTotal(transactions, '2026-06', 'income')
+    return transactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)
   }, [transactions])
 
   // Weekly membership average this month
@@ -35,7 +34,7 @@ export function OverviewTab({ transactions }: { transactions: Transaction[] }) {
     return Math.round(total / 3)
   }, [transactions])
 
-  // Revenue pie — derived from June transactions
+  // Revenue pie — derived from current month transactions
   const revPie = useMemo(() => {
     const map: Record<string, number> = {}
     transactions.filter(t => t.date.startsWith(CURRENT_YM) && t.type === 'income')
@@ -45,7 +44,7 @@ export function OverviewTab({ transactions }: { transactions: Transaction[] }) {
       .filter(d => d.value > 0)
   }, [transactions])
 
-  // Expense pie — derived from June transactions
+  // Expense pie — derived from current month transactions
   const expPie = useMemo(() => {
     const map: Record<string, number> = {}
     transactions.filter(t => t.date.startsWith(CURRENT_YM) && t.type === 'expense')
@@ -71,7 +70,7 @@ export function OverviewTab({ transactions }: { transactions: Transaction[] }) {
 
   const health = [
     { label: 'Membership Retention',   value: '87%',   color: '#10b981' },
-    { label: 'Avg Revenue / Athlete',  value: fmtK(Math.round(junIncome / 24)),  color: ACCENT },
+    { label: 'Avg Revenue / Athlete',  value: junIncome > 0 ? fmtK(Math.round(junIncome / 24)) : '—',  color: ACCENT },
     { label: 'Sessions / Week (avg)',  value: '5.4',   color: '#8b5cf6' },
     { label: 'Outstanding Debt',       value: '$2,419',color: '#f59e0b' },
   ]
@@ -86,7 +85,7 @@ export function OverviewTab({ transactions }: { transactions: Transaction[] }) {
         <StatCard icon={<IconChartPie size={16}/>}        label="Net Profit (Jun)"      value={fmtMoney(junNet)}      sub="Partial month" color="#10b981" />
         <StatCard icon={<IconReceipt size={16}/>}         label="Outstanding Invoices"  value="$2,419"                sub="3 invoices pending" color="#f59e0b" />
         <StatCard icon={<IconCalendar size={16}/>}        label="Weekly Membership Rev" value={fmtMoney(weeklyMembership)} sub="Recurring weekly" color="#8b5cf6" />
-        <StatCard icon={<IconCurrencyDollar size={16}/>}  label="Year to Date Revenue"  value={fmtK(ytdIncome)}       sub="Jul 2025 – Jun 2026" />
+        <StatCard icon={<IconCurrencyDollar size={16}/>}  label="Year to Date Revenue"  value={fmtK(ytdIncome)}       sub="All recorded transactions" />
       </div>
 
       {/* Receipt documentation card */}
@@ -145,42 +144,50 @@ export function OverviewTab({ transactions }: { transactions: Transaction[] }) {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div className="rounded-xl bg-white p-5 shadow-sm">
           <h2 className="mb-4 text-sm font-bold text-gray-900">Revenue Breakdown <span className="font-normal text-gray-400">— Jun 2026</span></h2>
-          <div className="flex items-center gap-4">
-            <div className="w-1/2">
-              <RevPieChart data={revPie} />
-            </div>
-            <div className="flex-1 space-y-1.5">
-              {revPie.map(d => (
-                <div key={d.name} className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-1.5">
-                    <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: d.color }} />
-                    <span className="text-xs text-gray-600">{d.name}</span>
+          {revPie.length === 0 ? (
+            <div className="flex h-[200px] items-center justify-center text-sm text-gray-400">No revenue recorded yet</div>
+          ) : (
+            <div className="flex items-center gap-4">
+              <div className="w-1/2">
+                <RevPieChart data={revPie} />
+              </div>
+              <div className="flex-1 space-y-1.5">
+                {revPie.map(d => (
+                  <div key={d.name} className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: d.color }} />
+                      <span className="text-xs text-gray-600">{d.name}</span>
+                    </div>
+                    <span className="text-xs font-semibold text-gray-800">{fmtMoney(d.value)}</span>
                   </div>
-                  <span className="text-xs font-semibold text-gray-800">{fmtMoney(d.value)}</span>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         <div className="rounded-xl bg-white p-5 shadow-sm">
           <h2 className="mb-4 text-sm font-bold text-gray-900">Expense Breakdown <span className="font-normal text-gray-400">— Jun 2026</span></h2>
-          <div className="flex items-center gap-4">
-            <div className="w-1/2">
-              <RevPieChart data={expPie} />
-            </div>
-            <div className="flex-1 space-y-1.5">
-              {expPie.map(d => (
-                <div key={d.name} className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-1.5">
-                    <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: d.color }} />
-                    <span className="text-xs text-gray-600">{d.name}</span>
+          {expPie.length === 0 ? (
+            <div className="flex h-[200px] items-center justify-center text-sm text-gray-400">No expenses recorded yet</div>
+          ) : (
+            <div className="flex items-center gap-4">
+              <div className="w-1/2">
+                <RevPieChart data={expPie} />
+              </div>
+              <div className="flex-1 space-y-1.5">
+                {expPie.map(d => (
+                  <div key={d.name} className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: d.color }} />
+                      <span className="text-xs text-gray-600">{d.name}</span>
+                    </div>
+                    <span className="text-xs font-semibold text-gray-800">{fmtMoney(d.value)}</span>
                   </div>
-                  <span className="text-xs font-semibold text-gray-800">{fmtMoney(d.value)}</span>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
 
@@ -190,35 +197,39 @@ export function OverviewTab({ transactions }: { transactions: Transaction[] }) {
           <h2 className="text-sm font-bold text-gray-900">Recent Transactions</h2>
           <p className="text-xs text-gray-400">Latest 8 entries across all periods</p>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[540px] text-sm">
-            <thead style={{ backgroundColor: '#f8fafc' }}>
-              <tr>
-                {['Date', 'Description', 'Category', 'Amount', 'Type'].map(h => (
-                  <th key={h} className="border-b border-gray-100 px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wide text-gray-400">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {recent.map(t => (
-                <tr key={t.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50">
-                  <td className="px-4 py-3 text-xs text-gray-500">{fmtDateShort(t.date)}</td>
-                  <td className="px-4 py-3 font-medium text-gray-800 max-w-[260px] truncate">{t.description}</td>
-                  <td className="px-4 py-3"><CatBadge cat={t.category} /></td>
-                  <td className="px-4 py-3 font-bold" style={{ color: t.type === 'income' ? '#15803d' : '#ef4444' }}>
-                    {t.type === 'income' ? '+' : '−'}{fmtMoney(t.amount)}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="rounded-full px-2 py-0.5 text-[11px] font-semibold"
-                      style={t.type === 'income' ? { background: '#dcfce7', color: '#15803d' } : { background: '#fee2e2', color: '#ef4444' }}>
-                      {t.type === 'income' ? 'Income' : 'Expense'}
-                    </span>
-                  </td>
+        {recent.length === 0 ? (
+          <div className="py-12 text-center text-sm text-gray-400">No transactions yet — add your first entry</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[540px] text-sm">
+              <thead style={{ backgroundColor: '#f8fafc' }}>
+                <tr>
+                  {['Date', 'Description', 'Category', 'Amount', 'Type'].map(h => (
+                    <th key={h} className="border-b border-gray-100 px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wide text-gray-400">{h}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {recent.map(t => (
+                  <tr key={t.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50">
+                    <td className="px-4 py-3 text-xs text-gray-500">{fmtDateShort(t.date)}</td>
+                    <td className="px-4 py-3 font-medium text-gray-800 max-w-[260px] truncate">{t.description}</td>
+                    <td className="px-4 py-3"><CatBadge cat={t.category} /></td>
+                    <td className="px-4 py-3 font-bold" style={{ color: t.type === 'income' ? '#15803d' : '#ef4444' }}>
+                      {t.type === 'income' ? '+' : '−'}{fmtMoney(t.amount)}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="rounded-full px-2 py-0.5 text-[11px] font-semibold"
+                        style={t.type === 'income' ? { background: '#dcfce7', color: '#15803d' } : { background: '#fee2e2', color: '#ef4444' }}>
+                        {t.type === 'income' ? 'Income' : 'Expense'}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Financial health */}

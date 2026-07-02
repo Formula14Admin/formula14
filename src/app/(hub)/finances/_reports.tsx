@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo } from 'react'
-import { Transaction, CHART_HISTORY, CASH_FLOW_DATA, MonthBarChart, CashFlowChart, fmtMoney, fmtK, monthTotal } from './_shared'
+import { Transaction, MonthBarChart, fmtK, monthTotal } from './_shared'
 
 const FY_MONTHS = [
   { month: 'Jul 2025', revenue: 7800,  expenses: 3400 },
@@ -10,15 +10,11 @@ const FY_MONTHS = [
   { month: 'Oct 2025', revenue: 9200,  expenses: 3550 },
   { month: 'Nov 2025', revenue: 9800,  expenses: 3700 },
   { month: 'Dec 2025', revenue: 6200,  expenses: 3400 },
-  // Jan–Apr come from CHART_HISTORY
 ]
 
 export function ReportsTab({ transactions }: { transactions: Transaction[] }) {
   const monthlyPnL = useMemo(() => {
-    const histRows = [
-      ...FY_MONTHS,
-      ...CHART_HISTORY.map(h => ({ month: `${h.label} 2026`, revenue: h.income, expenses: h.expenses })),
-    ]
+    const histRows = [...FY_MONTHS]
     const liveRows = [
       { month: 'May 2026', revenue: monthTotal(transactions, '2026-05', 'income'), expenses: monthTotal(transactions, '2026-05', 'expense') },
       { month: 'Jun 2026', revenue: monthTotal(transactions, '2026-06', 'income'), expenses: monthTotal(transactions, '2026-06', 'expense'), partial: true },
@@ -33,12 +29,13 @@ export function ReportsTab({ transactions }: { transactions: Transaction[] }) {
   }, [transactions])
 
   const chartData = useMemo(() => [
-    ...CHART_HISTORY,
     { label: 'May', ym: '2026-05', income: monthTotal(transactions, '2026-05', 'income'), expenses: monthTotal(transactions, '2026-05', 'expense') },
     { label: 'Jun', ym: '2026-06', income: monthTotal(transactions, '2026-06', 'income'), expenses: monthTotal(transactions, '2026-06', 'expense') },
   ], [transactions])
 
   const totals = monthlyPnL.reduce((a, m) => ({ revenue: a.revenue + m.revenue, expenses: a.expenses + m.expenses, net: a.net + m.net }), { revenue: 0, expenses: 0, net: 0 })
+
+  const hasChartData = chartData.some(d => d.income > 0 || d.expenses > 0)
 
   return (
     <div className="space-y-6">
@@ -47,13 +44,19 @@ export function ReportsTab({ transactions }: { transactions: Transaction[] }) {
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         <div className="rounded-xl bg-white p-5 shadow-sm">
           <h2 className="mb-1 text-sm font-bold text-gray-900">Revenue vs Expenses</h2>
-          <p className="mb-4 text-xs text-gray-400">Jan – Jun 2026</p>
-          <MonthBarChart data={chartData} />
+          <p className="mb-4 text-xs text-gray-400">Recent months</p>
+          {hasChartData ? (
+            <MonthBarChart data={chartData} />
+          ) : (
+            <div className="flex h-[220px] items-center justify-center text-sm text-gray-400">No transaction data yet</div>
+          )}
         </div>
         <div className="rounded-xl bg-white p-5 shadow-sm">
           <h2 className="mb-1 text-sm font-bold text-gray-900">Weekly Cash Flow</h2>
-          <p className="mb-4 text-xs text-gray-400">Past 13 weeks</p>
-          <CashFlowChart data={CASH_FLOW_DATA} />
+          <p className="mb-4 text-xs text-gray-400">Weekly entries</p>
+          <div className="flex h-[220px] items-center justify-center text-sm text-gray-400">
+            No cash flow data yet — add weekly entries to see trends
+          </div>
         </div>
       </div>
 

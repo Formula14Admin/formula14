@@ -8,7 +8,6 @@ import {
 } from '@tabler/icons-react'
 import {
   Transaction, PersonalTx, SavingsGoal,
-  INIT_TRANSACTIONS, INIT_PERSONAL_TX, INIT_GOALS,
   loadTransactions, saveTransactions,
   loadPersonalTxns, savePersonalTxns,
   loadGoals, saveGoals,
@@ -233,9 +232,9 @@ export default function FinancesPage() {
   const [showAddTx,    setShowAddTx]    = useState(false)
 
   useEffect(() => {
-    setTransactions(loadTransactions(INIT_TRANSACTIONS))
-    setPersonalTxns(loadPersonalTxns(INIT_PERSONAL_TX))
-    setGoals(loadGoals(INIT_GOALS))
+    setTransactions(loadTransactions([]))
+    setPersonalTxns(loadPersonalTxns([]))
+    setGoals(loadGoals([]))
   }, [])
 
   useEffect(() => { if (transactions.length) saveTransactions(transactions) }, [transactions])

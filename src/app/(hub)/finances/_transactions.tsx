@@ -10,7 +10,7 @@ import {
 } from '@tabler/icons-react'
 import {
   Transaction, TxType, TxCategory, IncomeCat, ExpenseCat,
-  INCOME_CATS, EXPENSE_CATS, CHART_HISTORY,
+  INCOME_CATS, EXPENSE_CATS,
   StatCard, CatBadge, MonthBarChart,
   fmtMoney, fmtDateShort, monthLabel, monthTotal,
   uid, INPUT, LABEL, ACCENT,
@@ -440,7 +440,6 @@ export function TransactionsTab({
   const net      = income - expenses
 
   const chartData = useMemo(() => [
-    ...CHART_HISTORY,
     { label: 'May', ym: '2026-05', income: monthTotal(transactions, '2026-05', 'income'), expenses: monthTotal(transactions, '2026-05', 'expense') },
     { label: 'Jun', ym: '2026-06', income: monthTotal(transactions, '2026-06', 'income'), expenses: monthTotal(transactions, '2026-06', 'expense') },
   ], [transactions])
@@ -456,11 +455,15 @@ export function TransactionsTab({
         <StatCard icon={<IconCurrencyDollar size={16}/>} label="Transactions"      value={String(periodTxns.length)} sub="in selected period" color="#8b5cf6" />
       </div>
 
-      {/* 6-month chart */}
+      {/* Monthly chart */}
       <div className="rounded-xl bg-white p-5 shadow-sm">
-        <h2 className="mb-1 text-sm font-bold text-gray-900">6-Month Overview</h2>
-        <p className="mb-4 text-xs text-gray-400">Jan – Jun 2026</p>
-        <MonthBarChart data={chartData} />
+        <h2 className="mb-1 text-sm font-bold text-gray-900">Monthly Overview</h2>
+        <p className="mb-4 text-xs text-gray-400">Recent months</p>
+        {chartData.some(d => d.income > 0 || d.expenses > 0) ? (
+          <MonthBarChart data={chartData} />
+        ) : (
+          <div className="flex h-[220px] items-center justify-center text-sm text-gray-400">No transaction data yet</div>
+        )}
       </div>
 
       {/* Filters */}
@@ -500,7 +503,11 @@ export function TransactionsTab({
       {/* Table */}
       <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
         {filtered.length === 0 ? (
-          <div className="py-14 text-center text-sm text-gray-400">No transactions match your filters</div>
+          <div className="py-14 text-center text-sm text-gray-400">
+            {transactions.length === 0
+              ? 'No transactions yet — add your first entry'
+              : 'No transactions match your filters'}
+          </div>
         ) : (
           <table className="w-full min-w-[640px] border-collapse text-sm">
             <thead>

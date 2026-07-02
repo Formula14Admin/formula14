@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { IconSend, IconSparkles, IconUser, IconRefresh } from '@tabler/icons-react'
-import { Transaction, PersonalTx, CHART_HISTORY, monthTotal, fmtMoney, fmtK, ACCENT } from './_shared'
+import { Transaction, PersonalTx, monthTotal, fmtMoney, fmtK, ACCENT } from './_shared'
 
 interface Message {
   role: 'user' | 'assistant'
@@ -25,8 +25,8 @@ function buildFinancialContext(transactions: Transaction[], personalTxns: Person
   const mayIncome   = monthTotal(transactions, '2026-05', 'income')
   const mayExpenses = monthTotal(transactions, '2026-05', 'expense')
   const mayNet      = mayIncome - mayExpenses
-  const ytdIncome   = CHART_HISTORY.reduce((s, m) => s + m.income, 0) + mayIncome + junIncome
-  const ytdExpenses = CHART_HISTORY.reduce((s, m) => s + m.expenses, 0) + mayExpenses + junExpenses
+  const ytdIncome   = transactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)
+  const ytdExpenses = transactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0)
   const ytdNet      = ytdIncome - ytdExpenses
 
   // Category breakdown for June
@@ -79,7 +79,7 @@ ${expBreakdown}
 - Personal savings this month: ${fmtMoney(personalIncome - personalExpenses)}
 
 ### Notes
-- Data covers May and June 2026 in full transaction detail; Jan–Apr 2026 available as monthly totals only
+- Data covers all recorded transactions in full detail
 - Business and personal finances are tracked separately`
 }
 
