@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useMemo, useEffect } from 'react'
+import { supabase } from '@/lib/supabase'
 import {
   IconLock,
   IconLockOpen,
@@ -476,25 +477,7 @@ class PricingConfigErrorBoundary extends React.Component<
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function PricingPage() {
-  const [pricingConfigs, setPricingConfigs] = useState<SessionPricingConfig[]>(() => {
-    try {
-      const raw = typeof window !== 'undefined' ? localStorage.getItem(PRICING_CONFIGS_LS) : null
-      if (raw) {
-        const parsed = JSON.parse(raw) as SessionPricingConfig[]
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          // Sanitise: if any config has a non-array tiers (stale Supabase string data), coerce it
-          const sanitised = parsed.map(c => ({
-            ...c,
-            tiers: Array.isArray(c.tiers)
-              ? c.tiers
-              : (() => { try { const t = JSON.parse(c.tiers as unknown as string); return Array.isArray(t) ? t : [] } catch { return [] } })(),
-          }))
-          return sanitised
-        }
-      }
-    } catch {}
-    return INIT_PRICING
-  })
+  const [pricingConfigs, setPricingConfigs] = useState<SessionPricingConfig[]>(INIT_PRICING)
   const [editingPricing, setEditingPricing] = useState<string | null>(null)
   const [editTiers, setEditTiers] = useState<PricingTier[]>([])
   const [editDurationMins, setEditDurationMins] = useState<number>(60)
@@ -510,19 +493,64 @@ export default function PricingPage() {
   const [editAttendance, setEditAttendance] = useState<Record<string, AttendanceStatus>>({})
 
   // Programme Catalogue state
-  const [catalogue, setCatalogue] = useState<ProgramCatalogueItem[]>(() => {
-    try {
-      const raw = typeof window !== 'undefined' ? localStorage.getItem('f14_program_catalogue') : null
-      if (raw) { const parsed = JSON.parse(raw) as ProgramCatalogueItem[]; if (Array.isArray(parsed) && parsed.length > 0) return parsed }
-    } catch {}
-    return INIT_CATALOGUE
-  })
+  const [catalogue, setCatalogue] = useState<ProgramCatalogueItem[]>(INIT_CATALOGUE)
   const [progModalOpen, setProgModalOpen] = useState(false)
   const [editingProg,   setEditingProg]   = useState<ProgramCatalogueItem | null>(null)
   const [devCatOpen,    setDevCatOpen]    = useState(true)
   const [socialCatOpen, setSocialCatOpen] = useState(true)
 
   const now = DEMO_NOW
+
+  // Load pricing configs from Supabase on mount
+  useEffect(() => {
+    void (async () => {
+      try {
+        const { data } = await supabase.from('session_types').select('*')
+        if (data && data.length > 0) {
+          const loaded = data.map(r => {
+            let tiers: PricingTier[] = []
+            try {
+              const raw = Array.isArray(r.tiers) ? r.tiers : JSON.parse(r.tiers as string ?? '[]')
+              tiers = (raw as Record<string, unknown>[]).map(t => ({
+                id:             (t.id as string) ?? '',
+                min:            (t.min as number) ?? 1,
+                max:            (t.max as number | null) ?? null,
+                pricePerAthlete:(t.pricePerAthlete as number) ?? 0,
+              }))
+            } catch {}
+            return {
+              sessionType:  r.session_type_id as string,
+              tiers,
+              durationMins: (r.duration_minutes as number) ?? 60,
+            } as SessionPricingConfig
+          })
+          setPricingConfigs(loaded)
+        }
+      } catch (e) { console.error('[pricing] session_types load failed:', e) }
+    })()
+  }, [])
+
+  // Load programme catalogue from Supabase on mount
+  useEffect(() => {
+    void (async () => {
+      try {
+        const { data } = await supabase.from('programs').select('*').order('name')
+        if (data && data.length > 0) {
+          setCatalogue(data.map(p => ({
+            id:             p.id as string,
+            name:           p.name as string,
+            category:       (p.category ?? 'development') as 'development' | 'social',
+            pricePerSession:(p.price_per_session as number) ?? 20,
+            numSessions:    (p.num_sessions as number) ?? 8,
+            maxCapacity:    (p.max_capacity as number) ?? 15,
+            enrolmentType:  (p.enrolment_type ?? 'approval') as 'instant' | 'approval',
+            description:    (p.description ?? '') as string,
+            colourTag:      (p.colour_tag ?? '#6BA3D6') as string,
+          })))
+        }
+      } catch (e) { console.error('[pricing] programs load failed:', e) }
+    })()
+  }, [])
 
   // Derive live computed state per session
   const computed = useMemo(() => sessions.map(s => {

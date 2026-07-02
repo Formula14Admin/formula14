@@ -637,44 +637,120 @@ export default function BookingsPage() {
 
   const [joinLinkModal, setJoinLinkModal] = useState<{ code: string; sessionType: string; date: string } | null>(null)
 
-  // Programme Catalogue — read from localStorage (written by pricing/page.tsx)
+  // Programme Catalogue — load from Supabase
   const [catalogue, setCatalogue] = useState<ProgramCatalogueItem[]>(INIT_CATALOGUE_FALLBACK)
   useEffect(() => {
-    if (typeof window === 'undefined') return
-    const raw = localStorage.getItem('f14_program_catalogue')
-    if (raw) { try { const p = JSON.parse(raw); if (p.length) setCatalogue(p) } catch {} }
+    void (async () => {
+      try {
+        const { data } = await supabase.from('programs').select('*').order('name')
+        if (data && data.length > 0) {
+          setCatalogue(data.map(p => ({
+            id:            p.id as string,
+            name:          p.name as string,
+            category:      (p.category ?? 'development') as 'development' | 'social',
+            pricePerSession: (p.price_per_session as number) ?? 20,
+            maxCapacity:   (p.max_capacity as number) ?? 15,
+            enrolmentType: (p.enrolment_type ?? 'approval') as 'instant' | 'approval',
+            description:   (p.description ?? '') as string,
+            colourTag:     (p.colour_tag ?? '#6BA3D6') as string,
+          })))
+        }
+      } catch (e) { console.error('[bookings] programs load failed:', e) }
+    })()
   }, [])
 
-  // Persist / restore availability settings in localStorage
+  // Load coach/facility availability from Supabase on mount
   useEffect(() => {
-    if (typeof window === 'undefined') return
-    try {
-      const cs = localStorage.getItem('f14_coach_schedules')
-      if (cs) setCoachSchedules(JSON.parse(cs))
-      const dov = localStorage.getItem('f14_date_overrides')
-      if (dov) setDateOverrides(JSON.parse(dov))
-      const fs = localStorage.getItem('f14_facility_schedule')
-      if (fs) setFacilitySchedule(JSON.parse(fs))
-      const fov = localStorage.getItem('f14_facility_overrides')
-      if (fov) setFacilityOverrides(JSON.parse(fov))
-    } catch {}
+    void (async () => {
+      try {
+        const [{ data: coachRows }, { data: facilityRows }, { data: exceptionRows }] = await Promise.all([
+          supabase.from('coach_availability').select('*'),
+          supabase.from('facility_availability').select('*'),
+          supabase.from('availability_exceptions').select('*').order('date'),
+        ])
+
+        // Map staff IDs (s1,s2,s3) → booking coach IDs (matt,jade,sam)
+        const STAFF_TO_COACH: Record<string, string> = { s1: 'matt', s2: 'jade', s3: 'sam' }
+
+        const tMins = (t: string | null | undefined): number => {
+          if (!t) return 0
+          const [h, m] = t.split(':').map(Number)
+          return h * 60 + m
+        }
+
+        if (coachRows && coachRows.length > 0) {
+          const byCoach: Record<string, typeof coachRows> = {}
+          for (const r of coachRows) {
+            const cId = r.coach_id as string
+            byCoach[cId] = byCoach[cId] ?? []
+            byCoach[cId].push(r)
+          }
+          const schedMap: Record<string, CoachSchedule> = {}
+          for (const [staffId, rows] of Object.entries(byCoach)) {
+            const coachId = STAFF_TO_COACH[staffId] ?? staffId
+            schedMap[coachId] = {
+              coachId,
+              days: Object.fromEntries(
+                ([0,1,2,3,4,5,6] as DayOfWeek[]).map(d => {
+                  const row = rows.find((r: Record<string, unknown>) => r.day_of_week === d)
+                  return row
+                    ? [d, { available: true,  windows: [{ id: `${coachId}-${d}`, startMins: tMins(row.start_time as string), endMins: tMins(row.end_time as string), sessionTypes: (row.session_types_enabled as string[]) ?? [] }] }]
+                    : [d, { available: false, windows: [{ id: `${coachId}-${d}`, startMins: 540, endMins: 1020, sessionTypes: [] }] }]
+                })
+              ) as Record<DayOfWeek, DaySchedule>,
+            }
+          }
+          setCoachSchedules(schedMap)
+        }
+
+        if (facilityRows && facilityRows.length > 0) {
+          const facilSched = {} as FacilitySchedule
+          for (let d = 0; d <= 6; d++) {
+            const row = facilityRows.find((r: Record<string, unknown>) => r.day_of_week === d)
+            facilSched[d as DayOfWeek] = row
+              ? { available: true,  windows: [{ id: `fac-${d}`, startMins: tMins(row.start_time as string), endMins: tMins(row.end_time as string), sessionTypes: [] }] }
+              : { available: false, windows: [{ id: `fac-${d}`, startMins: 360, endMins: 1320, sessionTypes: [] }] }
+          }
+          setFacilitySchedule(facilSched)
+        }
+
+        if (exceptionRows) {
+          const STAFF_TO_COACH_LOCAL: Record<string, string> = { s1: 'matt', s2: 'jade', s3: 'sam' }
+          const tMinsLocal = (t: string | null | undefined): number | undefined => {
+            if (!t) return undefined
+            const [h, m] = t.split(':').map(Number)
+            return h * 60 + m
+          }
+          setDateOverrides(
+            exceptionRows
+              .filter((r: Record<string, unknown>) => typeof r.applies_to === 'string' && (r.applies_to as string) !== 'facility')
+              .map((r: Record<string, unknown>) => ({
+                id:        r.id as string,
+                coachId:   STAFF_TO_COACH_LOCAL[(r.applies_to as string).replace('coach:', '')] ?? (r.applies_to as string).replace('coach:', ''),
+                date:      r.date as string,
+                type:      r.exception_type as 'block' | 'extra',
+                startMins: tMinsLocal(r.start_time as string),
+                endMins:   tMinsLocal(r.end_time   as string),
+                note:      (r.reason ?? '') as string,
+              }))
+          )
+          setFacilityOverrides(
+            exceptionRows
+              .filter((r: Record<string, unknown>) => r.applies_to === 'facility')
+              .map((r: Record<string, unknown>) => ({
+                id:        r.id as string,
+                date:      r.date as string,
+                type:      r.exception_type as 'block' | 'extra',
+                startMins: tMinsLocal(r.start_time as string),
+                endMins:   tMinsLocal(r.end_time   as string),
+                note:      (r.reason ?? '') as string,
+              }))
+          )
+        }
+      } catch (e) { console.error('[bookings] availability load failed:', e) }
+    })()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    localStorage.setItem('f14_coach_schedules', JSON.stringify(coachSchedules))
-  }, [coachSchedules])
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    localStorage.setItem('f14_date_overrides', JSON.stringify(dateOverrides))
-  }, [dateOverrides])
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    localStorage.setItem('f14_facility_schedule', JSON.stringify(facilitySchedule))
-  }, [facilitySchedule])
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    localStorage.setItem('f14_facility_overrides', JSON.stringify(facilityOverrides))
-  }, [facilityOverrides])
 
   // Load bookings from Supabase on mount — always replace state (empty DB = empty calendar)
   useEffect(() => {
@@ -4496,8 +4572,40 @@ function BookingInformationTab() {
   }, [meta])
 
   useEffect(() => {
-    try { const r = localStorage.getItem(BIT_LS_PRICING); if (r) setPricingConfigs(JSON.parse(r)) } catch {}
-    try { const r = localStorage.getItem(BIT_LS_CAT); if (r) { const p = JSON.parse(r); if (p.length > 0) setCatalogue(p) } } catch {}
+    void (async () => {
+      try {
+        const { data: stRows } = await supabase.from('session_types').select('*')
+        if (stRows && stRows.length > 0) {
+          setPricingConfigs(stRows.map(r => {
+            let tiers: BITPricingTier[] = []
+            try {
+              const raw = Array.isArray(r.tiers) ? r.tiers : JSON.parse(r.tiers as string ?? '[]')
+              tiers = raw.map((t: Record<string, unknown>) => ({
+                min:            (t.min as number) ?? 1,
+                max:            (t.max as number | null) ?? null,
+                pricePerAthlete:(t.pricePerAthlete as number) ?? 0,
+              }))
+            } catch {}
+            return { sessionType: r.session_type_id as string, tiers, durationMins: r.duration_minutes as number }
+          }))
+        }
+      } catch (e) { console.error('[BIT] session_types load failed:', e) }
+      try {
+        const { data: progRows } = await supabase.from('programs').select('*').order('name')
+        if (progRows && progRows.length > 0) {
+          setCatalogue(progRows.map(p => ({
+            id:            p.id as string,
+            name:          p.name as string,
+            category:      (p.category ?? 'development') as 'development' | 'social',
+            pricePerSession: (p.price_per_session as number) ?? 20,
+            maxCapacity:   (p.max_capacity as number) ?? 15,
+            enrolmentType: (p.enrolment_type ?? 'approval') as 'instant' | 'approval',
+            description:   (p.description ?? '') as string,
+            colourTag:     (p.colour_tag ?? '#6BA3D6') as string,
+          })))
+        }
+      } catch (e) { console.error('[BIT] programs load failed:', e) }
+    })()
   }, [])
 
   // ── Pricing helpers
