@@ -77,6 +77,7 @@ const NAV: NavSection[] = [
       },
       { label: 'Pricing & Payments',          href: '/pricing',             icon: IconCreditCard },
       { label: 'Social Media & Advertising',  href: '/social-media',        icon: IconSpeakerphone },
+      { label: 'Sponsorships',               href: '/sponsorships',        icon: IconTrophy },
       { label: 'To Do',                       href: '/todo',                icon: IconChecklist },
     ],
   },
