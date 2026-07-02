@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   IconUsers,
@@ -18,72 +18,105 @@ import {
 import { supabase } from '@/lib/supabase'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-type SessionStatus = 'past' | 'current' | 'upcoming'
+type TimeStatus = 'past' | 'current' | 'upcoming'
 
 type TodayBooking = {
   id: string
   start_mins: number
+  duration_mins: number | null
   session_type: string
   coach_id: string
   athlete_names: string[]
   space: string
+  status: string | null
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-function fmtNow(mins: number) {
+function fmtMins(mins: number) {
   const h = Math.floor(mins / 60)
   const m = mins % 60
   return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`
 }
 
+// Sydney date in YYYY-MM-DD — ensures bookings match local calendar day, not UTC
+function sydneyToday() {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'Australia/Sydney' })
+}
+
+// Minutes since midnight in Sydney time
+function sydneyNowMins() {
+  const now = new Date()
+  const sydStr = now.toLocaleTimeString('en-AU', { timeZone: 'Australia/Sydney', hour12: false })
+  const [h, m] = sydStr.split(':').map(Number)
+  return h * 60 + m
+}
+
+const COACH_NAMES: Record<string, string> = {
+  matt: 'Matt', jade: 'Jade', sam: 'Sam',
+  s1: 'Matt', s2: 'Jade', s3: 'Sam',
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function DashboardPage() {
   const router = useRouter()
+
+  const [nowMins, setNowMins] = useState(sydneyNowMins)
   const now = new Date()
-  const nowMins = now.getHours() * 60 + now.getMinutes()
   const dateStr = now.toLocaleDateString('en-AU', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+    timeZone: 'Australia/Sydney',
   })
+
+  // Tick nowMins every minute so the NOW indicator stays accurate
+  useEffect(() => {
+    const id = setInterval(() => setNowMins(sydneyNowMins()), 60_000)
+    return () => clearInterval(id)
+  }, [])
 
   // ── Real data ──────────────────────────────────────────────────────────────
   const [athleteCount, setAthleteCount] = useState(0)
   const [todayBookings, setTodayBookings] = useState<TodayBooking[]>([])
   const [statsLoaded, setStatsLoaded] = useState(false)
 
-  useEffect(() => {
-    const today = new Date().toISOString().slice(0, 10)
+  const fetchData = useCallback(async () => {
+    const today = sydneyToday()
+    const [athleteRes, bookingsRes] = await Promise.all([
+      supabase
+        .from('athletes')
+        .select('*', { count: 'exact', head: true })
+        .eq('is_active', true),
+      supabase
+        .from('bookings')
+        .select('id, start_mins, duration_mins, session_type, coach_id, athlete_names, space, status')
+        .eq('date', today)
+        .neq('status', 'cancelled')
+        .order('start_mins'),
+    ])
 
-    async function fetchData() {
-      const [athleteRes, bookingsRes] = await Promise.all([
-        supabase
-          .from('athletes')
-          .select('*', { count: 'exact', head: true })
-          .eq('is_active', true),
-        supabase
-          .from('bookings')
-          .select('id, start_mins, session_type, coach_id, athlete_names, space')
-          .eq('date', today)
-          .order('start_mins'),
-      ])
-
-      setAthleteCount(athleteRes.count ?? 0)
-      setTodayBookings((bookingsRes.data as TodayBooking[]) ?? [])
-      setStatsLoaded(true)
-    }
-
-    fetchData()
+    setAthleteCount(athleteRes.count ?? 0)
+    setTodayBookings((bookingsRes.data as TodayBooking[]) ?? [])
+    setStatsLoaded(true)
   }, [])
+
+  // Initial load
+  useEffect(() => { void fetchData() }, [fetchData])
+
+  // Supabase Realtime — re-fetch when any booking row changes
+  useEffect(() => {
+    const channel = supabase
+      .channel('dashboard-bookings')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, () => {
+        void fetchData()
+      })
+      .subscribe()
+    return () => { void supabase.removeChannel(channel) }
+  }, [fetchData])
 
   // Read pending join request count from localStorage (written by bookings page)
   const [pendingJoinCount, setPendingJoinCount] = useState(0)
   useEffect(() => {
     const stored = localStorage.getItem('f14_pendingJoinCount')
-    if (stored !== null) {
-      setPendingJoinCount(parseInt(stored, 10) || 0)
-    } else {
-      // Bookings page hasn't been visited yet — use seed data total (b2×2 + b13×1)
-      setPendingJoinCount(3)
-    }
+    setPendingJoinCount(stored !== null ? parseInt(stored, 10) || 0 : 0)
   }, [])
 
   // Read pending payment count from localStorage (written by pricing page)
@@ -91,12 +124,7 @@ export default function DashboardPage() {
   const [paymentsRan, setPaymentsRan] = useState(false)
   useEffect(() => {
     const stored = localStorage.getItem('f14_pendingPaymentCount')
-    if (stored !== null) {
-      setPendingPaymentCount(parseInt(stored, 10) || 0)
-    } else {
-      // Pricing page hasn't been visited yet — seed data has 2 payment-required
-      setPendingPaymentCount(2)
-    }
+    setPendingPaymentCount(stored !== null ? parseInt(stored, 10) || 0 : 0)
   }, [])
 
   function openJoinRequests() {
@@ -112,16 +140,17 @@ export default function DashboardPage() {
     setTimeout(() => setPaymentsRan(false), 2500)
   }
 
-  const enrichedSessions = todayBookings.map(s => ({
-    ...s,
-    status: (
-      nowMins > s.start_mins + 90 ? 'past' :
-      nowMins >= s.start_mins     ? 'current' :
-                                    'upcoming'
-    ) as SessionStatus,
-  }))
+  const enrichedSessions = todayBookings.map(s => {
+    const dur     = s.duration_mins ?? 60
+    const endMins = s.start_mins + dur
+    const timeStatus: TimeStatus =
+      nowMins >= endMins      ? 'past'    :
+      nowMins >= s.start_mins ? 'current' :
+                                'upcoming'
+    return { ...s, dur, endMins, timeStatus }
+  })
 
-  const nowIdx = enrichedSessions.findIndex(s => s.status !== 'past')
+  const nowIdx = enrichedSessions.findIndex(s => s.timeStatus !== 'past')
 
   const QUICK_ACTIONS: { label: string; icon: React.ComponentType<{ size?: number; style?: React.CSSProperties }>; onClick: () => void; badge?: number; disabled?: boolean }[] = [
     { label: 'Add Athlete',     icon: IconUserPlus,       onClick: () => router.push('/athletes') },
@@ -236,26 +265,33 @@ export default function DashboardPage() {
 
           <div>
             {enrichedSessions.length === 0 ? (
-              <p className="py-8 text-center text-sm text-gray-400">No sessions scheduled today</p>
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <svg className="mb-3 h-10 w-10 text-gray-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <p className="text-sm font-medium text-gray-400">No sessions scheduled for today</p>
+              </div>
             ) : (
               enrichedSessions.map((s, i) => {
-                const isPast    = s.status === 'past'
-                const isCurrent = s.status === 'current'
+                const isPast    = s.timeStatus === 'past'
+                const isCurrent = s.timeStatus === 'current'
                 const showNow   = i === nowIdx
+                const coachName = COACH_NAMES[s.coach_id] ?? s.coach_id
+                const names     = Array.isArray(s.athlete_names) ? s.athlete_names : []
 
                 return (
                   <div key={s.id}>
-                    {/* NOW indicator */}
+                    {/* NOW indicator — shown before the first non-past session */}
                     {showNow && (
-                      <div className="my-1 flex items-center gap-3">
-                        <span className="w-16 shrink-0 text-right text-[10px] font-bold tracking-widest text-red-500">
+                      <div className="my-2 flex items-center gap-3">
+                        <span className="w-[4.5rem] shrink-0 text-right text-[10px] font-bold tracking-widest text-red-500">
                           NOW
                         </span>
                         <div className="flex flex-1 items-center gap-2">
                           <span className="h-2 w-2 rounded-full bg-red-500" />
                           <div className="flex-1 border-t-2 border-dashed border-red-400" />
                           <span className="text-[10px] font-semibold text-red-500">
-                            {fmtNow(nowMins)}
+                            {fmtMins(nowMins)}
                           </span>
                         </div>
                       </div>
@@ -263,11 +299,16 @@ export default function DashboardPage() {
 
                     {/* Session row */}
                     <div className={`flex gap-3 py-2.5 ${isPast ? 'opacity-40' : ''}`}>
-                      <span className={`w-16 shrink-0 pt-0.5 text-right text-xs font-medium ${
-                        isCurrent ? 'text-[#6BA3D6]' : 'text-gray-400'
-                      }`}>
-                        {fmtNow(s.start_mins)}
-                      </span>
+                      {/* Time column */}
+                      <div className="w-[4.5rem] shrink-0 pt-0.5 text-right">
+                        <span className={`text-xs font-medium ${isCurrent ? 'text-[#6BA3D6]' : 'text-gray-400'}`}>
+                          {fmtMins(s.start_mins)}
+                        </span>
+                        <br />
+                        <span className="text-[10px] text-gray-300">{fmtMins(s.endMins)}</span>
+                      </div>
+
+                      {/* Timeline dot + connector */}
                       <div className="flex flex-col items-center pt-1">
                         <span
                           className="h-2.5 w-2.5 shrink-0 rounded-full border-2"
@@ -277,9 +318,11 @@ export default function DashboardPage() {
                           }}
                         />
                         {i < enrichedSessions.length - 1 && (
-                          <span className="mt-1 w-px flex-1 bg-gray-200" style={{ minHeight: 36 }} />
+                          <span className="mt-1 w-px flex-1 bg-gray-200" style={{ minHeight: 40 }} />
                         )}
                       </div>
+
+                      {/* Content */}
                       <div className="flex-1 pb-3">
                         <div className="flex items-start justify-between gap-2">
                           <div>
@@ -288,21 +331,33 @@ export default function DashboardPage() {
                             }`}>
                               {s.session_type}
                             </p>
-                            <p className="mt-0.5 text-xs text-gray-400">{s.space}</p>
+                            <p className="mt-0.5 text-xs text-gray-400">
+                              {s.space}{coachName ? ` · ${coachName}` : ''}
+                            </p>
                           </div>
+                          {/* Time-based status badge */}
                           <span className={`mt-0.5 shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                            isCurrent ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-500'
+                            isCurrent
+                              ? 'bg-blue-50 text-blue-600'
+                              : isPast
+                              ? 'bg-gray-100 text-gray-400'
+                              : 'bg-green-50 text-green-600'
                           }`}>
-                            {s.session_type}
+                            {isCurrent ? 'In Progress' : isPast ? 'Completed' : 'Upcoming'}
                           </span>
                         </div>
-                        {s.athlete_names.length > 0 && (
-                          <div className="mt-1.5 flex flex-wrap gap-1">
-                            {s.athlete_names.map((a, j) => (
+
+                        {/* Athletes */}
+                        {names.length > 0 && (
+                          <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                            {names.slice(0, 4).map((a, j) => (
                               <span key={j} className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] text-gray-600">
                                 {a}
                               </span>
                             ))}
+                            {names.length > 4 && (
+                              <span className="text-[10px] text-gray-400">+{names.length - 4} more</span>
+                            )}
                           </div>
                         )}
                       </div>
@@ -312,13 +367,14 @@ export default function DashboardPage() {
               })
             )}
 
+            {/* NOW line at bottom when all sessions are past */}
             {enrichedSessions.length > 0 && nowIdx === -1 && (
-              <div className="mt-1 flex items-center gap-3">
-                <span className="w-16 shrink-0 text-right text-[10px] font-bold tracking-widest text-red-500">NOW</span>
+              <div className="mt-2 flex items-center gap-3">
+                <span className="w-[4.5rem] shrink-0 text-right text-[10px] font-bold tracking-widest text-red-500">NOW</span>
                 <div className="flex flex-1 items-center gap-2">
                   <span className="h-2 w-2 rounded-full bg-red-500" />
                   <div className="flex-1 border-t-2 border-dashed border-red-400" />
-                  <span className="text-[10px] font-semibold text-red-500">{fmtNow(nowMins)}</span>
+                  <span className="text-[10px] font-semibold text-red-500">{fmtMins(nowMins)}</span>
                 </div>
               </div>
             )}
