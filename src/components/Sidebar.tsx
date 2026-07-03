@@ -73,7 +73,7 @@ const NAV: NavSection[] = [
           { label: 'Overview',     href: '/finances',              icon: IconLayoutDashboard },
           { label: 'Transactions', href: '/finances/transactions', icon: IconReceipt },
           { label: 'Payments',     href: '/pricing',               icon: IconCreditCard },
-          { label: 'Pricing',      href: '/pricing?tab=pricing',   icon: IconTag },
+          { label: 'Pricing',      href: '/pricing/config',         icon: IconTag },
         ],
       },
       { label: 'Forms',                       href: '/forms',               icon: IconForms },
