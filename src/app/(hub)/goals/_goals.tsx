@@ -2,10 +2,11 @@
 
 import { useState } from 'react'
 import {
-  IconPlus, IconX, IconCheck, IconChevronDown,
+  IconPlus, IconX, IconCheck,
   IconCalendar, IconTarget, IconTrophy,
   IconLock, IconWorldShare, IconMessageCircle, IconTrash,
 } from '@tabler/icons-react'
+import { DatePicker, SelectPicker } from '@/components/ui/Pickers'
 import {
   Goal, Milestone, GoalCategory, GoalStatus, Habit, ReflectionNote,
   ACCENT, INPUT, LABEL, TODAY,
@@ -202,18 +203,15 @@ export function AddGoalModal({ onClose, onAdd }: { onClose: () => void; onAdd: (
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={LABEL}>Category</label>
-              <div className="relative">
-                <select value={category} onChange={e => setCategory(e.target.value as GoalCategory)} className={INPUT + ' appearance-none pr-8'}>
-                  {(Object.entries(GOAL_CATEGORY_LABELS) as [GoalCategory, string][]).map(([v, l]) => (
-                    <option key={v} value={v}>{l}</option>
-                  ))}
-                </select>
-                <IconChevronDown size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              </div>
+              <SelectPicker
+                value={category}
+                onChange={v => setCategory(v as GoalCategory)}
+                options={(Object.entries(GOAL_CATEGORY_LABELS) as [GoalCategory, string][]).map(([v, l]) => ({ value: v, label: l }))}
+              />
             </div>
             <div>
               <label className={LABEL}>Target Date {err('target')}</label>
-              <input type="date" value={target} onChange={e => setTarget(e.target.value)} min={TODAY} className={INPUT + (errors.target ? ' border-red-400' : '')} />
+              <DatePicker value={target} onChange={setTarget} minDate={TODAY} />
             </div>
           </div>
 

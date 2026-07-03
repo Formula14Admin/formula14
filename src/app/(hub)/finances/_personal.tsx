@@ -8,6 +8,7 @@ import {
   StatCard, fmtMoney, fmtK, INPUT, LABEL, ACCENT,
 } from './_shared'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { DatePicker, SelectPicker } from '@/components/ui/Pickers'
 
 // ─── Add Personal Transaction Modal ───────────────────────────────────────────
 
@@ -38,7 +39,7 @@ function PersonalModal({ type, onClose, onAdd }: {
         <div className="space-y-4 p-6">
           <div>
             <label className={LABEL}>Date</label>
-            <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INPUT} />
+            <DatePicker value={date} onChange={setDate} />
           </div>
           <div>
             <label className={LABEL}>Description</label>
@@ -50,9 +51,11 @@ function PersonalModal({ type, onClose, onAdd }: {
           </div>
           <div>
             <label className={LABEL}>Category</label>
-            <select value={cat} onChange={e => setCat(e.target.value)} className={INPUT}>
-              {cats.map(c => <option key={c}>{c}</option>)}
-            </select>
+            <SelectPicker
+              value={cat}
+              onChange={setCat}
+              options={cats.map(c => ({ value: c, label: c }))}
+            />
           </div>
         </div>
         <div className="flex justify-end gap-2 border-t border-gray-100 px-6 py-4">

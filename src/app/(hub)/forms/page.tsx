@@ -8,6 +8,7 @@ import {
   IconChevronRight,
 } from '@tabler/icons-react'
 import { supabase } from '@/lib/supabase'
+import { SelectPicker } from '@/components/ui/Pickers'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -392,13 +393,11 @@ function NewFormModal({ onClose, onSave }: {
             </div>
             <div>
               <label className={LABEL}>Category</label>
-              <div className="relative">
-                <select value={category} onChange={e => setCategory(e.target.value as FormCategory)}
-                  className={INPUT + ' appearance-none pr-8'}>
-                  {Object.entries(CATEGORY_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-                </select>
-                <IconChevronDown size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              </div>
+              <SelectPicker
+                value={category}
+                onChange={v => setCategory(v as FormCategory)}
+                options={Object.entries(CATEGORY_CONFIG).map(([k, v]) => ({ value: k, label: v.label }))}
+              />
             </div>
           </div>
 

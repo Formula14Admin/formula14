@@ -16,6 +16,7 @@ import {
   uid, INPUT, LABEL, ACCENT,
 } from './_shared'
 import { supabase } from '@/lib/supabase'
+import { DatePicker, SelectPicker } from '@/components/ui/Pickers'
 
 const PAYMENT_METHODS = ['Business Card', 'Personal Card', 'Cash', 'Bank Transfer'] as const
 
@@ -296,7 +297,7 @@ function AddModal({ onClose, onAdd }: { onClose: () => void; onAdd: (t: Transact
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={LABEL}>Date</label>
-              <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INPUT} />
+              <DatePicker value={date} onChange={setDate} />
             </div>
             <div>
               <label className={LABEL}>Amount ($)</label>
@@ -321,12 +322,11 @@ function AddModal({ onClose, onAdd }: { onClose: () => void; onAdd: (t: Transact
               </div>
               <div>
                 <label className={LABEL}>Payment Method</label>
-                <div className="relative">
-                  <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)} className={INPUT + ' appearance-none pr-8'}>
-                    {PAYMENT_METHODS.map(m => <option key={m} value={m}>{m}</option>)}
-                  </select>
-                  <IconChevronDown size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                </div>
+                <SelectPicker
+                  value={paymentMethod}
+                  onChange={setPaymentMethod}
+                  options={PAYMENT_METHODS.map(m => ({ value: m, label: m }))}
+                />
               </div>
             </div>
           )}
@@ -338,12 +338,11 @@ function AddModal({ onClose, onAdd }: { onClose: () => void; onAdd: (t: Transact
 
           <div>
             <label className={LABEL}>Category</label>
-            <div className="relative">
-              <select value={category} onChange={e => setCategory(e.target.value as TxCategory)} className={INPUT + ' appearance-none pr-8'}>
-                {cats.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
-              </select>
-              <IconChevronDown size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            </div>
+            <SelectPicker
+              value={category}
+              onChange={v => setCategory(v as TxCategory)}
+              options={cats}
+            />
           </div>
 
           <div>

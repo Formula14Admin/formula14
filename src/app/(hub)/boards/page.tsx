@@ -7,6 +7,7 @@ import {
   IconCalendar, IconDotsVertical, IconArrowLeft,
   IconLayoutKanban, IconPencil,
 } from '@tabler/icons-react'
+import { DatePicker } from '@/components/ui/Pickers'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -307,8 +308,7 @@ function CardPanel({ card, colId, board, onUpdate, onMove, onDelete, onClose }: 
 
           <div>
             <label className={LABEL_CLS}>Due Date</label>
-            <input type="date" value={dueDate} onChange={e => { setDueDate(e.target.value); flush({ dueDate: e.target.value }) }}
-              className={INPUT + ' max-w-xs'} />
+            <DatePicker value={dueDate} onChange={v => { setDueDate(v); flush({ dueDate: v }) }} />
             {dueDate && (
               <button onClick={() => { setDueDate(''); flush({ dueDate: '' }) }}
                 className="mt-1 text-xs text-gray-400 hover:text-red-400">Clear date</button>

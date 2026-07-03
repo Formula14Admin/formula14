@@ -25,6 +25,7 @@ import {
   IconArrowLeft,
 } from '@tabler/icons-react'
 import { StripeCardStep } from '@/components/StripeCardModal'
+import { DatePicker } from '@/components/ui/Pickers'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1945,7 +1946,7 @@ export default function AthletesPage() {
                     <input type="tel" value={form.phone} onChange={e => patchForm({ phone: e.target.value })} placeholder="0412 345 678" className={INPUT} /></div>
                   <div>
                     <label className={LABEL}>Date of Birth</label>
-                    <input type="date" value={form.dob} onChange={e => patchForm({ dob: e.target.value })} className={INPUT} />
+                    <DatePicker value={form.dob} onChange={v => patchForm({ dob: v })} />
                     {form.dob && <p className="mt-1 text-xs text-gray-400">Age {calcAge(form.dob)} · {ageGroup(form.dob)}</p>}
                   </div>
                   <div>
@@ -2059,7 +2060,7 @@ export default function AthletesPage() {
                     <input type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="athlete@example.com" className={INPUT} /></div>
                   <div className="grid grid-cols-2 gap-3">
                     <div><label className={LABEL}>Date of Birth</label>
-                      <input type="date" value={newDob} onChange={e => setNewDob(e.target.value)} className={INPUT} /></div>
+                      <DatePicker value={newDob} onChange={setNewDob} /></div>
                     <div><label className={LABEL}>Phone <span className="normal-case font-normal text-gray-400">(optional)</span></label>
                       <input type="tel" value={newPhone} onChange={e => setNewPhone(e.target.value)} placeholder="0412 345 678" className={INPUT} /></div>
                   </div>
@@ -2101,7 +2102,7 @@ export default function AthletesPage() {
                   </div>
                   <div>
                     <label className={LABEL}>Start Date</label>
-                    <input type="date" value={newStarted} onChange={e => setNewStarted(e.target.value)} className={INPUT} />
+                    <DatePicker value={newStarted} onChange={setNewStarted} />
                     {newStarted && (
                       <p className="mt-1 text-xs text-gray-400">
                         First billing Monday: <span className="font-medium">{fmtDate(nextMondayFrom(newStarted))}</span>
@@ -2179,7 +2180,7 @@ export default function AthletesPage() {
                 </div>
                 <div>
                   <label className={LABEL}>Start Date</label>
-                  <input type="date" value={convertStarted} onChange={e => setConvertStarted(e.target.value)} className={INPUT} />
+                  <DatePicker value={convertStarted} onChange={setConvertStarted} />
                   {convertStarted && (
                     <p className="mt-1 text-xs text-gray-400">
                       First billing Monday: <span className="font-medium">{fmtDate(nextMondayFrom(convertStarted))}</span>

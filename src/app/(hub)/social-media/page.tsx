@@ -8,6 +8,7 @@ import {
   IconList, IconCalendar, IconCheck,
   IconArrowRight, IconSpeakerphone,
 } from '@tabler/icons-react'
+import { DatePicker, SelectPicker } from '@/components/ui/Pickers'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -140,14 +141,17 @@ function PostModal({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={LABEL}>Date (optional)</label>
-              <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INPUT} />
+              <DatePicker value={date} onChange={setDate} />
             </div>
             <div>
               <label className={LABEL}>Time</label>
-              <select value={time} onChange={e => setTime(e.target.value)} disabled={!date}
-                className={INPUT + ' cursor-pointer disabled:opacity-40'}>
-                {TIME_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
+              <div style={{ opacity: !date ? 0.4 : 1, pointerEvents: !date ? 'none' : undefined }}>
+                <SelectPicker
+                  value={time}
+                  onChange={setTime}
+                  options={TIME_OPTIONS.map(o => ({ value: o.value, label: o.label }))}
+                />
+              </div>
             </div>
           </div>
 
@@ -169,17 +173,23 @@ function PostModal({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={LABEL}>Post Type</label>
-              <select value={postType} onChange={e => setPostType(e.target.value as PostType)} className={INPUT + ' cursor-pointer'}>
-                {POST_TYPES.map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
-              </select>
+              <SelectPicker
+                value={postType}
+                onChange={v => setPostType(v as PostType)}
+                options={POST_TYPES.map(t => ({ value: t, label: t.charAt(0).toUpperCase() + t.slice(1) }))}
+              />
             </div>
             <div>
               <label className={LABEL}>Status</label>
-              <select value={status} onChange={e => setStatus(e.target.value as PostStatus)} className={INPUT + ' cursor-pointer'}>
-                <option value="idea">Idea</option>
-                <option value="scheduled">Scheduled</option>
-                <option value="posted">Posted</option>
-              </select>
+              <SelectPicker
+                value={status}
+                onChange={v => setStatus(v as PostStatus)}
+                options={[
+                  { value: 'idea', label: 'Idea' },
+                  { value: 'scheduled', label: 'Scheduled' },
+                  { value: 'posted', label: 'Posted' },
+                ]}
+              />
             </div>
           </div>
 

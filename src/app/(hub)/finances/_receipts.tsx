@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import {
   IconUpload, IconCamera, IconPlus, IconSearch, IconFilter,
-  IconChevronDown, IconX, IconCheck, IconEye, IconPencil,
+  IconX, IconCheck, IconEye, IconPencil,
   IconTrash, IconDownload, IconMail, IconDotsVertical,
   IconFileTypePdf, IconPhoto, IconReceipt2, IconAlertCircle,
   IconRefresh, IconCloudUpload, IconZoomIn, IconZoomOut,
@@ -11,6 +11,7 @@ import {
   IconTag, IconCalendar, IconCurrencyDollar, IconUser,
 } from '@tabler/icons-react'
 import { supabase } from '@/lib/supabase'
+import { DatePicker, SelectPicker } from '@/components/ui/Pickers'
 
 // ─── Types + constants ────────────────────────────────────────────────────────
 
@@ -149,27 +150,7 @@ function Thumbnail({ receipt, size = 48 }: { receipt: Receipt; size?: number }) 
   )
 }
 
-// ─── Dropdown helper ──────────────────────────────────────────────────────────
-
-function Select({
-  value, onChange, children, placeholder,
-}: {
-  value: string; onChange: (v: string) => void; children: React.ReactNode; placeholder?: string
-}) {
-  return (
-    <div className="relative">
-      <select
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        className="appearance-none rounded-lg border border-gray-200 bg-white py-1.5 pl-3 pr-8 text-sm text-gray-700 outline-none focus:border-[#6BA3D6]"
-      >
-        {placeholder && <option value="">{placeholder}</option>}
-        {children}
-      </select>
-      <IconChevronDown size={13} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-400" />
-    </div>
-  )
-}
+// ─── Dropdown helper — replaced by SelectPicker ──────────────────────────────
 
 // ─── Form field ───────────────────────────────────────────────────────────────
 
@@ -222,8 +203,7 @@ function ReceiptForm({
             onChange={e => onChange({ merchant_name: e.target.value })} placeholder="e.g. Officeworks" />
         </Field>
         <Field label="Date of Purchase *">
-          <input type="date" className={INPUT_CLS} value={data.purchase_date}
-            onChange={e => onChange({ purchase_date: e.target.value })} />
+          <DatePicker value={data.purchase_date} onChange={v => onChange({ purchase_date: v })} />
         </Field>
       </div>
       <div className="grid grid-cols-2 gap-3">
@@ -237,10 +217,14 @@ function ReceiptForm({
         </Field>
       </div>
       <Field label="Category">
-        <select className={INPUT_CLS} value={data.category} onChange={e => onChange({ category: e.target.value })}>
-          <option value="">Select category…</option>
-          {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
+        <SelectPicker
+          value={data.category}
+          onChange={v => onChange({ category: v })}
+          options={[
+            { value: '', label: 'Select category…', muted: true },
+            ...CATEGORIES.map(c => ({ value: c, label: c })),
+          ]}
+        />
       </Field>
       <Field label="Description / Notes">
         <textarea className={INPUT_CLS} rows={2} value={data.description}
@@ -248,14 +232,18 @@ function ReceiptForm({
       </Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Payment Method">
-          <select className={INPUT_CLS} value={data.payment_method} onChange={e => onChange({ payment_method: e.target.value })}>
-            {PAYMENT_METHODS.map(m => <option key={m} value={m}>{m}</option>)}
-          </select>
+          <SelectPicker
+            value={data.payment_method}
+            onChange={v => onChange({ payment_method: v })}
+            options={PAYMENT_METHODS.map(m => ({ value: m, label: m }))}
+          />
         </Field>
         <Field label="Uploaded By">
-          <select className={INPUT_CLS} value={data.uploaded_by} onChange={e => onChange({ uploaded_by: e.target.value })}>
-            {UPLOADERS.map(u => <option key={u.id} value={u.id}>{u.label}</option>)}
-          </select>
+          <SelectPicker
+            value={data.uploaded_by}
+            onChange={v => onChange({ uploaded_by: v })}
+            options={UPLOADERS.map(u => ({ value: u.id, label: u.label }))}
+          />
         </Field>
       </div>
       <label className="flex cursor-pointer items-center gap-2.5">
@@ -918,11 +906,9 @@ function ExportModal({ receipts, onClose }: { receipts: Receipt[]; onClose: () =
         <div className="shrink-0 border-b border-gray-50 bg-gray-50 px-6 py-3">
           <div className="flex items-center gap-3">
             <span className="text-xs font-semibold text-gray-500">Date range:</span>
-            <input type="date" value={from} onChange={e => setFrom(e.target.value)}
-              className="rounded-lg border border-gray-200 px-2 py-1 text-xs text-gray-700 outline-none focus:border-[#6BA3D6]" />
+            <DatePicker value={from} onChange={setFrom} />
             <span className="text-xs text-gray-400">to</span>
-            <input type="date" value={to} onChange={e => setTo(e.target.value)}
-              className="rounded-lg border border-gray-200 px-2 py-1 text-xs text-gray-700 outline-none focus:border-[#6BA3D6]" />
+            <DatePicker value={to} onChange={setTo} />
             <button onClick={toggleAll} className="ml-auto text-xs font-semibold" style={{ color: ACCENT }}>
               {selectedList.length === visible.length ? 'Deselect all' : 'Select all'}
             </button>
@@ -1181,29 +1167,40 @@ export function ReceiptsTab() {
             className="w-full rounded-lg border border-gray-200 py-1.5 pl-8 pr-3 text-sm text-gray-700 outline-none focus:border-[#6BA3D6]"
           />
         </div>
-        <Select value={filterCat} onChange={setFilterCat} placeholder="All Categories">
-          {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-        </Select>
-        <Select value={filterStatus} onChange={setFilterStatus} placeholder="All Statuses">
-          <option value="unreviewed">Unreviewed</option>
-          <option value="reviewed">Reviewed</option>
-          <option value="exported">Exported</option>
-        </Select>
-        <Select value={filterBy} onChange={setFilterBy} placeholder="All Users">
-          {UPLOADERS.map(u => <option key={u.id} value={u.id}>{u.label}</option>)}
-        </Select>
+        <SelectPicker
+          value={filterCat}
+          onChange={setFilterCat}
+          options={[{ value: '', label: 'All Categories', muted: true }, ...CATEGORIES.map(c => ({ value: c, label: c }))]}
+        />
+        <SelectPicker
+          value={filterStatus}
+          onChange={setFilterStatus}
+          options={[
+            { value: '', label: 'All Statuses', muted: true },
+            { value: 'unreviewed', label: 'Unreviewed' },
+            { value: 'reviewed', label: 'Reviewed' },
+            { value: 'exported', label: 'Exported' },
+          ]}
+        />
+        <SelectPicker
+          value={filterBy}
+          onChange={setFilterBy}
+          options={[{ value: '', label: 'All Users', muted: true }, ...UPLOADERS.map(u => ({ value: u.id, label: u.label }))]}
+        />
         <div className="flex items-center gap-1">
-          <input type="date" value={filterFrom} onChange={e => setFilterFrom(e.target.value)}
-            className="rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-700 outline-none focus:border-[#6BA3D6]" />
+          <DatePicker value={filterFrom} onChange={setFilterFrom} />
           <span className="text-xs text-gray-300">–</span>
-          <input type="date" value={filterTo} onChange={e => setFilterTo(e.target.value)}
-            className="rounded-lg border border-gray-200 px-2 py-1.5 text-xs text-gray-700 outline-none focus:border-[#6BA3D6]" />
+          <DatePicker value={filterTo} onChange={setFilterTo} />
         </div>
-        <Select value={sort} onChange={v => setSort(v as typeof sort)} placeholder="">
-          <option value="date">Newest first</option>
-          <option value="amount">Highest amount</option>
-          <option value="merchant">Merchant A–Z</option>
-        </Select>
+        <SelectPicker
+          value={sort}
+          onChange={v => setSort(v as typeof sort)}
+          options={[
+            { value: 'date', label: 'Newest first' },
+            { value: 'amount', label: 'Highest amount' },
+            { value: 'merchant', label: 'Merchant A–Z' },
+          ]}
+        />
         {(search || filterCat || filterStatus || filterBy || filterFrom || filterTo) && (
           <button onClick={() => { setSearch(''); setFilterCat(''); setFilterStatus(''); setFilterBy(''); setFilterFrom(''); setFilterTo('') }}
             className="flex items-center gap-1 text-xs font-semibold text-gray-400 hover:text-gray-600">

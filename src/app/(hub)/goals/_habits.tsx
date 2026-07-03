@@ -2,9 +2,10 @@
 
 import { useState, useMemo } from 'react'
 import {
-  IconPlus, IconX, IconCheck, IconChevronDown, IconBell,
+  IconPlus, IconX, IconCheck, IconBell,
   IconFlame, IconCalendarStats,
 } from '@tabler/icons-react'
+import { SelectPicker } from '@/components/ui/Pickers'
 import {
   Habit, Goal, HabitFreq, HabitType,
   ACCENT, INPUT, LABEL, TODAY,
@@ -162,13 +163,14 @@ export function AddHabitModal({
 
           <div>
             <label className={LABEL}>Linked Goal <span className="normal-case font-normal text-gray-400">(optional)</span></label>
-            <div className="relative">
-              <select value={linkedGoal} onChange={e => setLinkedGoal(e.target.value)} className={INPUT + ' appearance-none pr-8'}>
-                <option value="">None</option>
-                {goals.map(g => <option key={g.id} value={g.id}>{g.title}</option>)}
-              </select>
-              <IconChevronDown size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            </div>
+            <SelectPicker
+              value={linkedGoal}
+              onChange={setLinkedGoal}
+              options={[
+                { value: '', label: 'None', muted: true },
+                ...goals.map(g => ({ value: g.id, label: g.title })),
+              ]}
+            />
           </div>
 
           <div>

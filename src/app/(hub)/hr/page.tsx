@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
+import { DatePicker, SelectPicker } from '@/components/ui/Pickers'
 import { sendEmail } from '@/lib/send-email'
 import { supabase } from '@/lib/supabase'
 import { CANONICAL_SESSION_TYPES } from '@/lib/sessionTypes'
@@ -628,8 +629,11 @@ function ModalField({ label, value, onChange, type = 'text', placeholder }: {
   return (
     <div>
       <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</label>
-      <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
-        className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#6BA3D6] focus:ring-2 focus:ring-[#6BA3D6]/10" />
+      {type === 'date'
+        ? <DatePicker value={value} onChange={onChange} />
+        : <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
+            className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#6BA3D6] focus:ring-2 focus:ring-[#6BA3D6]/10" />
+      }
     </div>
   )
 }
@@ -640,10 +644,7 @@ function ModalSelect({ label, value, onChange, options }: {
   return (
     <div>
       <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</label>
-      <select value={value} onChange={e => onChange(e.target.value)}
-        className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#6BA3D6]">
-        {options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-      </select>
+      <SelectPicker value={value} onChange={onChange} options={options.map(([v, l]) => ({ value: v, label: l }))} />
     </div>
   )
 }
@@ -1167,15 +1168,23 @@ function AvailabilityTab({ staff }: { staff: StaffMember[] }) {
             <form onSubmit={e => void saveException(e)} className="space-y-2">
               <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Add Exception</p>
               <div className="flex flex-wrap gap-2">
-                <select value={exForm.appliesTo} onChange={e => setExForm(p => ({ ...p, appliesTo: e.target.value }))} className={INPUT_SM}>
-                  <option value="facility">Facility</option>
-                  {staff.map(s => <option key={s.id} value={`coach:${s.id}`}>{s.firstName} {s.lastName}</option>)}
-                </select>
-                <select value={exForm.exType} onChange={e => setExForm(p => ({ ...p, exType: e.target.value }))} className={INPUT_SM}>
-                  <option value="block">Block (closure)</option>
-                  <option value="extra">Extra hours</option>
-                </select>
-                <input type="date" required value={exForm.date} onChange={e => setExForm(p => ({ ...p, date: e.target.value }))} className={INPUT_SM} />
+                <SelectPicker
+                  value={exForm.appliesTo}
+                  onChange={v => setExForm(p => ({ ...p, appliesTo: v }))}
+                  options={[
+                    { value: 'facility', label: 'Facility' },
+                    ...staff.map(s => ({ value: `coach:${s.id}`, label: `${s.firstName} ${s.lastName}` })),
+                  ]}
+                />
+                <SelectPicker
+                  value={exForm.exType}
+                  onChange={v => setExForm(p => ({ ...p, exType: v }))}
+                  options={[
+                    { value: 'block', label: 'Block (closure)' },
+                    { value: 'extra', label: 'Extra hours' },
+                  ]}
+                />
+                <DatePicker value={exForm.date} onChange={v => setExForm(p => ({ ...p, date: v }))} />
                 <input type="time" value={exForm.startTime} onChange={e => setExForm(p => ({ ...p, startTime: e.target.value }))} className={INPUT_SM} />
                 <input type="time" value={exForm.endTime}   onChange={e => setExForm(p => ({ ...p, endTime:   e.target.value }))} className={INPUT_SM} />
                 <input type="text" placeholder="Reason (optional)" value={exForm.reason} onChange={e => setExForm(p => ({ ...p, reason: e.target.value }))} className={`${INPUT_SM} min-w-[140px] flex-1`} />
@@ -1495,11 +1504,14 @@ function DocumentsTab({ staff, setStaff }: { staff: StaffMember[]; setStaff: (s:
       )}
 
       <div className="mb-4 flex items-center justify-between">
-        <select value={filterStaff} onChange={e => setFilterStaff(e.target.value)}
-          className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#6BA3D6]">
-          <option value="all">All Staff</option>
-          {staff.map(s => <option key={s.id} value={s.id}>{s.firstName} {s.lastName}</option>)}
-        </select>
+        <SelectPicker
+          value={filterStaff}
+          onChange={setFilterStaff}
+          options={[
+            { value: 'all', label: 'All Staff' },
+            ...staff.map(s => ({ value: s.id, label: `${s.firstName} ${s.lastName}` })),
+          ]}
+        />
         <button onClick={() => setShowAdd(true)}
           className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold text-white"
           style={{ backgroundColor: ACCENT }}>

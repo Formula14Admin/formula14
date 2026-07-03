@@ -8,6 +8,7 @@ import {
   IconTrophy,
 } from '@tabler/icons-react'
 import { supabase } from '@/lib/supabase'
+import { DatePicker, SelectPicker } from '@/components/ui/Pickers'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -115,9 +116,11 @@ function SponsorModal({
         <div className="space-y-3">
           <div>
             <label className={LABEL}>Sponsorship Tier</label>
-            <select value={tierId} onChange={e => setTierId(e.target.value)} className={INPUT + ' cursor-pointer'}>
-              {tiers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-            </select>
+            <SelectPicker
+              value={tierId}
+              onChange={setTierId}
+              options={tiers.map(t => ({ value: t.id, label: t.name }))}
+            />
           </div>
           <div>
             <label className={LABEL}>Business Name <span className="text-red-400">*</span></label>
@@ -140,11 +143,11 @@ function SponsorModal({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={LABEL}>Start Date</label>
-              <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className={INPUT} />
+              <DatePicker value={startDate} onChange={setStartDate} />
             </div>
             <div>
               <label className={LABEL}>Renewal Date</label>
-              <input type="date" value={renewalDate} onChange={e => setRenewalDate(e.target.value)} className={INPUT} />
+              <DatePicker value={renewalDate} onChange={setRenewalDate} />
             </div>
           </div>
           <div>
@@ -207,9 +210,11 @@ function AddTierModal({
           </div>
           <div>
             <label className={LABEL}>Colour Style</label>
-            <select value={colorId} onChange={e => setColorId(e.target.value)} className={INPUT + ' cursor-pointer'}>
-              {COLOR_OPTIONS.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
-            </select>
+            <SelectPicker
+              value={colorId}
+              onChange={setColorId}
+              options={COLOR_OPTIONS.map(o => ({ value: o.id, label: o.label }))}
+            />
           </div>
         </div>
         <div className="mt-5 flex justify-end gap-2">
@@ -659,14 +664,11 @@ export default function SponsorshipsPage() {
                                   <IconPencil size={13} />
                                 </button>
                                 {tiers.length > 1 && (
-                                  <select
+                                  <SelectPicker
                                     value={sp.tier_id}
-                                    onChange={e => void moveSponsor(sp.id, e.target.value)}
-                                    title="Move to tier"
-                                    className="rounded border border-gray-200 bg-white px-1 py-0.5 text-[10px] font-semibold text-gray-500 outline-none hover:border-gray-300 cursor-pointer"
-                                  >
-                                    {tiers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                                  </select>
+                                    onChange={v => void moveSponsor(sp.id, v)}
+                                    options={tiers.map(t => ({ value: t.id, label: t.name }))}
+                                  />
                                 )}
                                 <button
                                   onClick={() => void deleteSponsor(sp.id)}

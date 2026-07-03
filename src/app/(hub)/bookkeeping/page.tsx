@@ -15,6 +15,7 @@ import {
   IconReceipt,
   IconChevronDown,
 } from '@tabler/icons-react'
+import { DatePicker, SelectPicker } from '@/components/ui/Pickers'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -310,7 +311,7 @@ function AddModal({ onClose, onAdd }: AddModalProps) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={LABEL}>Date</label>
-              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={INPUT} />
+              <DatePicker value={date} onChange={setDate} />
             </div>
             <div>
               <label className={LABEL}>Amount</label>
@@ -333,18 +334,11 @@ function AddModal({ onClose, onAdd }: AddModalProps) {
 
           <div>
             <label className={LABEL}>Category</label>
-            <div className="relative">
-              <select
-                value={category}
-                onChange={(e) => setCategory(e.target.value as TxCategory)}
-                className={INPUT + ' appearance-none pr-8'}
-              >
-                {catOptions.map(({ value, label }) => (
-                  <option key={value} value={value}>{label}</option>
-                ))}
-              </select>
-              <IconChevronDown size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            </div>
+            <SelectPicker
+              value={category}
+              onChange={v => setCategory(v as TxCategory)}
+              options={catOptions}
+            />
           </div>
 
           <div>

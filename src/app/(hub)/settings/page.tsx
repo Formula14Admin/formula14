@@ -36,6 +36,7 @@ import {
 } from '@/lib/notification-settings'
 import type { TemplateName } from '@/lib/email-templates'
 import EmailTemplatesSection from '@/components/settings/EmailTemplatesSection'
+import { SelectPicker } from '@/components/ui/Pickers'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -230,9 +231,7 @@ function RecipientRow({ recipient, onSave, onDelete }: {
         <td className="px-4 py-3"><input value={name}  onChange={e => setName(e.target.value)}  className={INPUT} placeholder="Name" /></td>
         <td className="px-4 py-3"><input type="email" value={email} onChange={e => setEmail(e.target.value)} className={INPUT} placeholder="email@example.com" /></td>
         <td className="px-4 py-3">
-          <select value={role} onChange={e => setRole(e.target.value)} className={INPUT}>
-            {ROLE_OPTIONS.map(r => <option key={r}>{r}</option>)}
-          </select>
+          <SelectPicker value={role} onChange={setRole} options={ROLE_OPTIONS.map(r => ({ value: r, label: r }))} />
         </td>
         <td className="px-4 py-3 text-right">
           <div className="flex justify-end gap-1.5">
@@ -302,9 +301,7 @@ function AddRecipientForm({ onAdd, onCancel }: { onAdd: (r: Recipient) => void; 
         </div>
         <div>
           <label className={LABEL}>Role</label>
-          <select value={role} onChange={e => setRole(e.target.value)} className={INPUT}>
-            {ROLE_OPTIONS.map(r => <option key={r}>{r}</option>)}
-          </select>
+          <SelectPicker value={role} onChange={setRole} options={ROLE_OPTIONS.map(r => ({ value: r, label: r }))} />
         </div>
       </div>
       <div className="mt-3 flex gap-2">
@@ -365,15 +362,15 @@ function AudienceBadge({ label, color }: { label: string; color: string }) {
 // SendTo selector (Matt / Jade / Both)
 function SendToSelector({ value, onChange }: { value: SendToOption; onChange: (v: SendToOption) => void }) {
   return (
-    <select
+    <SelectPicker
       value={value}
-      onChange={e => onChange(e.target.value as SendToOption)}
-      className="rounded-lg border border-gray-200 py-1 pl-2 pr-6 text-xs font-semibold text-gray-700 outline-none focus:border-[#6BA3D6]"
-    >
-      <option value="matt">Matt only</option>
-      <option value="jade">Jade only</option>
-      <option value="both">Matt &amp; Jade</option>
-    </select>
+      onChange={v => onChange(v as SendToOption)}
+      options={[
+        { value: 'matt', label: 'Matt only' },
+        { value: 'jade', label: 'Jade only' },
+        { value: 'both', label: 'Matt & Jade' },
+      ]}
+    />
   )
 }
 
@@ -613,21 +610,17 @@ function NotificationsTab({
             </div>
             <div className="flex items-center gap-2">
               <span className="text-xs font-semibold text-gray-500">From</span>
-              <select
-                value={s.sendingHours.start}
-                onChange={e => onSendingHours(Number(e.target.value), s.sendingHours.end)}
-                className="rounded-lg border border-gray-200 py-1.5 pl-2 pr-6 text-xs font-semibold text-gray-700 outline-none focus:border-[#6BA3D6]"
-              >
-                {HOURS.map(h => <option key={h} value={h}>{fmtHour(h)}</option>)}
-              </select>
+              <SelectPicker
+                value={String(s.sendingHours.start)}
+                onChange={v => onSendingHours(Number(v), s.sendingHours.end)}
+                options={HOURS.map(h => ({ value: String(h), label: fmtHour(h) }))}
+              />
               <span className="text-xs font-semibold text-gray-500">to</span>
-              <select
-                value={s.sendingHours.end}
-                onChange={e => onSendingHours(s.sendingHours.start, Number(e.target.value))}
-                className="rounded-lg border border-gray-200 py-1.5 pl-2 pr-6 text-xs font-semibold text-gray-700 outline-none focus:border-[#6BA3D6]"
-              >
-                {HOURS.map(h => <option key={h} value={h}>{fmtHour(h)}</option>)}
-              </select>
+              <SelectPicker
+                value={String(s.sendingHours.end)}
+                onChange={v => onSendingHours(s.sendingHours.start, Number(v))}
+                options={HOURS.map(h => ({ value: String(h), label: fmtHour(h) }))}
+              />
             </div>
           </div>
         </div>
@@ -664,15 +657,15 @@ function NotificationsTab({
           enabled={s.sessionReminder.enabled}
           onToggle={v => onPatch('sessionReminder', { enabled: v })}
           template="booking-confirmation" sessionEmail={sessionEmail}>
-          <select
+          <SelectPicker
             value={s.sessionReminder.timing}
-            onChange={e => onPatch('sessionReminder', { timing: e.target.value as '24h' | '2h' | 'both' })}
-            className="rounded-lg border border-gray-200 py-1 pl-2 pr-6 text-xs font-semibold text-gray-700 outline-none focus:border-[#6BA3D6]"
-          >
-            <option value="24h">24 hours before</option>
-            <option value="2h">2 hours before</option>
-            <option value="both">Both (24h and 2h)</option>
-          </select>
+            onChange={v => onPatch('sessionReminder', { timing: v as '24h' | '2h' | 'both' })}
+            options={[
+              { value: '24h', label: '24 hours before' },
+              { value: '2h', label: '2 hours before' },
+              { value: 'both', label: 'Both (24h and 2h)' },
+            ]}
+          />
         </NotifRow>
 
         <NotifRow label="Casual Shooting Bump" desc="Sent when their Casual Shooting booking is cancelled due to a higher-priority member"
@@ -692,14 +685,14 @@ function NotificationsTab({
           enabled={s.membershipRenewalReminder.enabled}
           onToggle={v => onPatch('membershipRenewalReminder', { enabled: v })}
           template="booking-confirmation" sessionEmail={sessionEmail}>
-          <select
+          <SelectPicker
             value={s.membershipRenewalReminder.timing}
-            onChange={e => onPatch('membershipRenewalReminder', { timing: e.target.value as '3days' | '1day' })}
-            className="rounded-lg border border-gray-200 py-1 pl-2 pr-6 text-xs font-semibold text-gray-700 outline-none focus:border-[#6BA3D6]"
-          >
-            <option value="3days">3 days before renewal</option>
-            <option value="1day">1 day before renewal</option>
-          </select>
+            onChange={v => onPatch('membershipRenewalReminder', { timing: v as '3days' | '1day' })}
+            options={[
+              { value: '3days', label: '3 days before renewal' },
+              { value: '1day', label: '1 day before renewal' },
+            ]}
+          />
         </NotifRow>
 
         <NotifRow label="Program Enrolment Confirmation" desc="Sent when athlete is enrolled in a program"

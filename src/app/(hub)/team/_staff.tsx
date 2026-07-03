@@ -2,10 +2,11 @@
 
 import { useState } from 'react'
 import {
-  IconPlus, IconX, IconChevronDown, IconMail, IconPhone,
+  IconPlus, IconX, IconMail, IconPhone,
   IconEye, IconEyeOff, IconUpload, IconAlertTriangle,
   IconBriefcase, IconCurrencyDollar, IconCheck,
 } from '@tabler/icons-react'
+import { DatePicker, SelectPicker } from '@/components/ui/Pickers'
 import {
   StaffMember, StaffDocument, EmploymentType, PayRateType, DocType,
   ACCENT, INPUT, LABEL,
@@ -146,17 +147,16 @@ export function AddStaffModal({ onClose, onAdd }: { onClose: () => void; onAdd: 
               </div>
             </Field>
             <Field label="Employment Type" id="empType">
-              <div className="relative">
-                <select id="empType" value={form.employmentType} onChange={e => set('employmentType', e.target.value as EmploymentType)} className={INPUT + ' appearance-none pr-8'}>
-                  {Object.entries(EMPLOYMENT_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-                </select>
-                <IconChevronDown size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              </div>
+              <SelectPicker
+                value={form.employmentType}
+                onChange={v => set('employmentType', v as EmploymentType)}
+                options={Object.entries(EMPLOYMENT_LABELS).map(([v, l]) => ({ value: v, label: l }))}
+              />
             </Field>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Start Date" id="start">
-              <input id="start" type="date" value={form.startDate} onChange={e => set('startDate', e.target.value)} className={INPUT} />
+              <DatePicker value={form.startDate} onChange={v => set('startDate', v)} />
             </Field>
             <Field label="Status" id="status">
               <div className="flex gap-2 pt-1">

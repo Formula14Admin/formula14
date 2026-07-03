@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
+import { SelectPicker } from '@/components/ui/Pickers'
 import {
   IconLock,
   IconLockOpen,
@@ -1419,15 +1420,11 @@ export default function PricingPage() {
                               {editTiers.map(tier => (
                                 <tr key={tier.id} className="border-b border-gray-100 last:border-0">
                                   <td className="px-3 py-1.5">
-                                    <select
-                                      value={tier.min}
-                                      onChange={e => updateTierField(tier.id, { min: parseInt(e.target.value), max: parseInt(e.target.value) })}
-                                      className="rounded border border-gray-200 px-2 py-1 text-sm text-gray-900 outline-none focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/30"
-                                    >
-                                      {[15,30,45,60,75,90,105,120].map(m => (
-                                        <option key={m} value={m}>{m} min</option>
-                                      ))}
-                                    </select>
+                                    <SelectPicker
+                                      value={String(tier.min)}
+                                      onChange={v => updateTierField(tier.id, { min: parseInt(v), max: parseInt(v) })}
+                                      options={[15,30,45,60,75,90,105,120].map(m => ({ value: String(m), label: `${m} min` }))}
+                                    />
                                   </td>
                                   <td className="px-3 py-1.5">
                                     <div className="flex items-center gap-1">
@@ -1460,15 +1457,11 @@ export default function PricingPage() {
                       <div className="space-y-2">
                         <div className="flex items-center gap-3">
                           <label className="shrink-0 text-xs font-semibold text-gray-600">Duration</label>
-                          <select
-                            value={editDurationMins}
-                            onChange={e => setEditDurationMins(parseInt(e.target.value))}
-                            className="flex-1 rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-900 outline-none focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/30"
-                          >
-                            {DURATION_OPTIONS.map(opt => (
-                              <option key={opt.value} value={opt.value}>{opt.label}</option>
-                            ))}
-                          </select>
+                          <SelectPicker
+                            value={String(editDurationMins)}
+                            onChange={v => setEditDurationMins(parseInt(v))}
+                            options={DURATION_OPTIONS.map(opt => ({ value: String(opt.value), label: opt.label }))}
+                          />
                         </div>
                         {editTiers.length > 0 && (
                           <div className="overflow-hidden rounded-lg border border-gray-200">

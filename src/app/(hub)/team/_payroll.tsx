@@ -5,6 +5,7 @@ import {
   IconPlus, IconX, IconUsers, IconClock,
   IconCalendar, IconCurrencyDollar, IconCircleCheck,
 } from '@tabler/icons-react'
+import { DatePicker } from '@/components/ui/Pickers'
 import {
   PayRun, PayRunEntry, StaffMember, PayPeriodType,
   ACCENT, INPUT, LABEL,
@@ -134,11 +135,11 @@ function CreatePayRunModal({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={LABEL}>Start Date</label>
-              <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className={INPUT} />
+              <DatePicker value={startDate} onChange={setStartDate} />
             </div>
             <div>
               <label className={LABEL}>End Date</label>
-              <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className={INPUT} />
+              <DatePicker value={endDate} onChange={setEndDate} />
             </div>
           </div>
 
