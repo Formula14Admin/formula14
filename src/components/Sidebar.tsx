@@ -2,7 +2,7 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useSearchParams } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
 import { useState, useEffect, useCallback, type ComponentType, type CSSProperties } from 'react'
 import {
@@ -72,8 +72,8 @@ const NAV: NavSection[] = [
         children: [
           { label: 'Overview',     href: '/finances',              icon: IconLayoutDashboard },
           { label: 'Transactions', href: '/finances/transactions', icon: IconReceipt },
-          { label: 'Pricing',      href: '/pricing',               icon: IconTag },
-          { label: 'Payments',     href: '/bookkeeping',           icon: IconCreditCard },
+          { label: 'Payments',     href: '/pricing',               icon: IconCreditCard },
+          { label: 'Pricing',      href: '/pricing?tab=pricing',   icon: IconTag },
         ],
       },
       { label: 'Forms',                       href: '/forms',               icon: IconForms },
@@ -116,10 +116,45 @@ const NAV: NavSection[] = [
   },
 ]
 
+// ─── Active detection (supports query-param hrefs like /pricing?tab=pricing) ──
+
+function isChildActive(href: string, pathname: string, searchStr: string): boolean {
+  const qIdx = href.indexOf('?')
+  if (qIdx === -1) {
+    // No query in href — active when path matches.
+    // If the URL has a 'tab' query that belongs to a sibling at the same path,
+    // stay inactive so the sibling can claim active instead.
+    if (pathname !== href) return false
+    const urlParams = new URLSearchParams(searchStr)
+    const tab = urlParams.get('tab')
+    // Only suppress if another sibling uses ?tab= for the same path
+    if (!tab) return true
+    // Check if any other NAV child uses this path with ?tab=<something>
+    for (const { items } of NAV) {
+      for (const item of items) {
+        for (const c of item.children ?? []) {
+          if (c.href !== href && c.href.startsWith(href + '?tab=')) return false
+        }
+      }
+    }
+    return true
+  }
+  const hrefPath = href.slice(0, qIdx)
+  if (hrefPath !== pathname) return false
+  const hrefParams = new URLSearchParams(href.slice(qIdx + 1))
+  const urlParams = new URLSearchParams(searchStr)
+  for (const [key, val] of hrefParams.entries()) {
+    if (urlParams.get(key) !== val) return false
+  }
+  return true
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function Sidebar() {
   const pathname = usePathname()
+  const rawSearchParams = useSearchParams()
+  const searchStr = rawSearchParams.toString()
   const { data: session } = useSession()
 
   // Notification badge counts keyed by nav href
@@ -178,10 +213,9 @@ export default function Sidebar() {
   // Track which expandable items are open (keyed by href)
   const [expanded, setExpanded] = useState<Set<string>>(() => {
     const initial = new Set<string>()
-    // Auto-open any parent whose child is currently active
     NAV.forEach(({ items }) =>
       items.forEach(item => {
-        if (item.children?.some(c => pathname === c.href || pathname.startsWith(c.href + '/'))) {
+        if (item.children?.some(c => isChildActive(c.href, pathname, searchStr))) {
           initial.add(item.href)
         }
       })
@@ -189,16 +223,16 @@ export default function Sidebar() {
     return initial
   })
 
-  // Keep expanded in sync when pathname changes (e.g. deep-linking)
+  // Keep expanded in sync when pathname/search changes
   useEffect(() => {
     NAV.forEach(({ items }) =>
       items.forEach(item => {
-        if (item.children?.some(c => pathname === c.href || pathname.startsWith(c.href + '/'))) {
+        if (item.children?.some(c => isChildActive(c.href, pathname, searchStr))) {
           setExpanded(prev => new Set(prev).add(item.href))
         }
       })
     )
-  }, [pathname])
+  }, [pathname, searchStr])
 
   function toggleExpanded(href: string) {
     setExpanded(prev => {
@@ -259,7 +293,7 @@ export default function Sidebar() {
                 {items.map(item => {
                   const hasChildren = !!item.children?.length
                   const childActive = hasChildren && item.children!.some(
-                    c => pathname === c.href || pathname.startsWith(c.href + '/')
+                    c => isChildActive(c.href, pathname, searchStr)
                   )
                   const active = pathname === item.href || pathname.startsWith(item.href + '/') || childActive
                   const open = expanded.has(item.href)
@@ -318,7 +352,7 @@ export default function Sidebar() {
                       {hasChildren && open && (
                         <ul className="mt-0.5 space-y-0.5 pl-4">
                           {item.children!.map(child => {
-                            const childIsActive = pathname === child.href || pathname.startsWith(child.href + '/')
+                            const childIsActive = isChildActive(child.href, pathname, searchStr)
                             return (
                               <li key={child.href}>
                                 <Link
