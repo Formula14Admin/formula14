@@ -30,6 +30,8 @@ import {
   IconTrophy,
   IconReceipt,
   IconTag,
+  IconUser,
+  IconSparkles,
 } from '@tabler/icons-react'
 
 // ─── Nav types ────────────────────────────────────────────────────────────────
@@ -72,8 +74,11 @@ const NAV: NavSection[] = [
         children: [
           { label: 'Overview',     href: '/finances',              icon: IconLayoutDashboard },
           { label: 'Transactions', href: '/finances/transactions', icon: IconReceipt },
+          { label: 'Reports',      href: '/finances/reports',      icon: IconChartBar },
+          { label: 'Personal',     href: '/finances/personal',     icon: IconUser },
+          { label: 'Ask Claude',   href: '/finances/claude',       icon: IconSparkles },
           { label: 'Payments',     href: '/pricing',               icon: IconCreditCard },
-          { label: 'Pricing',      href: '/pricing/config',         icon: IconTag },
+          { label: 'Pricing',      href: '/pricing/config',        icon: IconTag },
         ],
       },
       { label: 'Forms',                       href: '/forms',               icon: IconForms },
