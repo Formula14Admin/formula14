@@ -2,19 +2,18 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import {
-  IconLayoutDashboard, IconReceipt, IconChartBar, IconUser,
+  IconLayoutDashboard, IconChartBar, IconUser,
   IconSparkles, IconSend, IconMail, IconX, IconCheck,
-  IconPlus, IconChevronDown,
+  IconChevronDown,
 } from '@tabler/icons-react'
 import {
   Transaction, PersonalTx, SavingsGoal,
   loadTransactions, saveTransactions,
   loadPersonalTxns, savePersonalTxns,
   loadGoals, saveGoals,
-  uid, ACCENT, INPUT, LABEL,
+  ACCENT, INPUT, LABEL,
 } from './_shared'
 import { OverviewTab }      from './_overview'
-import { TransactionsTab }  from './_transactions'
 import { ReportsTab }       from './_reports'
 import { PersonalTab }      from './_personal'
 import { AskClaudeTab }     from './_claude'
@@ -23,14 +22,13 @@ import { sendEmail } from '@/lib/send-email'
 
 // ─── Tab config ────────────────────────────────────────────────────────────────
 
-type TabId = 'overview' | 'transactions' | 'reports' | 'personal' | 'claude'
+type TabId = 'overview' | 'reports' | 'personal' | 'claude'
 
 const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
-  { id: 'overview',      label: 'Overview',      icon: <IconLayoutDashboard size={15} /> },
-  { id: 'transactions',  label: 'Transactions',  icon: <IconReceipt size={15} /> },
-  { id: 'reports',       label: 'Reports',       icon: <IconChartBar size={15} /> },
-  { id: 'personal',      label: 'Personal',      icon: <IconUser size={15} /> },
-  { id: 'claude',        label: 'Ask Claude',    icon: <IconSparkles size={15} /> },
+  { id: 'overview',  label: 'Overview',   icon: <IconLayoutDashboard size={15} /> },
+  { id: 'reports',   label: 'Reports',    icon: <IconChartBar size={15} /> },
+  { id: 'personal',  label: 'Personal',   icon: <IconUser size={15} /> },
+  { id: 'claude',    label: 'Ask Claude', icon: <IconSparkles size={15} /> },
 ]
 
 // ─── Send Summary Modal ────────────────────────────────────────────────────────
@@ -229,7 +227,6 @@ export default function FinancesPage() {
   const [goals,        setGoals]        = useState<SavingsGoal[]>([])
   const [showSend,     setShowSend]     = useState(false)
   const [toast,        setToast]        = useState<string | null>(null)
-  const [showAddTx,    setShowAddTx]    = useState(false)
 
   useEffect(() => {
     setTransactions(loadTransactions([]))
@@ -283,14 +280,6 @@ export default function FinancesPage() {
             <p className="text-sm text-gray-500">Business · Personal · AI-powered insights</p>
           </div>
           <div className="flex items-center gap-3">
-            {/* Context-sensitive action buttons */}
-            {tab === 'transactions' && (
-              <button onClick={() => setShowAddTx(true)}
-                className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
-                style={{ backgroundColor: ACCENT }}>
-                <IconPlus size={15} /> Add Transaction
-              </button>
-            )}
             {(tab === 'overview' || tab === 'reports') && (
               <button onClick={() => setShowSend(true)}
                 className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
@@ -316,11 +305,10 @@ export default function FinancesPage() {
 
       {/* Content */}
       <div className="p-6">
-        {tab === 'overview'     && <OverviewTab     transactions={transactions} />}
-        {tab === 'transactions' && <TransactionsTab transactions={transactions} onAdd={addTransaction} onDelete={delTransaction} showAddModalProp={showAddTx} onAddModalClose={() => setShowAddTx(false)} />}
-{tab === 'reports'      && <ReportsTab      transactions={transactions} />}
-        {tab === 'personal'     && <PersonalTab     txns={personalTxns} goals={goals} onAddTx={addPersonalTx} onAddGoal={addGoal} />}
-        {tab === 'claude'       && <AskClaudeTab    transactions={transactions} personalTxns={personalTxns} />}
+        {tab === 'overview'  && <OverviewTab  transactions={transactions} />}
+        {tab === 'reports'   && <ReportsTab   transactions={transactions} />}
+        {tab === 'personal'  && <PersonalTab  txns={personalTxns} goals={goals} onAddTx={addPersonalTx} onAddGoal={addGoal} />}
+        {tab === 'claude'    && <AskClaudeTab transactions={transactions} personalTxns={personalTxns} />}
       </div>
 
       {showSend && <SendSummaryModal onClose={() => setShowSend(false)} onSend={handleSend} />}

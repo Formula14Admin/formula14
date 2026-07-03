@@ -28,6 +28,8 @@ import {
   IconChecklist,
   IconBriefcase,
   IconTrophy,
+  IconReceipt,
+  IconTag,
 } from '@tabler/icons-react'
 
 // ─── Nav types ────────────────────────────────────────────────────────────────
@@ -63,7 +65,17 @@ const NAV: NavSection[] = [
       { label: 'Athletes',                    href: '/athletes',            icon: IconUsers },
       { label: 'Boards',                      href: '/boards',              icon: IconLayoutKanban },
       { label: 'Bookings',                    href: '/bookings',            icon: IconCalendar },
-      { label: 'Finances',                    href: '/finances',            icon: IconCash },
+      {
+        label: 'Finances',
+        href: '/finances',
+        icon: IconCash,
+        children: [
+          { label: 'Overview',     href: '/finances',              icon: IconLayoutDashboard },
+          { label: 'Transactions', href: '/finances/transactions', icon: IconReceipt },
+          { label: 'Pricing',      href: '/pricing',               icon: IconTag },
+          { label: 'Payments',     href: '/bookkeeping',           icon: IconCreditCard },
+        ],
+      },
       { label: 'Forms',                       href: '/forms',               icon: IconForms },
       { label: 'HR',                          href: '/hr',                  icon: IconBriefcase },
       {
@@ -75,7 +87,6 @@ const NAV: NavSection[] = [
           { label: 'Procedures', href: '/procedures', icon: IconClipboardList },
         ],
       },
-      { label: 'Pricing & Payments',          href: '/pricing',             icon: IconCreditCard },
       { label: 'Social Media & Advertising',  href: '/social-media',        icon: IconSpeakerphone },
       { label: 'Sponsorships',               href: '/sponsorships',        icon: IconTrophy },
       { label: 'To Do',                       href: '/todo',                icon: IconChecklist },
