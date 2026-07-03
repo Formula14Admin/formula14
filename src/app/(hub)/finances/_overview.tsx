@@ -11,8 +11,14 @@ import {
   monthTotal, ACCENT,
 } from './_shared'
 
-const CURRENT_YM = '2026-06'
-const PREV_YM    = '2026-05'
+function sydneyYM(offset = 0): string {
+  const d = new Date()
+  d.setMonth(d.getMonth() + offset)
+  return d.toLocaleDateString('en-CA', { timeZone: 'Australia/Sydney' }).slice(0, 7)
+}
+const CURRENT_YM    = sydneyYM(0)
+const PREV_YM       = sydneyYM(-1)
+const CURRENT_LABEL = new Date().toLocaleDateString('en-AU', { month: 'long', year: 'numeric', timeZone: 'Australia/Sydney' })
 
 export function OverviewTab({ transactions }: { transactions: Transaction[] }) {
 
@@ -69,10 +75,10 @@ export function OverviewTab({ transactions }: { transactions: Transaction[] }) {
   const withoutReceipt = currentMonthExpenses.filter(t => !t.receiptUrl).length
 
   const health = [
-    { label: 'Membership Retention',   value: '87%',   color: '#10b981' },
-    { label: 'Avg Revenue / Athlete',  value: junIncome > 0 ? fmtK(Math.round(junIncome / 24)) : '—',  color: ACCENT },
-    { label: 'Sessions / Week (avg)',  value: '5.4',   color: '#8b5cf6' },
-    { label: 'Outstanding Debt',       value: '$2,419',color: '#f59e0b' },
+    { label: 'Membership Retention',   value: '—',                                          color: '#10b981' },
+    { label: 'Avg Revenue / Athlete',  value: junIncome > 0 ? fmtK(junIncome) : '—',        color: ACCENT },
+    { label: 'Sessions / Week (avg)',  value: '—',                                          color: '#8b5cf6' },
+    { label: 'Outstanding Debt',       value: '$0',                                         color: '#10b981' },
   ]
 
   return (
@@ -83,7 +89,7 @@ export function OverviewTab({ transactions }: { transactions: Transaction[] }) {
         <StatCard icon={<IconTrendingUp size={16}/>}      label="Revenue (Jun)"         value={fmtMoney(junIncome)}   sub={`${fmtMoney(mayIncome)} in May`} />
         <StatCard icon={<IconTrendingDown size={16}/>}    label="Expenses (Jun)"        value={fmtMoney(junExpenses)} sub={`${fmtMoney(mayExpenses)} in May`} color="#ef4444" negative />
         <StatCard icon={<IconChartPie size={16}/>}        label="Net Profit (Jun)"      value={fmtMoney(junNet)}      sub="Partial month" color="#10b981" />
-        <StatCard icon={<IconReceipt size={16}/>}         label="Outstanding Invoices"  value="$2,419"                sub="3 invoices pending" color="#f59e0b" />
+        <StatCard icon={<IconReceipt size={16}/>}         label="Outstanding Invoices"  value="$0"                    sub="No invoices pending" />
         <StatCard icon={<IconCalendar size={16}/>}        label="Weekly Membership Rev" value={fmtMoney(weeklyMembership)} sub="Recurring weekly" color="#8b5cf6" />
         <StatCard icon={<IconCurrencyDollar size={16}/>}  label="Year to Date Revenue"  value={fmtK(ytdIncome)}       sub="All recorded transactions" />
       </div>
@@ -93,7 +99,7 @@ export function OverviewTab({ transactions }: { transactions: Transaction[] }) {
         <div className="mb-3 flex items-center justify-between">
           <div>
             <h2 className="text-sm font-bold text-gray-900">Expense Documentation</h2>
-            <p className="text-xs text-gray-400">Receipt coverage for June 2026 expenses</p>
+            <p className="text-xs text-gray-400">Receipt coverage for {CURRENT_LABEL} expenses</p>
           </div>
           {withoutReceipt > 0 && (
             <span className="flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700">
@@ -143,7 +149,7 @@ export function OverviewTab({ transactions }: { transactions: Transaction[] }) {
       {/* Pie charts */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div className="rounded-xl bg-white p-5 shadow-sm">
-          <h2 className="mb-4 text-sm font-bold text-gray-900">Revenue Breakdown <span className="font-normal text-gray-400">— Jun 2026</span></h2>
+          <h2 className="mb-4 text-sm font-bold text-gray-900">Revenue Breakdown <span className="font-normal text-gray-400">— {CURRENT_LABEL}</span></h2>
           {revPie.length === 0 ? (
             <div className="flex h-[200px] items-center justify-center text-sm text-gray-400">No revenue recorded yet</div>
           ) : (
@@ -167,7 +173,7 @@ export function OverviewTab({ transactions }: { transactions: Transaction[] }) {
         </div>
 
         <div className="rounded-xl bg-white p-5 shadow-sm">
-          <h2 className="mb-4 text-sm font-bold text-gray-900">Expense Breakdown <span className="font-normal text-gray-400">— Jun 2026</span></h2>
+          <h2 className="mb-4 text-sm font-bold text-gray-900">Expense Breakdown <span className="font-normal text-gray-400">— {CURRENT_LABEL}</span></h2>
           {expPie.length === 0 ? (
             <div className="flex h-[200px] items-center justify-center text-sm text-gray-400">No expenses recorded yet</div>
           ) : (
