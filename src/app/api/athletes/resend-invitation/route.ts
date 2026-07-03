@@ -1,12 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { supabase } from '@/lib/supabase'
 import { resend, FROM_EMAIL, REPLY_TO } from '@/lib/resend'
 import { athleteInvitation } from '@/lib/email-templates'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-)
 
 function tempPassword(): string {
   return `Formula14#${String(Math.floor(1000 + Math.random() * 9000))}`

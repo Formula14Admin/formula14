@@ -23,13 +23,7 @@ import {
   getTemplateDefinition,
   getSampleVars,
 } from '@/lib/email-template-definitions'
-import { createClient } from '@supabase/supabase-js'
-
-// Server-side Supabase client (anon key — RLS is permissive in dev)
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'https://dydrtbrhhgyppancbhpy.supabase.co',
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ''
-)
+import { supabase } from '@/lib/supabase'
 
 // ─── Notification settings check ─────────────────────────────────────────────
 
