@@ -65,7 +65,6 @@ const NAV: NavSection[] = [
     items: [
       { label: 'Dashboard',                   href: '/dashboard',           icon: IconLayoutDashboard },
       { label: 'Athletes',                    href: '/athletes',            icon: IconUsers },
-      { label: 'Boards',                      href: '/boards',              icon: IconLayoutKanban },
       { label: 'Bookings',                    href: '/bookings',            icon: IconCalendar },
       {
         label: 'Finances',
@@ -81,20 +80,20 @@ const NAV: NavSection[] = [
           { label: 'Pricing',      href: '/pricing/config',        icon: IconTag },
         ],
       },
-      { label: 'Forms',                       href: '/forms',               icon: IconForms },
       { label: 'HR',                          href: '/hr',                  icon: IconBriefcase },
       {
-        label: 'Policies & Procedures',
-        href: '/policies-procedures',
-        icon: IconFileText,
+        label: 'Admin Tools',
+        href: '/boards',
+        icon: IconSettings,
         children: [
-          { label: 'Policies',   href: '/policies',   icon: IconFileText },
-          { label: 'Procedures', href: '/procedures', icon: IconClipboardList },
+          { label: 'Boards',                    href: '/boards',                  icon: IconLayoutKanban },
+          { label: 'Forms',                     href: '/forms',                   icon: IconForms },
+          { label: 'Policies & Procedures',     href: '/policies-procedures',     icon: IconFileText },
+          { label: 'Social Media & Advertising',href: '/social-media',            icon: IconSpeakerphone },
+          { label: 'Sponsorships',              href: '/sponsorships',            icon: IconTrophy },
+          { label: 'To Do',                     href: '/todo',                    icon: IconChecklist },
         ],
       },
-      { label: 'Social Media & Advertising',  href: '/social-media',        icon: IconSpeakerphone },
-      { label: 'Sponsorships',               href: '/sponsorships',        icon: IconTrophy },
-      { label: 'To Do',                       href: '/todo',                icon: IconChecklist },
     ],
   },
   {
