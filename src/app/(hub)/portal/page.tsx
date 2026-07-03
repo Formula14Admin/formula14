@@ -11,6 +11,7 @@ import {
   IconSearch,
 } from '@tabler/icons-react'
 import { BookASession, type MembershipData, type AdminBookingContext } from '@/components/BookASession'
+import { supabase } from '@/lib/supabase'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -96,24 +97,12 @@ interface PortalAthlete {
   membershipPlan: 'bronze' | 'silver' | 'gold' | 'platinum' | null
 }
 
-const PORTAL_ATHLETES: PortalAthlete[] = [
-  { id: 'a1',  firstName: 'Liam',   lastName: 'Carter',   membershipPlan: 'bronze'   },
-  { id: 'a2',  firstName: 'Jordan', lastName: 'Williams', membershipPlan: 'silver'   },
-  { id: 'a3',  firstName: 'Aisha',  lastName: 'Thompson', membershipPlan: 'gold'     },
-  { id: 'a4',  firstName: 'Marcus', lastName: 'Davies',   membershipPlan: 'gold'     },
-  { id: 'a5',  firstName: 'Devon',  lastName: 'Knox',     membershipPlan: null       },
-  { id: 'a6',  firstName: 'Kai',    lastName: 'Okafor',   membershipPlan: 'bronze'   },
-  { id: 'a7',  firstName: 'Tyler',  lastName: 'Ross',     membershipPlan: 'silver'   },
-  { id: 'a8',  firstName: 'Priya',  lastName: 'Mehta',    membershipPlan: 'silver'   },
-  { id: 'a9',  firstName: 'Sam',    lastName: 'Liu',      membershipPlan: 'platinum' },
-  { id: 'a10', firstName: 'Zara',   lastName: 'Obi',      membershipPlan: 'bronze'   },
-]
-
 const AVATAR_COLORS = ['#6BA3D6','#6BAD6B','#D4A520','#D46B6B','#9B6BD4','#D46BAF','#6BD4C8','#D48B6B','#8B6BD4','#6BD48B']
 
 function getAthleteAvatarColor(id: string): string {
-  const idx = parseInt(id.replace(/\D/g, ''), 10) - 1
-  return AVATAR_COLORS[Math.max(0, idx) % AVATAR_COLORS.length]
+  let hash = 0
+  for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) >>> 0
+  return AVATAR_COLORS[hash % AVATAR_COLORS.length]
 }
 
 function athleteMembershipToData(plan: 'bronze' | 'silver' | 'gold' | 'platinum' | null): MembershipData | null {
@@ -681,6 +670,7 @@ export default function PortalPage() {
   const [bookingConfirmed, setBookingConfirmed] = useState(false)
 
   // ── Admin athlete selector state ────────────────────────────────────────────
+  const [portalAthletes, setPortalAthletes]       = useState<PortalAthlete[]>([])
   const [selectedAthleteId, setSelectedAthleteId] = useState<string | null>(null)
   const [athleteSearch, setAthleteSearch]         = useState('')
 
@@ -695,6 +685,25 @@ export default function PortalPage() {
   const [enrolName, setEnrolName]         = useState('')
   const [shareModal, setShareModal]       = useState<{ url: string; sessionType: string } | null>(null)
   const [portalPrograms, setPortalPrograms] = useState<PortalProgram[]>(PORTAL_PROGRAMS)
+
+  // Fetch real athletes from Supabase
+  useEffect(() => {
+    void (async () => {
+      const { data } = await supabase
+        .from('athletes')
+        .select('id, first_name, last_name, membership_tier')
+        .eq('is_active', true)
+        .order('last_name')
+      if (data) {
+        setPortalAthletes(data.map(r => ({
+          id:             r.id as string,
+          firstName:      (r.first_name  ?? '') as string,
+          lastName:       (r.last_name   ?? '') as string,
+          membershipPlan: (r.membership_tier ?? null) as PortalAthlete['membershipPlan'],
+        })))
+      }
+    })()
+  }, [])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -820,7 +829,7 @@ export default function PortalPage() {
   const todayIso = new Date().toISOString().slice(0, 10)
 
   // ── Admin derived values ────────────────────────────────────────────────────
-  const selectedAthlete = PORTAL_ATHLETES.find(a => a.id === selectedAthleteId) ?? null
+  const selectedAthlete = portalAthletes.find(a => a.id === selectedAthleteId) ?? null
   const athleteMembership = selectedAthlete ? athleteMembershipToData(selectedAthlete.membershipPlan) : null
   const adminCtx: AdminBookingContext | null = selectedAthlete ? {
     athleteId: selectedAthlete.id,
@@ -829,7 +838,7 @@ export default function PortalPage() {
     avatarColor: getAthleteAvatarColor(selectedAthlete.id),
   } : null
 
-  const filteredAthletes = PORTAL_ATHLETES
+  const filteredAthletes = portalAthletes
     .filter(a => {
       const q = athleteSearch.toLowerCase().trim()
       return q === '' || `${a.firstName} ${a.lastName}`.toLowerCase().includes(q)

@@ -147,18 +147,8 @@ const PLAN_ALLOWANCES: Record<string, Array<{ type: CreditType; label: string; l
   ],
 }
 
-// Athlete name → membership plan key (for credit lookup in booking modal)
-const MEMBER_PLANS: Record<string, string> = {
-  'Liam Carter':     'bronze',
-  'Jordan Williams': 'silver',
-  'Aisha Thompson':  'gold',
-  'Marcus Davies':   'gold',
-  'Kai Okafor':      'bronze',
-  'Tyler Ross':      'silver',
-  'Priya Mehta':     'silver',
-  'Sam Liu':         'platinum',
-  'Zara Obi':        'bronze',
-}
+// Athlete name → membership plan key (populated dynamically; credit status only shown when a match is found)
+const MEMBER_PLANS: Record<string, string> = {}
 
 function getMondayKey(date: Date): string {
   const d = new Date(date)
@@ -529,64 +519,6 @@ function occurrenceDates(startDate: string, repeat: string, until: string): stri
   return dates
 }
 
-// ── Sample bookings ────────────────────────────────────────────────────────────
-function makeSamples(today: string): Booking[] {
-  const dt = parse(today)
-  const yd  = ds(shift(dt, -1))
-  const d2  = ds(shift(dt, -2))
-  const tm  = ds(shift(dt,  1))
-  const d2f = ds(shift(dt,  2))
-  return [
-    { id:'b1',  date:today, spaceId:'primary',   startMins:7*60,     duration:60,  sessionType:'Individual Work Out', athletes:['Liam Carter'],                                              coach:'matt', bookingType:'member' },
-    { id:'b2',  date:today, spaceId:'primary',   startMins:8*60+30,  duration:90,  sessionType:'Small Group Session', athletes:['Jordan Williams','Aisha Thompson','Devon Knox'],             coach:'matt', bookingType:'member',
-      capacity: 6,
-      joinRequests: [
-        { id: 'jr1', bookingId: 'b2', athleteName: 'Kai Okafor', requestedAt: today, status: 'pending' },
-        { id: 'jr2', bookingId: 'b2', athleteName: 'Zara Obi', requestedAt: today, status: 'pending' },
-      ] },
-    { id:'b3',  date:today, spaceId:'secondary', startMins:9*60,     duration:120, sessionType:'Team Training',       athletes:['Liam Carter','Jordan Williams','Marcus Davies','Priya Mehta','Tyler Ross'], coach:'jade', bookingType:'member' },
-    { id:'b4',  date:today, spaceId:'primary',   startMins:11*60,    duration:60,  sessionType:'Domestic Academy',    athletes:[],                                                           coach:'matt', bookingType:'program' },
-    { id:'b5',  date:today, spaceId:'secondary', startMins:14*60,    duration:90,  sessionType:'Small Group Session', athletes:['Aisha Thompson','Kai Okafor','Sam Liu'],                     coach:'jade', bookingType:'member', capacity: 4, joinRequests: [], joinCode: 'demo0001' },
-    { id:'b6',  date:today, spaceId:'shooting',  startMins:16*60+30, duration:60,  sessionType:'Volume Shooting',     athletes:['Devon Knox'],                                               coach:'matt', bookingType:'member' },
-    { id:'b7',  date:today, spaceId:'meeting',   startMins:17*60,    duration:60,  sessionType:'Coach Meeting',       athletes:[],                                                           coach:'matt', bookingType:'member' },
-    { id:'b8',  date:today, spaceId:'primary',   startMins:18*60,    duration:90,  sessionType:'Team Training',       athletes:['Liam Carter','Jordan Williams','Aisha Thompson','Tyler Ross','Zara Obi'], coach:'matt', bookingType:'member' },
-    { id:'b9',  date:yd,   spaceId:'primary',   startMins:9*60,     duration:60,  sessionType:'Individual Work Out', athletes:['Tyler Ross'],                                               coach:'jade', bookingType:'member' },
-    { id:'b10', date:yd,   spaceId:'meeting',   startMins:15*60,    duration:60,  sessionType:'Film Review',         athletes:['Jordan Williams','Marcus Davies'],                          coach:'matt', bookingType:'member' },
-    { id:'b11', date:d2,   spaceId:'secondary', startMins:10*60,    duration:90,  sessionType:'Snipers Club',        athletes:[],                                                           coach:'matt', bookingType:'program' },
-    { id:'b12', date:d2,   spaceId:'shooting',  startMins:14*60,    duration:60,  sessionType:'Volume Shooting',     athletes:['Kai Okafor'],                                              coach:'jade', bookingType:'member' },
-    { id:'b13', date:tm,   spaceId:'primary',   startMins:8*60,     duration:90,  sessionType:'Small Group Session', athletes:['Liam Carter','Jordan Williams','Aisha Thompson'],           coach:'matt', bookingType:'member', capacity: 5, joinCode: 'demo0002', joinRequests: [
-      { id: 'jr3', bookingId: 'b13', athleteName: 'Tyler Ross', requestedAt: today, status: 'pending' },
-    ] },
-    { id:'b14', date:tm,   spaceId:'meeting',   startMins:13*60,    duration:60,  sessionType:'Goal Setting',        athletes:['Devon Knox'],                                               coach:'jade', bookingType:'member' },
-    { id:'b15', date:d2f,  spaceId:'secondary', startMins:11*60,    duration:60,  sessionType:'Team Training',       athletes:['Tyler Ross','Priya Mehta','Zara Obi'],                     coach:'matt', bookingType:'member' },
-    // Casual Shooting demo — 5/6 capacity on primary today for bump testing
-    { id:'cs1', date:today, spaceId:'primary', startMins:7*60+30, duration:60, sessionType:'Casual Shooting', athletes:['Zara Obi'],     coach:'', bookingType:'member',   memberTier:'platinum' },
-    { id:'cs2', date:today, spaceId:'primary', startMins:9*60,    duration:60, sessionType:'Casual Shooting', athletes:['Priya Mehta'],  coach:'', bookingType:'member',   memberTier:'gold' },
-    { id:'cs3', date:today, spaceId:'primary', startMins:12*60,   duration:60, sessionType:'Casual Shooting', athletes:['Tyler Ross'],   coach:'', bookingType:'member',   memberTier:'silver' },
-    { id:'cs4', date:today, spaceId:'primary', startMins:13*60,   duration:60, sessionType:'Casual Shooting', athletes:['Marcus Davies'],coach:'', bookingType:'casual' },
-    { id:'cs5', date:today, spaceId:'primary', startMins:15*60,   duration:60, sessionType:'Casual Shooting', athletes:['Sam Liu'],      coach:'', bookingType:'casual' },
-    // Shooting Machine Rental demos
-    { id:'sm1', date:today, spaceId:'shooting', startMins:10*60,     duration:60, sessionType:'Shooting Machine Rental', athletes:['Liam Carter'],    coach:'', bookingType:'casual' },
-    { id:'sm2', date:tm,    spaceId:'shooting', startMins:13*60+30,  duration:45, sessionType:'Shooting Machine Rental', athletes:['Jordan Williams'], coach:'', bookingType:'casual' },
-    // Program demos
-    { id:'pg1', date:today, spaceId:'secondary', startMins:12*60, duration:60, sessionType:'Mid Day Ladies Comp', athletes:['Aisha Thompson','Devon Knox'], coach:'jade', bookingType:'program', capacity:20, enrolmentType:'instant', pricePerSession:20, termLength:13,
-      enrolments:[
-        { id:'en1', athleteName:'Aisha Thompson', requestedAt:today, status:'paid' as const },
-        { id:'en2', athleteName:'Devon Knox',     requestedAt:today, status:'paid' as const },
-      ],
-    },
-    { id:'pg2', date:tm,    spaceId:'primary',   startMins:10*60, duration:60, sessionType:'Domestic Academy',  athletes:['Tyler Ross','Priya Mehta','Sam Liu','Zara Obi'], coach:'matt', bookingType:'program', capacity:15, enrolmentType:'approval', pricePerSession:45, termLength:13,
-      enrolments:[
-        { id:'en3', athleteName:'Tyler Ross',     requestedAt:today, status:'paid'             as const },
-        { id:'en4', athleteName:'Priya Mehta',    requestedAt:today, status:'paid'             as const },
-        { id:'en5', athleteName:'Sam Liu',        requestedAt:today, status:'paid'             as const },
-        { id:'en6', athleteName:'Zara Obi',       requestedAt:today, status:'paid'             as const },
-        { id:'en7', athleteName:'Kai Okafor',     requestedAt:today, status:'pending-approval' as const },
-        { id:'en8', athleteName:'Marcus Davies',  requestedAt:today, status:'pending-approval' as const },
-      ],
-    },
-  ]
-}
 
 // ── Page ───────────────────────────────────────────────────────────────────────
 export default function BookingsPage() {
