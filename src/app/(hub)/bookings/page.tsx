@@ -170,10 +170,6 @@ function getMondayKey(date: Date): string {
 // Shooting Machine Rental: price by duration (minutes)
 const MACHINE_RENTAL_PRICES: Record<number, number> = { 30: 30, 45: 40, 60: 50 }
 
-const ATHLETES = [
-  'Liam Carter', 'Jordan Williams', 'Aisha Thompson', 'Marcus Davies',
-  'Devon Knox', 'Kai Okafor', 'Tyler Ross', 'Priya Mehta', 'Sam Liu', 'Zara Obi',
-]
 
 const TEAMS = [
   'Frankston Bobcats U12 Boys',
@@ -605,6 +601,7 @@ export default function BookingsPage() {
   const [hoverInfo,  setHoverInfo]  = useState<HoverInfo>(null)
   const [toast,      setToast]      = useState<string | null>(null)
   const [conflictMsg, setConflictMsg] = useState<string | null>(null)
+  const [athleteNames, setAthleteNames] = useState<string[]>([])
 
   // ── Module tab state ──────────────────────────────────────────────────────────
   const [pageTab, setPageTab] = useState<'calendar' | 'booking-info' | 'join-requests'>('calendar')
@@ -781,6 +778,14 @@ export default function BookingsPage() {
       }
     })()
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Athlete names from Supabase for booking dropdowns
+  useEffect(() => {
+    void (async () => {
+      const { data } = await supabase.from('athletes').select('first_name, last_name').order('last_name')
+      if (data) setAthleteNames(data.map(a => `${a.first_name as string} ${a.last_name as string}`.trim()))
+    })()
   }, [])
 
   const gridRef = useRef<HTMLDivElement>(null)
@@ -2072,6 +2077,7 @@ export default function BookingsPage() {
           onDeclineEnrolment={declineEnrolment}
           onMarkPaid={markEnrolmentPaid}
           catalogue={catalogue}
+          athleteNames={athleteNames}
         />
       )}
 
@@ -2723,7 +2729,7 @@ function SelectPicker({ value, onChange, options, accentColor = '#6BA3D6', getPa
 // ── Booking Modal ──────────────────────────────────────────────────────────────
 function BookingModal({
   modal, today, onClose, onSave, onDelete, onDeleteFrom, onSaveFrom, onEdit, onEditSeries, creditUsage,
-  onApproveEnrolment, onDeclineEnrolment, onMarkPaid, catalogue,
+  onApproveEnrolment, onDeclineEnrolment, onMarkPaid, catalogue, athleteNames,
 }: {
   modal: NonNullable<Modal>
   today: string
@@ -2739,6 +2745,7 @@ function BookingModal({
   onDeclineEnrolment?: (bookingId: string, enrolmentId: string) => void
   onMarkPaid?: (bookingId: string, enrolmentId: string) => void
   catalogue: ProgramCatalogueItem[]
+  athleteNames: string[]
 }) {
   const isView          = modal.kind === 'view'
   const editSeriesFuture = modal.kind === 'editSeries'
@@ -3454,7 +3461,7 @@ function BookingModal({
                       centerOnTrigger
                       options={[
                         { value: '', label: 'Select Athletes', muted: true },
-                        ...[...ATHLETES].sort().map(a => ({ value: a, label: a })),
+                        ...athleteNames.map(a => ({ value: a, label: a })),
                       ]}
                     />
                   </div>
@@ -3935,7 +3942,7 @@ function BookingModal({
                                   centerOnTrigger
                                   options={[
                                     { value: '', label: 'Select Athlete', muted: true },
-                                    ...[...ATHLETES].sort().map(a => ({ value: a, label: a })),
+                                    ...athleteNames.map(a => ({ value: a, label: a })),
                                   ]}
                                 />
                               </div>
@@ -4000,7 +4007,7 @@ function BookingModal({
                               centerOnTrigger
                               options={[
                                 { value: '', label: 'Select Athlete', muted: true },
-                                ...[...ATHLETES].sort().map(a => ({ value: a, label: a })),
+                                ...athleteNames.map(a => ({ value: a, label: a })),
                               ]}
                             />
                           </div>
@@ -4111,7 +4118,7 @@ function BookingModal({
                                   centerOnTrigger
                                   options={[
                                     { value: '', label: 'Select Athlete', muted: true },
-                                    ...[...ATHLETES].sort().map(a => ({ value: a, label: a })),
+                                    ...athleteNames.map(a => ({ value: a, label: a })),
                                   ]} />
                               </div>
                             )}
@@ -4139,7 +4146,7 @@ function BookingModal({
                         centerOnTrigger
                         options={[
                           { value: '', label: 'Select Athlete', muted: true },
-                          ...[...ATHLETES].sort().map(a => ({ value: a, label: a })),
+                          ...athleteNames.map(a => ({ value: a, label: a })),
                           { value: 'other', label: 'Other' },
                         ]}
                       />
