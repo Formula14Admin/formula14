@@ -107,12 +107,19 @@ export function monthTotal(txns: Transaction[], ym: string, type: TxType) {
 
 // ─── localStorage ──────────────────────────────────────────────────────────────
 
-const TX_KEY   = 'f14_bk_transactions'
-const PTX_KEY  = 'f14_personal_txns'
-const GOAL_KEY = 'f14_savings_goals'
+const TX_KEY      = 'f14_bk_transactions'
+const PTX_KEY     = 'f14_personal_txns'
+const GOAL_KEY    = 'f14_savings_goals'
+const FIN_FLUSH   = 'f14_fin_flushed_v2'
 
 export function loadTransactions(defaults: Transaction[]): Transaction[] {
   if (typeof window === 'undefined') return defaults
+  if (!localStorage.getItem(FIN_FLUSH)) {
+    localStorage.removeItem(TX_KEY)
+    localStorage.removeItem(PTX_KEY)
+    localStorage.removeItem(GOAL_KEY)
+    localStorage.setItem(FIN_FLUSH, '1')
+  }
   try { const s = localStorage.getItem(TX_KEY); return s ? JSON.parse(s) : defaults } catch { return defaults }
 }
 export function saveTransactions(txns: Transaction[]) { localStorage.setItem(TX_KEY, JSON.stringify(txns)) }

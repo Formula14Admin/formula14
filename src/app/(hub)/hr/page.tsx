@@ -52,7 +52,6 @@ import {
   PayRateType,
   DocType,
   DocStatus,
-  INIT_STAFF,
   loadStaff,
   saveStaff,
   loadPayRuns,
