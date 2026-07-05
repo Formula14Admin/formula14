@@ -949,7 +949,12 @@ export function BookASession({
     persistBookings(updated); setBookings(updated)
   }
 
-  const activeBookingCount = bookings.filter(b => b.status !== 'cancelled').length
+  // When viewing as a specific athlete, only show that athlete's bookings
+  const visibleBookings = adminContext
+    ? bookings.filter(b => b.athleteId === adminContext.athleteId)
+    : bookings
+
+  const activeBookingCount = visibleBookings.filter(b => b.status !== 'cancelled').length
 
   // ── render
 
@@ -1007,7 +1012,7 @@ export function BookASession({
 
       {/* My Bookings */}
       {view === 'my-bookings' && (
-        <MyBookingsView bookings={bookings} onCancel={cancelBooking} />
+        <MyBookingsView bookings={visibleBookings} onCancel={cancelBooking} />
       )}
 
       {/* Book flow */}
