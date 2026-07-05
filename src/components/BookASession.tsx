@@ -11,6 +11,7 @@ import {
   IconCalendarEvent,
 } from '@tabler/icons-react'
 import { CANONICAL_SESSION_TYPES, type SessionTypeId, type SessionTypeDef } from '@/lib/sessionTypes'
+import { supabase } from '@/lib/supabase'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -814,6 +815,31 @@ export function BookASession({
     } catch {}
   }, [])
 
+  // ── Coach availability windows ────────────────────────────────────────────
+  const [coachWindows, setCoachWindows] = useState<Array<{ startMins: number; endMins: number }>>([])
+  const [windowsLoading, setWindowsLoading] = useState(false)
+
+  useEffect(() => {
+    if (!selectedDate || !typeId) { setCoachWindows([]); return }
+    const sessionDef = CANONICAL_SESSION_TYPES.find(t => t.id === typeId)
+    if (!sessionDef || sessionDef.selfServe) { setCoachWindows([]); return }
+    const dow = (new Date(selectedDate + 'T12:00:00').getDay() + 6) % 7 // 0=Mon…6=Sun
+    setWindowsLoading(true)
+    supabase
+      .from('coach_availability')
+      .select('start_time, end_time')
+      .eq('day_of_week', dow)
+      .contains('session_types_enabled', [typeId])
+      .then(({ data }) => {
+        const toMins = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m }
+        setCoachWindows((data ?? []).map((row: { start_time: string; end_time: string }) => ({
+          startMins: toMins(row.start_time),
+          endMins: toMins(row.end_time),
+        })))
+        setWindowsLoading(false)
+      })
+  }, [selectedDate, typeId])
+
   const sgsRange = useMemo(() => {
     const config = pricingConfigs.find(c => c.sessionType === 'small-group')
     if (!config || config.tiers.length === 0) return { min: 40, max: 40 }
@@ -864,8 +890,38 @@ export function BookASession({
 
   const slotsForDate = useMemo((): TimeSlot[] => {
     if (!selectedDate || !typeId) return []
-    return getSlotsForDate(selectedDate, typeId)
-  }, [selectedDate, typeId])
+    const sessionDef = CANONICAL_SESSION_TYPES.find(t => t.id === typeId)
+    // Self-serve facility sessions use hardcoded facility hours
+    if (!sessionDef || sessionDef.selfServe) return getSlotsForDate(selectedDate, typeId)
+    // Coached sessions: derive slots directly from coach availability windows
+    const isToday = selectedDate === TODAY_ISO
+    const durationMins = sessionDef.durationMins
+    if (typeId === 'small-group') {
+      const existing: TimeSlot[] = SAMPLE_SGS
+        .filter(s => s.date === selectedDate && s.attendees.length < s.capacity)
+        .map(s => ({ startMins: s.startMins, endMins: s.endMins, spotsLeft: s.capacity - s.attendees.length, isSgsExisting: true as const, sgsId: s.id }))
+      const seen = new Set<number>(existing.map(s => s.startMins))
+      const newSlots: TimeSlot[] = []
+      for (const w of coachWindows) {
+        for (let t = w.startMins; t + durationMins <= w.endMins; t += durationMins) {
+          if (!seen.has(t) && (!isToday || t > NOW_MINS)) {
+            seen.add(t); newSlots.push({ startMins: t, endMins: t + durationMins, isSgsExisting: false })
+          }
+        }
+      }
+      return [...existing, ...newSlots].sort((a, b) => a.startMins - b.startMins)
+    }
+    const seen = new Set<number>()
+    const slots: TimeSlot[] = []
+    for (const w of coachWindows) {
+      for (let t = w.startMins; t + durationMins <= w.endMins; t += durationMins) {
+        if (!seen.has(t) && (!isToday || t > NOW_MINS)) {
+          seen.add(t); slots.push({ startMins: t, endMins: t + durationMins })
+        }
+      }
+    }
+    return slots.sort((a, b) => a.startMins - b.startMins)
+  }, [selectedDate, typeId, coachWindows])
 
   // ── navigation helpers
 
@@ -1262,6 +1318,10 @@ export function BookASession({
                         {!selectedDate ? (
                           <div className="flex h-48 items-center justify-center p-5 text-sm text-gray-400">
                             Select a date to see available times
+                          </div>
+                        ) : windowsLoading ? (
+                          <div className="flex h-48 items-center justify-center p-5 text-sm text-gray-400">
+                            Loading available times…
                           </div>
                         ) : (
                           <>
