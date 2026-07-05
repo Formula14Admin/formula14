@@ -102,10 +102,7 @@ const INIT_PRICING: SessionPricingConfig[] = [
     sessionType: 'small-group',
     durationMins: 90,
     tiers: [
-      { id: 't1', min: 1, max: 1, pricePerAthlete: 50 },
-      { id: 't2', min: 2, max: 2, pricePerAthlete: 45 },
-      { id: 't3', min: 3, max: 3, pricePerAthlete: 40 },
-      { id: 't4', min: 4, max: 6, pricePerAthlete: 35 },
+      { id: 't1', min: 1, max: 6, pricePerAthlete: 40 },
     ],
   },
   {

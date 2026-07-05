@@ -463,7 +463,7 @@ function SessionTypeTile({
           <div className="text-center leading-tight">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Price at lockout</p>
             <p className="mt-1 text-xl font-bold" style={{ color: type.accentColor }}>
-              ${sgsRange.min}–${sgsRange.max}
+              {sgsRange.min === sgsRange.max ? `$${sgsRange.min}` : `$${sgsRange.min}–$${sgsRange.max}`}
             </p>
             <p className="text-[10px] text-gray-400">per athlete</p>
           </div>
@@ -810,7 +810,7 @@ export function BookASession({
 
   const sgsRange = useMemo(() => {
     const config = pricingConfigs.find(c => c.sessionType === 'small-group')
-    if (!config || config.tiers.length === 0) return { min: 35, max: 50 }
+    if (!config || config.tiers.length === 0) return { min: 40, max: 40 }
     const prices = config.tiers.map(t => t.pricePerAthlete)
     return { min: Math.min(...prices), max: Math.max(...prices) }
   }, [pricingConfigs])
@@ -1318,7 +1318,7 @@ export function BookASession({
                           <span className="font-semibold text-gray-700">Cost</span>
                           {typeId === 'small-group'
                             ? <span className="font-bold" style={{ color: ACCENT }}>
-                                ${sgsRange.min}–${sgsRange.max}/athlete · set at lockout
+                                {sgsRange.min === sgsRange.max ? `$${sgsRange.min}` : `$${sgsRange.min}–$${sgsRange.max}`}/athlete · set at lockout
                               </span>
                             : (() => {
                                 const sc = getScenario(typeId!, membership)
