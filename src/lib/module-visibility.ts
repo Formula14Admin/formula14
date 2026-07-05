@@ -13,6 +13,7 @@ export type AthleteModuleKey =
   | 'how-we-feel'
   | 'leaderboards'
   | 'programs'
+  | 'profile'
 
 export type CoachModuleKey =
   | 'dashboard'
@@ -51,6 +52,7 @@ export const DEFAULT_VISIBILITY: ModuleVisibility = {
     'how-we-feel':{ enabled: true,  comingSoon: false },
     leaderboards: { enabled: true,  comingSoon: true  },
     programs:     { enabled: true,  comingSoon: false },
+    profile:      { enabled: true,  comingSoon: false },
   },
   coach: {
     dashboard:    { enabled: true },

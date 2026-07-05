@@ -28,6 +28,7 @@ const MODULE_LABELS: Record<AthleteModuleKey, string> = {
   'how-we-feel':'How We Feel',
   leaderboards: 'Leaderboards',
   programs:     'Programs',
+  profile:      'My Profile',
 }
 
 function ComingSoonPage({ moduleKey }: { moduleKey: AthleteModuleKey }) {

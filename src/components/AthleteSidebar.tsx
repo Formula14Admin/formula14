@@ -13,6 +13,7 @@ import {
   IconNotebook,
   IconTarget,
   IconMoodSmile,
+  IconUser,
   IconLogout,
   IconMenu2,
   IconX,
@@ -40,6 +41,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Journal',        href: '/athlete/journal',     icon: IconNotebook,        moduleKey: 'journal'      },
   { label: 'Goals & Habits', href: '/athlete/goals',       icon: IconTarget,          moduleKey: 'goals'        },
   { label: 'How We Feel',    href: '/athlete/how-we-feel', icon: IconMoodSmile,       moduleKey: 'how-we-feel'  },
+  { label: 'My Profile',     href: '/athlete/profile',     icon: IconUser,            moduleKey: 'profile'      },
 ]
 
 function SidebarContent({ onClose }: { onClose?: () => void }) {
