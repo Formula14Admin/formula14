@@ -32,6 +32,11 @@ import {
   IconTag,
   IconUser,
   IconSparkles,
+  IconUserPlus,
+  IconBeach,
+  IconFile,
+  IconStar,
+  IconShieldCheck,
 } from '@tabler/icons-react'
 
 // ─── Nav types ────────────────────────────────────────────────────────────────
@@ -80,7 +85,21 @@ const NAV: NavSection[] = [
           { label: 'Pricing',      href: '/pricing/config',        icon: IconTag },
         ],
       },
-      { label: 'HR',                          href: '/hr',                  icon: IconBriefcase },
+      {
+        label: 'HR',
+        href: '/hr',
+        icon: IconBriefcase,
+        children: [
+          { label: 'People',       href: '/hr',              icon: IconUsers },
+          { label: 'Availability', href: '/hr/availability', icon: IconCalendar },
+          { label: 'Onboarding',   href: '/hr/onboarding',   icon: IconUserPlus },
+          { label: 'Leave',        href: '/hr/leave',         icon: IconBeach },
+          { label: 'Documents',    href: '/hr/documents',     icon: IconFile },
+          { label: 'Performance',  href: '/hr/performance',   icon: IconStar },
+          { label: 'Payroll',      href: '/hr/payroll',       icon: IconCash },
+          { label: 'Compliance',   href: '/hr/compliance',    icon: IconShieldCheck },
+        ],
+      },
       {
         label: 'Admin Tools',
         href: '/boards',
