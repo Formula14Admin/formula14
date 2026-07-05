@@ -144,6 +144,12 @@ function persistBookings(b: Booking[]): void {
   localStorage.setItem(LS_BOOKINGS, JSON.stringify(b))
 }
 
+function halfHourRange(from: number, to: number): number[] {
+  const r: number[] = []
+  for (let t = from; t <= to; t += 30) r.push(t)
+  return r
+}
+
 function getSlotsForDate(iso: string, typeId: string): TimeSlot[] {
   if (iso < TODAY_ISO) return []
   const dow = (new Date(iso + 'T12:00:00').getDay() + 6) % 7 // 0=Mon…6=Sun
@@ -152,8 +158,8 @@ function getSlotsForDate(iso: string, typeId: string): TimeSlot[] {
   const isToday = iso === TODAY_ISO
 
   if (typeId === 'individual') {
-    return [540, 600, 660, 720, 780, 840]
-      .filter((_, i) => (seed + i) % 4 !== 0)
+    return halfHourRange(540, 840) // 9:00 AM – 2:00 PM
+      .filter((_, i) => (seed + i) % 7 !== 0)
       .filter(t => !isToday || t > NOW_MINS)
       .map(t => ({ startMins: t, endMins: t + 60 }))
   }
@@ -166,7 +172,7 @@ function getSlotsForDate(iso: string, typeId: string): TimeSlot[] {
         spotsLeft: s.capacity - s.attendees.length,
         isSgsExisting: true, sgsId: s.id,
       }))
-    const newSlots: TimeSlot[] = [600, 720].map(t => ({
+    const newSlots: TimeSlot[] = halfHourRange(540, 840).map(t => ({ // 9:00 AM – 2:00 PM
       startMins: t, endMins: t + 90, isSgsExisting: false,
     }))
     return [...existing, ...newSlots]
@@ -175,17 +181,17 @@ function getSlotsForDate(iso: string, typeId: string): TimeSlot[] {
   }
 
   if (typeId === 'team-training') {
-    return [540, 720]
+    return halfHourRange(480, 840) // 8:00 AM – 2:00 PM
       .filter(t => !isToday || t > NOW_MINS)
       .map(t => ({ startMins: t, endMins: t + 120 }))
   }
 
   const bases: Partial<Record<string, number[]>> = {
-    'casual-shooting':        [480, 540, 600, 660, 720, 780, 840],
-    'shooting-machine-session': [480, 540, 600, 660, 720, 780, 840, 900],
-    'weight-room-session':    [480, 540, 600, 660, 720, 780, 840],
-    'film-room-session':      [540, 600, 660, 720, 780, 840],
-    'volume-shooting':        [480, 540, 600, 660, 720, 780, 840, 900],
+    'casual-shooting':          halfHourRange(480, 840),
+    'shooting-machine-session': halfHourRange(480, 900),
+    'weight-room-session':      halfHourRange(480, 840),
+    'film-room-session':        halfHourRange(540, 840),
+    'volume-shooting':          halfHourRange(480, 900),
   }
   return (bases[typeId] ?? [])
     .filter(t => !isToday || t > NOW_MINS)
