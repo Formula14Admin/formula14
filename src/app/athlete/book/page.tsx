@@ -96,7 +96,7 @@ function timeToMins(t: string): number {
 const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December']
 const DAY_NAMES   = ['Su','Mo','Tu','We','Th','Fr','Sa']
 
-const SLOT_INTERVAL = 15  // minutes between slot start times
+const SLOT_INTERVAL = 30  // minutes between slot start times (on-the-hour or half-hour only)
 
 // ── Step badge ────────────────────────────────────────────────────────────────
 
@@ -313,7 +313,9 @@ export default function BookPage() {
       ? new Date().getHours() * 60 + new Date().getMinutes() + 120
       : 0
 
-    const facStart = Math.max(facDay.startMins, nowMins)
+    // Snap up to the next on-the-hour / half-hour boundary
+    const rawStart = Math.max(facDay.startMins, nowMins)
+    const facStart = Math.ceil(rawStart / SLOT_INTERVAL) * SLOT_INTERVAL
     const facEnd   = facDay.endMins
 
     if (selfServe) {
