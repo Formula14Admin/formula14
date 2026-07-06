@@ -50,31 +50,9 @@ function fmtLongDate() {
   return new Date().toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 }
 
-const UPCOMING_SESSIONS = [
-  { id: 'us1', date: '2026-06-28', day: 'Tuesday',  time: '4:30 PM', type: 'Small Group',     coach: 'Coach Matt',  space: 'Main Court',  status: 'confirmed' },
-  { id: 'us2', date: '2026-07-01', day: 'Friday',   time: '9:00 AM', type: 'Individual 1:1',  coach: 'Coach Matt',  space: 'Half Court',  status: 'confirmed' },
-  { id: 'us3', date: '2026-07-05', day: 'Tuesday',  time: '4:30 PM', type: 'Small Group',     coach: 'Coach Jade',  space: 'Main Court',  status: 'pending'   },
-  { id: 'us4', date: '2026-07-08', day: 'Friday',   time: '9:00 AM', type: 'Individual 1:1',  coach: 'Coach Matt',  space: 'Half Court',  status: 'confirmed' },
-]
+const UPCOMING_SESSIONS: { id: string; date: string; day: string; time: string; type: string; coach: string; space: string; status: string }[] = []
 
-const NOTIFICATIONS = [
-  { id: 'n1', icon: '✅', text: 'Your booking for Small Group on Tue 28 Jun was confirmed.',  time: '2h ago'   },
-  { id: 'n2', icon: '💬', text: 'Coach Matt left a note on your goal "Make the U18 rep squad".', time: 'Yesterday' },
-  { id: 'n3', icon: '📅', text: 'Reminder: You have a session this Tuesday at 4:30 PM.',     time: 'Today'    },
-  { id: 'n4', icon: '🏀', text: 'New program available — Snipers Club starting Monday 6 Jul.', time: '3d ago'  },
-]
-
-const MEMBERSHIP = {
-  plan: 'Gold',
-  price: '$75',
-  billingFreq: 'per week',
-  nextBilling: '7 Jul 2026',
-  credits: [
-    { label: 'Small Group',    used: 1, total: 3 },
-    { label: 'Individual 1:1', used: 0, total: 1 },
-    { label: 'Elite Program',  used: 0, total: 0 },
-  ],
-}
+const NOTIFICATIONS: { id: string; icon: string; text: string; time: string }[] = []
 
 const FEELING_OPTIONS = [
   { value: 1, emoji: '😔', label: 'Not great'     },
@@ -431,8 +409,8 @@ export default function AthleteDashboard() {
           <SnapshotCard
             icon={<IconCards size={18} />}
             label="Weekly Credits"
-            value={`${3 - MEMBERSHIP.credits[0].used} of ${MEMBERSHIP.credits[0].total}`}
-            sub="Small Group remaining"
+            value="—"
+            sub="No active membership"
             color="#8b5cf6"
           />
           <SnapshotCard
@@ -635,52 +613,31 @@ export default function AthleteDashboard() {
           <div className="rounded-2xl bg-white shadow-sm">
             <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
               <h2 className="font-bold text-gray-900">Recent Activity</h2>
-              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">{NOTIFICATIONS.length}</span>
             </div>
-            <ul className="divide-y divide-gray-50">
-              {NOTIFICATIONS.map(n => (
-                <li key={n.id} className="flex items-start gap-3 px-5 py-3">
-                  <span className="mt-0.5 text-lg">{n.icon}</span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-gray-700 leading-snug">{n.text}</p>
-                    <p className="mt-0.5 text-[11px] text-gray-400">{n.time}</p>
-                  </div>
-                </li>
-              ))}
-            </ul>
+            {NOTIFICATIONS.length === 0 ? (
+              <div className="py-8 text-center text-sm text-gray-400">No recent activity.</div>
+            ) : (
+              <ul className="divide-y divide-gray-50">
+                {NOTIFICATIONS.map(n => (
+                  <li key={n.id} className="flex items-start gap-3 px-5 py-3">
+                    <span className="mt-0.5 text-lg">{n.icon}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-gray-700 leading-snug">{n.text}</p>
+                      <p className="mt-0.5 text-[11px] text-gray-400">{n.time}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
 
           {/* Membership */}
           <div className="rounded-2xl bg-white shadow-sm">
             <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
               <h2 className="font-bold text-gray-900">Membership</h2>
-              <span className="rounded-full px-2.5 py-0.5 text-xs font-bold" style={{ backgroundColor: '#fef3c7', color: '#92400e' }}>
-                {MEMBERSHIP.plan}
-              </span>
             </div>
-            <div className="px-5 py-4 space-y-3">
-              <div className="flex items-end justify-between">
-                <div>
-                  <p className="text-2xl font-black text-gray-900">{MEMBERSHIP.price}<span className="text-sm font-medium text-gray-400">{MEMBERSHIP.billingFreq}</span></p>
-                  <p className="text-xs text-gray-400">Next billing: {MEMBERSHIP.nextBilling}</p>
-                </div>
-              </div>
-              <div className="space-y-2">
-                {MEMBERSHIP.credits.filter(c => c.total > 0).map(c => (
-                  <div key={c.label}>
-                    <div className="mb-1 flex justify-between text-xs">
-                      <span className="text-gray-600">{c.label}</span>
-                      <span className="font-semibold text-gray-700">{c.used}/{c.total} used</span>
-                    </div>
-                    <div className="h-1.5 overflow-hidden rounded-full bg-gray-100">
-                      <div className="h-full rounded-full" style={{ width: `${(c.used / c.total) * 100}%`, backgroundColor: ACCENT }} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <Link href="/athlete/book" className="block text-center rounded-xl border border-gray-200 py-2 text-xs font-bold text-gray-600 hover:bg-gray-50">
-                Manage Membership
-              </Link>
+            <div className="px-5 py-8 text-center text-sm text-gray-400">
+              No active membership.
             </div>
           </div>
         </div>
