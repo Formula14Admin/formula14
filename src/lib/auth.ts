@@ -31,12 +31,17 @@ export const authOptions: NextAuthOptions = {
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null
 
+        const email = credentials.email.trim().toLowerCase()
+
         // Try Supabase first (authenticate_user RPC uses bcrypt via pgcrypto)
         try {
           const { data, error } = await supabaseAuth.rpc('authenticate_user', {
-            p_email:    credentials.email,
+            p_email:    email,
             p_password: credentials.password,
           })
+          if (error) {
+            console.error('[auth] authenticate_user error:', error.message, error.code, error.details)
+          }
           if (!error && data && data.length > 0) {
             const u = data[0]
             return {
@@ -47,13 +52,13 @@ export const authOptions: NextAuthOptions = {
               mustChangePassword:  u.must_change_password ?? false,
             }
           }
-        } catch {
-          // Supabase unavailable — fall through to local fallback
+        } catch (err) {
+          console.error('[auth] authenticate_user exception:', err)
         }
 
         // Fallback: hardcoded users (used before migrations are run)
         const fallback = FALLBACK_USERS.find(
-          (u) => u.email === credentials.email && u.password === credentials.password
+          (u) => u.email === email && u.password === credentials.password
         )
         if (fallback) {
           return { id: fallback.id, name: fallback.name, email: fallback.email, role: fallback.role }
