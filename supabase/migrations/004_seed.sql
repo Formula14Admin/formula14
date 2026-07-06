@@ -4,9 +4,8 @@
 
 -- ── Users (staff accounts) ────────────────────────────────────────────────────
 INSERT INTO users (email, password_hash, role, first_name, last_name) VALUES
-  ('matt@formula14.com.au',   crypt('Formula14Matt!', gen_salt('bf', 10)), 'director', 'Matt',   'Brasser'),
-  ('jade@formula14.com.au',   crypt('Formula14Jade!', gen_salt('bf', 10)), 'director', 'Jade',   'Formula14'),
-  ('jordan@formula14.com.au', crypt('Athlete123!',    gen_salt('bf', 10)), 'athlete',  'Jordan', 'Williams')
+  ('matt@formula14.com.au', crypt('Formula14Matt!', gen_salt('bf', 10)), 'director', 'Matt', 'Brasser'),
+  ('jade@formula14.com.au', crypt('Formula14Jade!', gen_salt('bf', 10)), 'director', 'Jade', 'Formula14')
 ON CONFLICT (email) DO NOTHING;
 
 -- ── Athletes ──────────────────────────────────────────────────────────────────

@@ -12,9 +12,8 @@ const supabaseAuth = createClient(
 
 // Fallback users for development before migrations are run
 const FALLBACK_USERS = [
-  { id: '1', name: 'Matt',   email: 'matt@formula14.com.au',   password: 'Formula14Matt!', role: 'director' },
-  { id: '2', name: 'Jade',   email: 'jade@formula14.com.au',   password: 'Formula14Jade!', role: 'director' },
-  { id: '3', name: 'Jordan', email: 'jordan@formula14.com.au', password: 'Athlete123!',     role: 'athlete'  },
+  { id: '1', name: 'Matt', email: 'matt@formula14.com.au', password: 'Formula14Matt!', role: 'director' },
+  { id: '2', name: 'Jade', email: 'jade@formula14.com.au', password: 'Formula14Jade!', role: 'director' },
 ]
 
 // Use secure cookies whenever we're in production, regardless of NEXTAUTH_URL.
