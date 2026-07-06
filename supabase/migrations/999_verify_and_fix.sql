@@ -627,7 +627,7 @@ BEGIN
 
   IF v_user_id IS NULL THEN RETURN; END IF;
 
-  UPDATE users SET last_login_at = NOW() WHERE id = v_user_id;
+  UPDATE users SET last_login_at = NOW() WHERE users.id = v_user_id;
   UPDATE athletes
     SET last_login_at = NOW(),
         invite_status = CASE WHEN invite_status = 'invited' THEN 'accepted' ELSE invite_status END
