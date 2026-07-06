@@ -27,27 +27,8 @@ VALUES
   (6, '07:00'::TIME, '19:00'::TIME, '[]'::jsonb)
 ON CONFLICT (day_of_week) DO NOTHING;
 
--- ── Default coach availability ────────────────────────────────────────────────
--- Matt Brasser (s1): Mon–Fri
-INSERT INTO coach_availability (coach_id, day_of_week, start_time, end_time, session_types_enabled)
-SELECT 's1', d, '06:00'::TIME, '21:00'::TIME,
-  '["individual","small-group","team-training","film-room-session"]'::jsonb
-FROM unnest(ARRAY[1,2,3,4,5]) AS d
-ON CONFLICT (coach_id, day_of_week) DO NOTHING;
-
--- Jade Brasser (s2): Tue–Sat
-INSERT INTO coach_availability (coach_id, day_of_week, start_time, end_time, session_types_enabled)
-SELECT 's2', d, '06:00'::TIME, '21:00'::TIME,
-  '["individual","small-group","team-training","film-room-session"]'::jsonb
-FROM unnest(ARRAY[2,3,4,5,6]) AS d
-ON CONFLICT (coach_id, day_of_week) DO NOTHING;
-
--- Sam Torres (s3): Sat–Sun
-INSERT INTO coach_availability (coach_id, day_of_week, start_time, end_time, session_types_enabled)
-SELECT 's3', d, '07:00'::TIME, '19:00'::TIME,
-  '["individual","small-group","team-training","film-room-session"]'::jsonb
-FROM unnest(ARRAY[6,0]) AS d
-ON CONFLICT (coach_id, day_of_week) DO NOTHING;
+-- Coach availability is configured via the HR → Availability module.
+-- No placeholder rows are seeded here.
 
 -- ── Grants ────────────────────────────────────────────────────────────────────
 GRANT SELECT, INSERT, UPDATE, DELETE ON facility_availability    TO anon, authenticated;
