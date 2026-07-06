@@ -74,16 +74,19 @@ export default function SignupPage() {
       })
 
       if (rpcError) {
-        setError(rpcError.message?.includes('EMAIL_EXISTS')
-          ? 'An account with this email already exists. Try logging in.'
-          : 'Registration failed. Please try again.')
         console.error('[signup] rpc error:', rpcError)
+        if (rpcError.message?.includes('EMAIL_EXISTS')) {
+          setError('An account with this email already exists. Try logging in.')
+        } else {
+          const detail = rpcError.message || rpcError.code || JSON.stringify(rpcError)
+          setError(`Registration failed: ${detail}`)
+        }
         setLoading(false)
         return
       }
 
       if (!data || data.length === 0) {
-        setError('Registration failed. Please try again.')
+        setError('Registration failed: the database returned no data. Please contact support.')
         setLoading(false)
         return
       }
