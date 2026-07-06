@@ -6,6 +6,7 @@ import { signIn } from 'next-auth/react'
 import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { DatePicker } from '@/components/ui/Pickers'
 
 const FIELD = 'mb-1.5 block text-sm font-medium text-gray-400'
 const INPUT = 'w-full rounded-lg px-4 py-3 text-sm text-white placeholder-gray-600 outline-none transition focus:ring-2 focus:ring-[#6BA3D6]'
@@ -157,10 +158,11 @@ export default function SignupPage() {
 
           <div>
             <label className={FIELD}>Date of Birth</label>
-            <input
-              type="date" required
-              value={dob} onChange={e => setDob(e.target.value)}
-              className={INPUT} style={{ ...INPUT_STYLE, colorScheme: 'dark' }}
+            <DatePicker
+              value={dob}
+              onChange={setDob}
+              dark
+              maxDate={new Date().toISOString().slice(0, 10)}
             />
             {age !== null && (
               <p className="mt-1 text-xs" style={{ color: isUnder18 ? '#fb923c' : '#6b7280' }}>

@@ -3,389 +3,194 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
-import { IconCheck, IconChevronLeft } from '@tabler/icons-react'
+import { IconChevronLeft, IconCheck, IconChevronRight, IconUser } from '@tabler/icons-react'
+import { calcCompletionPct, loadProfileFromSupabase, type WizardDraft, EMPTY_DRAFT } from '@/lib/athleteProfile'
+import { useActiveAthlete } from '@/lib/activeAthlete'
 
 const ACCENT = '#6BA3D6'
-const LS_KEY = 'f14_athlete_profile'
 
-interface AthleteProfile {
-  // Playing background
-  yearsPlaying:     string
-  position:         string
-  currentClub:      string
-  competitionLevel: string
-  repExperience:    string
-  // Goals
-  shortTermGoal:    string
-  longTermGoal:     string
-  primaryImprovement: string
-  // Training
-  strengths:        string
-  weaknesses:       string
-  trainingStyle:    string
-  trainingFrequency: string
-  // Additional
-  dominantHand:     string
-  height:           string
-  weight:           string
-  injuries:         string
-  howHeard:         string
-}
-
-const EMPTY: AthleteProfile = {
-  yearsPlaying: '', position: '', currentClub: '', competitionLevel: '', repExperience: '',
-  shortTermGoal: '', longTermGoal: '', primaryImprovement: '',
-  strengths: '', weaknesses: '', trainingStyle: '', trainingFrequency: '',
-  dominantHand: '', height: '', weight: '', injuries: '', howHeard: '',
-}
-
-const REQUIRED_FIELDS: (keyof AthleteProfile)[] = [
-  'yearsPlaying', 'position', 'shortTermGoal', 'longTermGoal',
-  'strengths', 'weaknesses', 'trainingFrequency',
+const STEPS = [
+  { n: 1,  label: 'Basketball Information', weight: 20 },
+  { n: 2,  label: 'Basketball Details',     weight: 5  },
+  { n: 3,  label: 'Playing Style',          weight: 5  },
+  { n: 4,  label: 'Strengths & Areas',      weight: 10 },
+  { n: 5,  label: 'Goals',                  weight: 15 },
+  { n: 6,  label: 'Training Habits',        weight: 10 },
+  { n: 7,  label: 'Physical Information',   weight: 5  },
+  { n: 8,  label: 'Medical Information',    weight: 10 },
+  { n: 9,  label: 'Communication',          weight: 5  },
+  { n: 10, label: 'Athlete Mindset',        weight: 5  },
+  { n: 11, label: 'Additional Information', weight: 10 },
 ]
-
-function pctComplete(p: AthleteProfile): number {
-  const done = REQUIRED_FIELDS.filter(k => p[k].trim() !== '').length
-  return Math.round((done / REQUIRED_FIELDS.length) * 100)
-}
-
-// ── UI helpers ────────────────────────────────────────────────────────────────
-
-const LABEL = 'mb-1.5 block text-sm font-semibold text-gray-700'
-const INPUT = 'w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-[#6BA3D6] focus:ring-2 focus:ring-[#6BA3D6]/10'
-const TEXTAREA = INPUT + ' resize-none'
-const SELECT = INPUT + ' cursor-pointer'
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="overflow-hidden rounded-2xl bg-white shadow-sm">
-      <div className="border-b border-gray-100 px-6 py-4">
-        <h2 className="font-bold text-gray-900">{title}</h2>
-      </div>
-      <div className="space-y-5 px-6 py-5">{children}</div>
-    </div>
-  )
-}
-
-function ChipGroup({ options, value, onChange }: { options: string[]; value: string; onChange: (v: string) => void }) {
-  return (
-    <div className="flex flex-wrap gap-2">
-      {options.map(opt => {
-        const sel = value === opt
-        return (
-          <button
-            key={opt}
-            type="button"
-            onClick={() => onChange(sel ? '' : opt)}
-            className="rounded-full border px-3 py-1.5 text-sm font-semibold transition"
-            style={sel
-              ? { backgroundColor: ACCENT, borderColor: ACCENT, color: '#fff' }
-              : { backgroundColor: '#f9fafb', borderColor: '#e5e7eb', color: '#374151' }}
-          >
-            {opt}
-          </button>
-        )
-      })}
-    </div>
-  )
-}
-
-// ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function AthleteProfilePage() {
   const { data: session } = useSession()
+  const { activeId: athleteId } = useActiveAthlete()
   const name     = session?.user?.name  ?? 'Athlete'
   const initials = name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()
 
-  const [profile,  setProfile]  = useState<AthleteProfile>(EMPTY)
-  const [saved,    setSaved]    = useState(false)
-  const [loaded,   setLoaded]   = useState(false)
+  const lsKey = athleteId ? `f14_profile_wizard_${athleteId}` : null
+
+  const [draft,  setDraft]  = useState<WizardDraft>(EMPTY_DRAFT)
+  const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
+    if (!athleteId || !lsKey) return
     try {
-      const raw = localStorage.getItem(LS_KEY)
-      if (raw) setProfile(JSON.parse(raw))
+      const raw = localStorage.getItem(lsKey)
+      if (raw) setDraft(prev => ({ ...prev, ...JSON.parse(raw) }))
     } catch {}
+    loadProfileFromSupabase(athleteId).then(remote => {
+      if (Object.keys(remote).length > 0) {
+        setDraft(prev => ({ ...prev, ...remote }))
+      }
+    })
     setLoaded(true)
-  }, [])
+  }, [athleteId]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  function set<K extends keyof AthleteProfile>(key: K, value: string) {
-    setProfile(prev => ({ ...prev, [key]: value }))
-    setSaved(false)
-  }
-
-  function handleSave(e: React.FormEvent) {
-    e.preventDefault()
-    try { localStorage.setItem(LS_KEY, JSON.stringify(profile)) } catch {}
-    setSaved(true)
-    setTimeout(() => setSaved(false), 3000)
-  }
-
-  const pct       = loaded ? pctComplete(profile) : 0
-  const isComplete = pct === 100
-
-  if (!loaded) return null
+  const pct      = loaded ? calcCompletionPct(draft) : 0
+  const complete = pct === 100
 
   return (
     <div className="min-h-screen pb-16" style={{ backgroundColor: '#f4f6f9' }}>
 
       {/* Header */}
       <div className="sticky top-0 z-10 border-b border-gray-100 bg-white/90 px-4 py-4 backdrop-blur-sm">
-        <div className="mx-auto flex max-w-2xl items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Link href="/athlete/dashboard" className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition hover:bg-gray-100">
-              <IconChevronLeft size={20} />
-            </Link>
-            <div>
-              <h1 className="text-base font-bold text-gray-900">Athlete Profile</h1>
-              <p className="text-xs text-gray-400">{pct}% complete</p>
-            </div>
+        <div className="mx-auto flex max-w-2xl items-center gap-3">
+          <Link href="/athlete/dashboard" className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition hover:bg-gray-100">
+            <IconChevronLeft size={20} />
+          </Link>
+          <div className="flex-1">
+            <h1 className="text-base font-bold text-gray-900">Athlete Profile</h1>
+            <p className="text-xs text-gray-400">{pct}% complete</p>
           </div>
-          {/* Progress bar */}
-          <div className="hidden sm:flex flex-1 max-w-[160px] flex-col gap-1">
-            <div className="h-2 overflow-hidden rounded-full bg-gray-200">
-              <div
-                className="h-full rounded-full transition-all duration-500"
-                style={{ width: `${pct}%`, backgroundColor: isComplete ? '#10b981' : ACCENT }}
-              />
-            </div>
-          </div>
-          <button
-            type="button"
-            form="profile-form"
-            onClick={handleSave}
-            className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-bold text-white transition hover:opacity-90"
-            style={{ backgroundColor: saved ? '#10b981' : ACCENT }}
-          >
-            {saved ? <><IconCheck size={14} strokeWidth={3} /> Saved</> : 'Save Profile'}
-          </button>
+          <Link href="/athlete/profile/complete"
+            className="rounded-xl px-4 py-2 text-sm font-bold text-white transition hover:opacity-90"
+            style={{ backgroundColor: complete ? '#10b981' : ACCENT }}>
+            {complete ? 'Edit Profile' : 'Complete Profile →'}
+          </Link>
         </div>
       </div>
 
-      <div className="mx-auto max-w-2xl space-y-5 px-4 pt-6">
+      <div className="mx-auto max-w-2xl space-y-4 px-4 pt-6">
 
-        {/* Completion callout */}
-        {isComplete ? (
-          <div className="flex items-center gap-3 rounded-2xl bg-green-50 px-5 py-4" style={{ border: '1.5px solid #86efac' }}>
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-green-100">
-              <IconCheck size={18} color="#16a34a" strokeWidth={2.5} />
-            </span>
-            <div>
-              <p className="font-bold text-green-900">Profile complete</p>
-              <p className="text-sm text-green-700">Your coach has everything they need to personalise your sessions.</p>
+        {/* Progress card */}
+        <div className="overflow-hidden rounded-2xl bg-white shadow-sm">
+          <div className="px-5 py-4">
+            <div className="flex items-center gap-4">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-xl font-bold text-white" style={{ backgroundColor: ACCENT }}>
+                {initials}
+              </div>
+              <div className="flex-1">
+                <p className="font-bold text-gray-900">{name}</p>
+                <p className="text-sm text-gray-400">{session?.user?.email}</p>
+              </div>
+              {complete && (
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-green-100">
+                  <IconCheck size={16} color="#16a34a" strokeWidth={2.5} />
+                </span>
+              )}
+            </div>
+
+            <div className="mt-4">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs font-semibold text-gray-500">Profile Completion</span>
+                <span className="text-xs font-bold" style={{ color: complete ? '#10b981' : ACCENT }}>{pct}%</span>
+              </div>
+              <div className="h-2.5 overflow-hidden rounded-full bg-gray-100">
+                <div className="h-full rounded-full transition-all duration-500"
+                  style={{ width: `${pct}%`, backgroundColor: complete ? '#10b981' : ACCENT }} />
+              </div>
+              {!complete && (
+                <p className="mt-2 text-xs text-gray-400">Complete your profile so your coach can personalise your sessions.</p>
+              )}
             </div>
           </div>
-        ) : (
-          <div className="flex items-center gap-4 rounded-2xl bg-white px-5 py-4 shadow-sm">
-            <div className="shrink-0 text-center">
-              <span className="text-2xl font-black" style={{ color: ACCENT }}>{pct}%</span>
-              <p className="text-[10px] font-semibold text-gray-400">complete</p>
+        </div>
+
+        {/* Steps checklist */}
+        <div className="overflow-hidden rounded-2xl bg-white shadow-sm">
+          <div className="border-b border-gray-100 px-5 py-3.5">
+            <h2 className="text-sm font-bold text-gray-900">Profile Steps</h2>
+          </div>
+          <div className="divide-y divide-gray-50">
+            {STEPS.map(s => {
+              const done = draft.completedSteps.includes(s.n)
+              return (
+                <Link key={s.n} href={`/athlete/profile/complete?step=${s.n}`}
+                  className="flex items-center gap-3 px-5 py-3.5 transition hover:bg-gray-50">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full"
+                    style={done
+                      ? { backgroundColor: '#10b981' }
+                      : { backgroundColor: '#f3f4f6' }}>
+                    {done
+                      ? <IconCheck size={13} color="#fff" strokeWidth={3} />
+                      : <span className="text-[11px] font-bold text-gray-400">{s.n}</span>}
+                  </span>
+                  <span className={`flex-1 text-sm font-medium ${done ? 'text-gray-700' : 'text-gray-400'}`}>{s.label}</span>
+                  <span className="text-[10px] font-semibold text-gray-300">{s.weight}%</span>
+                  <IconChevronRight size={14} className="text-gray-300" />
+                </Link>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Profile summary (only show filled fields) */}
+        {loaded && (draft.primaryPosition || draft.strengths || draft.goal12Months || draft.mindset) && (
+          <div className="overflow-hidden rounded-2xl bg-white shadow-sm">
+            <div className="border-b border-gray-100 px-5 py-3.5">
+              <h2 className="text-sm font-bold text-gray-900">Profile Summary</h2>
             </div>
-            <div className="flex-1">
-              <p className="text-sm font-bold text-gray-900">Almost there — finish your profile</p>
-              <p className="mt-0.5 text-xs text-gray-500">Your coach uses this to tailor your training and track your development.</p>
-              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-gray-100">
-                <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: ACCENT }} />
-              </div>
+            <div className="space-y-3 px-5 py-4 text-sm">
+              {draft.primaryPosition && (
+                <div className="flex gap-2">
+                  <span className="w-28 shrink-0 font-semibold text-gray-400">Position</span>
+                  <span className="text-gray-800">{draft.primaryPosition}{draft.secondaryPosition ? ` / ${draft.secondaryPosition}` : ''}</span>
+                </div>
+              )}
+              {draft.dominantHand && (
+                <div className="flex gap-2">
+                  <span className="w-28 shrink-0 font-semibold text-gray-400">Hand</span>
+                  <span className="text-gray-800">{draft.dominantHand}</span>
+                </div>
+              )}
+              {draft.playingStyles.length > 0 && (
+                <div className="flex gap-2">
+                  <span className="w-28 shrink-0 font-semibold text-gray-400">Style</span>
+                  <span className="text-gray-800">{draft.playingStyles.join(', ')}</span>
+                </div>
+              )}
+              {draft.strengths && (
+                <div className="flex gap-2">
+                  <span className="w-28 shrink-0 font-semibold text-gray-400">Strengths</span>
+                  <span className="text-gray-800 line-clamp-2">{draft.strengths}</span>
+                </div>
+              )}
+              {draft.goal12Months && (
+                <div className="flex gap-2">
+                  <span className="w-28 shrink-0 font-semibold text-gray-400">12-month goal</span>
+                  <span className="text-gray-800 line-clamp-2">{draft.goal12Months}</span>
+                </div>
+              )}
+              {draft.mindset && (
+                <div className="flex gap-2">
+                  <span className="w-28 shrink-0 font-semibold text-gray-400">Mindset</span>
+                  <span className="text-gray-800">{draft.mindset}</span>
+                </div>
+              )}
             </div>
           </div>
         )}
 
-        {/* Avatar */}
-        <div className="flex items-center gap-4 rounded-2xl bg-white px-5 py-4 shadow-sm">
-          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-xl font-bold text-white" style={{ backgroundColor: ACCENT }}>
-            {initials}
-          </div>
-          <div>
-            <p className="font-bold text-gray-900">{name}</p>
-            <p className="text-sm text-gray-400">{session?.user?.email}</p>
-          </div>
-        </div>
-
-        <form id="profile-form" onSubmit={handleSave} className="space-y-5">
-
-          {/* ── Section 1: Your Game ─────────────────────────────────── */}
-          <Section title="Your Game">
-            <div>
-              <label className={LABEL}>How long have you been playing basketball? <span className="text-red-400">*</span></label>
-              <ChipGroup
-                options={['Less than 1 year', '1–3 years', '3–5 years', '5–10 years', '10+ years']}
-                value={profile.yearsPlaying}
-                onChange={v => set('yearsPlaying', v)}
-              />
-            </div>
-
-            <div>
-              <label className={LABEL}>Primary position <span className="text-red-400">*</span></label>
-              <ChipGroup
-                options={['Point Guard', 'Shooting Guard', 'Small Forward', 'Power Forward', 'Centre', 'Multiple']}
-                value={profile.position}
-                onChange={v => set('position', v)}
-              />
-            </div>
-
-            <div>
-              <label className={LABEL}>Current club or team <span className="text-gray-400 font-normal">(optional)</span></label>
-              <input type="text" value={profile.currentClub} onChange={e => set('currentClub', e.target.value)} placeholder="e.g. Sydney Kings Academy" className={INPUT} />
-            </div>
-
-            <div>
-              <label className={LABEL}>Competition level</label>
-              <select value={profile.competitionLevel} onChange={e => set('competitionLevel', e.target.value)} className={SELECT}>
-                <option value="">Select level…</option>
-                <option>Recreational</option>
-                <option>School sport</option>
-                <option>Junior club</option>
-                <option>Junior representative</option>
-                <option>Senior club</option>
-                <option>Senior representative</option>
-                <option>Semi-professional</option>
-              </select>
-            </div>
-
-            <div>
-              <label className={LABEL}>Representative experience</label>
-              <ChipGroup
-                options={['None', 'Local / Regional', 'State level', 'National level']}
-                value={profile.repExperience}
-                onChange={v => set('repExperience', v)}
-              />
-            </div>
-          </Section>
-
-          {/* ── Section 2: Goals ─────────────────────────────────────── */}
-          <Section title="Your Goals">
-            <div>
-              <label className={LABEL}>Short-term goal (next 3 months) <span className="text-red-400">*</span></label>
-              <textarea
-                rows={3} value={profile.shortTermGoal}
-                onChange={e => set('shortTermGoal', e.target.value)}
-                placeholder="e.g. Improve my off-the-dribble shooting consistency"
-                className={TEXTAREA}
-              />
-            </div>
-
-            <div>
-              <label className={LABEL}>Long-term goal <span className="text-red-400">*</span></label>
-              <textarea
-                rows={3} value={profile.longTermGoal}
-                onChange={e => set('longTermGoal', e.target.value)}
-                placeholder="e.g. Make the U18 state representative squad"
-                className={TEXTAREA}
-              />
-            </div>
-
-            <div>
-              <label className={LABEL}>What aspect of your game do you most want to improve?</label>
-              <ChipGroup
-                options={['Shooting', 'Ball handling', 'Defence', 'Athleticism', 'Basketball IQ', 'Leadership', 'Finishing']}
-                value={profile.primaryImprovement}
-                onChange={v => set('primaryImprovement', v)}
-              />
-            </div>
-          </Section>
-
-          {/* ── Section 3: Self-Assessment ───────────────────────────── */}
-          <Section title="Self-Assessment">
-            <div>
-              <label className={LABEL}>My biggest strengths <span className="text-red-400">*</span></label>
-              <textarea
-                rows={3} value={profile.strengths}
-                onChange={e => set('strengths', e.target.value)}
-                placeholder="e.g. Court vision, three-point shooting, competitiveness"
-                className={TEXTAREA}
-              />
-            </div>
-
-            <div>
-              <label className={LABEL}>Areas I want to work on <span className="text-red-400">*</span></label>
-              <textarea
-                rows={3} value={profile.weaknesses}
-                onChange={e => set('weaknesses', e.target.value)}
-                placeholder="e.g. Left-hand finishing, lateral quickness, free throws"
-                className={TEXTAREA}
-              />
-            </div>
-
-            <div>
-              <label className={LABEL}>How do you prefer to train?</label>
-              <ChipGroup
-                options={['Solo drills', 'Small group', 'Large group', 'Mix of everything']}
-                value={profile.trainingStyle}
-                onChange={v => set('trainingStyle', v)}
-              />
-            </div>
-
-            <div>
-              <label className={LABEL}>Sessions per week you are targeting <span className="text-red-400">*</span></label>
-              <ChipGroup
-                options={['1', '2', '3', '4', '5+']}
-                value={profile.trainingFrequency}
-                onChange={v => set('trainingFrequency', v)}
-              />
-            </div>
-          </Section>
-
-          {/* ── Section 4: Additional Information ───────────────────── */}
-          <Section title="Additional Information">
-            <div>
-              <label className={LABEL}>Dominant hand</label>
-              <ChipGroup
-                options={['Right', 'Left', 'Ambidextrous']}
-                value={profile.dominantHand}
-                onChange={v => set('dominantHand', v)}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className={LABEL}>Height <span className="text-gray-400 font-normal">(optional)</span></label>
-                <input type="text" value={profile.height} onChange={e => set('height', e.target.value)} placeholder="e.g. 183 cm" className={INPUT} />
-              </div>
-              <div>
-                <label className={LABEL}>Weight <span className="text-gray-400 font-normal">(optional)</span></label>
-                <input type="text" value={profile.weight} onChange={e => set('weight', e.target.value)} placeholder="e.g. 78 kg" className={INPUT} />
-              </div>
-            </div>
-
-            <div>
-              <label className={LABEL}>Any injuries or physical limitations we should know about? <span className="text-gray-400 font-normal">(optional)</span></label>
-              <textarea
-                rows={2} value={profile.injuries}
-                onChange={e => set('injuries', e.target.value)}
-                placeholder="e.g. Left ankle sprain recovering, avoid high-impact landing drills"
-                className={TEXTAREA}
-              />
-            </div>
-
-            <div>
-              <label className={LABEL}>How did you hear about Formula14?</label>
-              <select value={profile.howHeard} onChange={e => set('howHeard', e.target.value)} className={SELECT}>
-                <option value="">Select…</option>
-                <option>Social media</option>
-                <option>Friend or family referral</option>
-                <option>Coach referral</option>
-                <option>Google / online search</option>
-                <option>School or academy</option>
-                <option>Saw a game or event</option>
-                <option>Other</option>
-              </select>
-            </div>
-          </Section>
-
-          {/* Save */}
-          <button
-            type="submit"
-            className="w-full rounded-2xl py-4 text-sm font-bold text-white shadow-sm transition hover:opacity-90"
-            style={{ backgroundColor: saved ? '#10b981' : ACCENT }}
-          >
-            {saved ? '✓ Profile Saved' : 'Save Profile'}
-          </button>
-
-          <p className="text-center text-xs text-gray-400 pb-4">
-            <span className="text-red-400">*</span> Required fields are used by your coach before your first session.
-          </p>
-        </form>
+        {!complete && (
+          <Link href="/athlete/profile/complete"
+            className="flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-sm font-bold text-white shadow-sm transition hover:opacity-90"
+            style={{ backgroundColor: ACCENT }}>
+            <IconUser size={16} />
+            Continue Completing Profile
+          </Link>
+        )}
       </div>
     </div>
   )

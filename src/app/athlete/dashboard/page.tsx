@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
+import { useActiveAthlete } from '@/lib/activeAthlete'
 import {
   IconCalendar, IconFlame, IconCurrencyDollar, IconTrophy,
   IconCheck, IconX, IconChevronRight,
@@ -221,6 +222,7 @@ function CancelDialog({ sessionLabel, onCancel, onClose }: {
 
 export default function AthleteDashboard() {
   const { data: session } = useSession()
+  const { activeId: athleteId } = useActiveAthlete()
   const name   = session?.user?.name ?? 'Athlete'
   const userId = session?.user?.id
   const quote  = getDailyQuote()
@@ -264,10 +266,12 @@ export default function AthleteDashboard() {
   // Profile completion banner
   useEffect(() => {
     try {
-      const REQUIRED = ['yearsPlaying', 'position', 'shortTermGoal', 'longTermGoal', 'strengths', 'weaknesses', 'trainingFrequency']
-      const raw = localStorage.getItem('f14_athlete_profile')
+      const lsKey = athleteId ? `f14_profile_wizard_${athleteId}` : 'f14_profile_wizard'
+      const raw = localStorage.getItem(lsKey)
       const p   = raw ? JSON.parse(raw) : {}
-      const pct = Math.round(REQUIRED.filter(k => p[k]?.trim()).length / REQUIRED.length * 100)
+      const completedSteps: number[] = Array.isArray(p.completedSteps) ? p.completedSteps : []
+      const WEIGHTS: Record<number, number> = { 1:20, 2:5, 3:5, 4:10, 5:15, 6:10, 7:5, 8:10, 9:5, 10:5, 11:10 }
+      const pct = completedSteps.reduce((sum, n) => sum + (WEIGHTS[n] ?? 0), 0)
       setProfilePct(pct)
     } catch { setProfilePct(0) }
 
@@ -279,7 +283,7 @@ export default function AthleteDashboard() {
       const daysSince = Math.floor((Date.now() - ts) / 86400000)
       setDaysLeft(Math.max(0, 7 - daysSince))
     } catch { setDaysLeft(null) }
-  }, [userId])
+  }, [userId, athleteId])
 
   function showToast(msg: string) {
     setToast(msg)
@@ -385,7 +389,7 @@ export default function AthleteDashboard() {
         {/* ── Finish Set Up Banner ───────────────────────────────────────── */}
         {profilePct !== null && profilePct < 100 && (
           <Link
-            href="/athlete/profile"
+            href="/athlete/profile/complete"
             className="flex items-center gap-4 rounded-2xl p-4 shadow-sm transition hover:opacity-90"
             style={{ backgroundColor: '#fffbeb', border: '1.5px solid #fcd34d' }}
           >

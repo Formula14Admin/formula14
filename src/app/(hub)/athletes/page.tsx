@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
+import { calcBVAgeGroup } from '@/lib/bvAgeGroup'
 import {
   IconX,
   IconSearch,
@@ -23,6 +24,9 @@ import {
   IconCheck,
   IconClock,
   IconArrowLeft,
+  IconLock,
+  IconSend,
+  IconChevronDown,
 } from '@tabler/icons-react'
 import { StripeCardStep } from '@/components/StripeCardModal'
 import { DatePicker } from '@/components/ui/Pickers'
@@ -85,6 +89,35 @@ interface Athlete {
   inviteStatus?: 'invited' | 'accepted' | null
   lastLoginAt:   string | null
   isActive: boolean
+}
+
+interface AthleteProfilePanel {
+  primaryPosition:         string
+  secondaryPosition:       string
+  dominantHand:            string
+  playingStyles:           string[]
+  strengths:               string
+  areasToImprove:          string[]
+  mindset:                 string
+  completionPct:           number
+  goal12Months:            string
+  longTermDream:           string
+  formula14Goal:           string
+  weeklyTrainingSessions:  string
+  weeklyGames:             string
+  individualSkillFrequency: string
+  currentInjuries:         string
+  medicalConditions:       string
+  allergies:               string
+  bvDisplayLabel:          string
+  selectedLevels:          string[]
+}
+
+interface CoachNote {
+  id:         string
+  content:    string
+  authorName: string
+  createdAt:  string
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -553,6 +586,250 @@ function dbToAthlete(row: any): Athlete {
   }
 }
 
+// ─── Profile Panel Tab ────────────────────────────────────────────────────────
+
+const LEVEL_LABELS: Record<string, string> = {
+  domestic:   'Domestic',      junior_rep: 'Junior Rep',
+  school:     'School',        bigv_nbl1:  'Big V / NBL1',
+  bv_pathway: 'BV Pathways',  ba_pathway: 'BA Pathways',
+  collegiate: 'Collegiate',   nbl: 'NBL',  wnbl: 'WNBL',
+  nba: 'NBA', wnba: 'WNBA',   other: 'Other',
+}
+
+function ProfilePanelRow({ label, value }: { label: string; value: string | React.ReactNode }) {
+  if (!value || value === '') return null
+  return (
+    <div className="flex gap-2 py-1.5">
+      <span className="w-28 shrink-0 text-xs font-semibold text-gray-400">{label}</span>
+      <span className="flex-1 text-sm text-gray-800">{value}</span>
+    </div>
+  )
+}
+
+function ProfileSection({ title, children, confidential }: { title: string; children: React.ReactNode; confidential?: boolean }) {
+  const [open, setOpen] = useState(!confidential)
+  return (
+    <section>
+      <button type="button" onClick={() => setOpen(o => !o)}
+        className="mb-2 flex w-full items-center justify-between">
+        <h3 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-gray-400">
+          {confidential && <IconLock size={11} />}
+          {title}
+          {confidential && <span className="ml-1 rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-widest text-amber-700">Confidential</span>}
+        </h3>
+        <IconChevronDown size={14} className="text-gray-300 transition" style={{ transform: open ? 'rotate(180deg)' : undefined }} />
+      </button>
+      {open && <div className="divide-y divide-gray-50 rounded-xl border border-gray-100 bg-gray-50 px-4">{children}</div>}
+    </section>
+  )
+}
+
+const POSITION_FULL: Record<string, string> = {
+  PG: 'Point Guard', SG: 'Shooting Guard', SF: 'Small Forward',
+  PF: 'Power Forward', C: 'Centre',
+}
+
+function ProfilePanelTab({ athlete, data, loading }: {
+  athlete: Athlete
+  data: AthleteProfilePanel | null
+  loading: boolean
+}) {
+  if (loading) {
+    return (
+      <div className="space-y-3 p-5">
+        {[1,2,3,4].map(i => <div key={i} className="h-16 animate-pulse rounded-xl bg-gray-100" />)}
+      </div>
+    )
+  }
+
+  const bvResult  = athlete.dob ? calcBVAgeGroup(athlete.dob) : null
+  const wizardPct = data?.completionPct ?? 0
+
+  // Position from athletes table (short code) or from wizard (full name)
+  const positionDisplay = data?.primaryPosition
+    || (athlete.position ? POSITION_FULL[athlete.position] ?? athlete.position : '')
+
+  return (
+    <div className="space-y-4 p-5">
+
+      {/* BV Age Group + wizard completion */}
+      <div className="overflow-hidden rounded-xl border border-gray-100 bg-gray-50 p-4 space-y-3">
+        {bvResult && (
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-gray-400">BV Age Group</span>
+            <span className="rounded-full px-2.5 py-1 text-xs font-bold text-white" style={{ backgroundColor: ACCENT }}>
+              {bvResult.displayLabel}
+            </span>
+          </div>
+        )}
+        <div>
+          <div className="mb-1.5 flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-gray-400">Profile Wizard</span>
+            <span className="text-xs font-bold" style={{ color: wizardPct === 100 ? '#10b981' : wizardPct > 0 ? ACCENT : '#9ca3af' }}>
+              {wizardPct > 0 ? `${wizardPct}% complete` : 'Not started'}
+            </span>
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-gray-200">
+            <div className="h-full rounded-full transition-all"
+              style={{ width: `${wizardPct}%`, backgroundColor: wizardPct === 100 ? '#10b981' : ACCENT }} />
+          </div>
+        </div>
+      </div>
+
+      {/* Basic info — always shown from athletes table */}
+      <ProfileSection title="Basic Information">
+        <ProfilePanelRow label="Position"    value={positionDisplay} />
+        {data?.secondaryPosition && <ProfilePanelRow label="2nd position" value={data.secondaryPosition} />}
+        <ProfilePanelRow label="Dominant hand" value={data?.dominantHand ?? ''} />
+        <ProfilePanelRow label="Club / Rep"  value={athlete.repClub} />
+        <ProfilePanelRow label="School"      value={athlete.school} />
+        <ProfilePanelRow label="DOB"         value={athlete.dob ? `${fmtDob(athlete.dob)} (${calcAge(athlete.dob)} yrs)` : ''} />
+        <ProfilePanelRow label="Gender"      value={athlete.gender} />
+      </ProfileSection>
+
+      {/* Wizard data — shown when wizard has been started */}
+      {data && (
+        <>
+          {/* Basketball levels */}
+          {data.selectedLevels.length > 0 && (
+            <ProfileSection title="Basketball Background">
+              <div className="py-2">
+                <div className="flex flex-wrap gap-1.5">
+                  {data.selectedLevels.map(l => (
+                    <span key={l} className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-xs font-semibold text-gray-600">
+                      {LEVEL_LABELS[l] ?? l}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </ProfileSection>
+          )}
+
+          {/* Playing style */}
+          {(data.playingStyles.length > 0 || data.mindset) && (
+            <ProfileSection title="Playing Style">
+              <ProfilePanelRow label="Style"   value={data.playingStyles.join(', ')} />
+              <ProfilePanelRow label="Mindset" value={data.mindset} />
+            </ProfileSection>
+          )}
+
+          {/* Strengths */}
+          {(data.strengths || data.areasToImprove.length > 0) && (
+            <ProfileSection title="Strengths & Development">
+              <ProfilePanelRow label="Strengths"        value={data.strengths} />
+              <ProfilePanelRow label="Areas to improve" value={data.areasToImprove.join(', ')} />
+            </ProfileSection>
+          )}
+
+          {/* Goals */}
+          {(data.goal12Months || data.formula14Goal || data.longTermDream) && (
+            <ProfileSection title="Goals">
+              <ProfilePanelRow label="12-month goal"  value={data.goal12Months} />
+              <ProfilePanelRow label="F14 goal"       value={data.formula14Goal} />
+              <ProfilePanelRow label="Long-term dream" value={data.longTermDream} />
+            </ProfileSection>
+          )}
+
+          {/* Training habits */}
+          {(data.weeklyTrainingSessions || data.weeklyGames || data.individualSkillFrequency) && (
+            <ProfileSection title="Training Habits">
+              <ProfilePanelRow label="Training/week"   value={data.weeklyTrainingSessions} />
+              <ProfilePanelRow label="Games/week"      value={data.weeklyGames} />
+              <ProfilePanelRow label="Individual work" value={data.individualSkillFrequency} />
+            </ProfileSection>
+          )}
+
+          {/* Medical — confidential, collapsed by default */}
+          {(data.currentInjuries || data.medicalConditions || data.allergies) && (
+            <ProfileSection title="Medical Information" confidential>
+              <ProfilePanelRow label="Injuries"   value={data.currentInjuries} />
+              <ProfilePanelRow label="Conditions" value={data.medicalConditions} />
+              <ProfilePanelRow label="Allergies"  value={data.allergies} />
+            </ProfileSection>
+          )}
+        </>
+      )}
+
+      {!data && (
+        <div className="rounded-xl border border-dashed border-gray-200 p-4 text-center">
+          <p className="text-xs font-semibold text-gray-400">Wizard not yet completed</p>
+          <p className="mt-1 text-[11px] text-gray-300">Detailed profile, goals, and training data will appear here once the athlete completes their profile wizard.</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Notes Panel Tab ──────────────────────────────────────────────────────────
+
+function NotesPanelTab({ notes, loading, newNote, setNewNote, onAdd, saving }: {
+  notes: CoachNote[]; loading: boolean
+  newNote: string; setNewNote: (v: string) => void
+  onAdd: () => void; saving: boolean
+}) {
+  function fmtNoteDate(iso: string) {
+    return new Date(iso).toLocaleString('en-AU', {
+      day: 'numeric', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    })
+  }
+
+  return (
+    <div className="flex h-full flex-col">
+      {/* Compose */}
+      <div className="shrink-0 border-b border-gray-100 p-4">
+        <textarea
+          rows={3}
+          value={newNote}
+          onChange={e => setNewNote(e.target.value)}
+          placeholder="Add a coach note — only visible to admins…"
+          className="w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm outline-none transition placeholder:text-gray-300 focus:border-[#6BA3D6] focus:ring-2 focus:ring-[#6BA3D6]/10"
+        />
+        <div className="mt-2 flex items-center justify-between">
+          <span className="flex items-center gap-1 text-[10px] font-semibold text-gray-400">
+            <IconLock size={10} /> Admin only
+          </span>
+          <button
+            type="button"
+            onClick={onAdd}
+            disabled={!newNote.trim() || saving}
+            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold text-white transition hover:opacity-90 disabled:opacity-40"
+            style={{ backgroundColor: ACCENT }}>
+            <IconSend size={12} />
+            {saving ? 'Saving…' : 'Add Note'}
+          </button>
+        </div>
+      </div>
+
+      {/* Notes feed */}
+      <div className="flex-1 overflow-y-auto">
+        {loading ? (
+          <div className="space-y-3 p-4">
+            {[1,2].map(i => <div key={i} className="h-20 animate-pulse rounded-xl bg-gray-100" />)}
+          </div>
+        ) : notes.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-2 p-10 text-center">
+            <IconNotes size={28} className="text-gray-200" />
+            <p className="text-sm text-gray-400">No notes yet</p>
+          </div>
+        ) : (
+          <div className="space-y-3 p-4">
+            {notes.map(note => (
+              <div key={note.id} className="rounded-xl border border-gray-100 bg-white p-3.5 shadow-sm">
+                <p className="whitespace-pre-wrap text-sm text-gray-800">{note.content}</p>
+                <div className="mt-2 flex items-center justify-between">
+                  <span className="text-xs font-semibold text-gray-400">{note.authorName || 'Admin'}</span>
+                  <span className="text-[10px] text-gray-300">{fmtNoteDate(note.createdAt)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function AthletesPage() {
@@ -586,6 +863,21 @@ export default function AthletesPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [addMemberInsertedData, setAddMemberInsertedData] = useState<any>(null)
   const [addMemberExistingAthlete, setAddMemberExistingAthlete] = useState<Athlete | null>(null)
+
+  // Detail panel: sub-tab
+  const [panelTab, setPanelTab] = useState<'overview' | 'profile' | 'notes'>('overview')
+
+  // Detail panel: athlete profile data
+  const [panelProfile,          setPanelProfile]          = useState<AthleteProfilePanel | null>(null)
+  const [panelProfileLoading,   setPanelProfileLoading]   = useState(false)
+  const [panelProfileAthleteId, setPanelProfileAthleteId] = useState<string | null>(null)
+
+  // Detail panel: coach notes
+  const [panelNotes,          setPanelNotes]          = useState<CoachNote[]>([])
+  const [panelNotesLoading,   setPanelNotesLoading]   = useState(false)
+  const [panelNotesAthleteId, setPanelNotesAthleteId] = useState<string | null>(null)
+  const [newNote,    setNewNote]    = useState('')
+  const [savingNote, setSavingNote] = useState(false)
 
   // Detail panel: account status actions
   const [resendingInvite, setResendingInvite] = useState(false)
@@ -695,6 +987,98 @@ export default function AthletesPage() {
       .finally(() => setPanelPmLoading(false))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId])
+
+  // Fetch profile data when panel opens for a new athlete
+  useEffect(() => {
+    const athleteId = selectedId
+    if (!athleteId) { setPanelProfile(null); setPanelProfileAthleteId(null); return }
+    if (athleteId === panelProfileAthleteId) return
+    setPanelProfileLoading(true)
+    setPanelProfile(null)
+    setPanelProfileAthleteId(athleteId)
+    void Promise.all([
+      supabase.from('athlete_profiles').select('*').eq('athlete_id', athleteId).single(),
+      supabase.from('athlete_profile_goals').select('*').eq('athlete_id', athleteId).single(),
+      supabase.from('athlete_training_habits').select('*').eq('athlete_id', athleteId).single(),
+      supabase.from('athlete_medical_info').select('*').eq('athlete_id', athleteId).single(),
+      supabase.from('athlete_basketball_levels').select('level_type').eq('athlete_id', athleteId),
+    ]).then(([profileRes, goalsRes, habitsRes, medicalRes, levelsRes]) => {
+      const p = profileRes.data
+      const g = goalsRes.data
+      const h = habitsRes.data
+      const m = medicalRes.data
+      const levels = (levelsRes.data ?? []).map((r: { level_type: string }) => r.level_type)
+      if (!p && !g && !h && !m) { setPanelProfileLoading(false); return }
+      setPanelProfile({
+        primaryPosition:          p?.primary_position          ?? '',
+        secondaryPosition:        p?.secondary_position        ?? '',
+        dominantHand:             p?.dominant_hand             ?? '',
+        playingStyles:            p?.playing_styles            ?? [],
+        strengths:                p?.strengths                 ?? '',
+        areasToImprove:           p?.areas_to_improve          ?? [],
+        mindset:                  p?.mindset                   ?? '',
+        completionPct:            p?.completion_percentage     ?? 0,
+        goal12Months:             g?.goal_12_months            ?? '',
+        longTermDream:            g?.long_term_dream           ?? '',
+        formula14Goal:            g?.formula14_goal            ?? '',
+        weeklyTrainingSessions:   h?.weekly_training_sessions  ?? '',
+        weeklyGames:              h?.weekly_games              ?? '',
+        individualSkillFrequency: h?.individual_skill_frequency ?? '',
+        currentInjuries:          m?.current_injuries          ?? '',
+        medicalConditions:        m?.medical_conditions        ?? '',
+        allergies:                m?.allergies                 ?? '',
+        bvDisplayLabel:           '',
+        selectedLevels:           levels,
+      })
+    }).finally(() => setPanelProfileLoading(false))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId])
+
+  // Fetch coach notes when panel opens for a new athlete
+  useEffect(() => {
+    const athleteId = selectedId
+    if (!athleteId) { setPanelNotes([]); setPanelNotesAthleteId(null); return }
+    if (athleteId === panelNotesAthleteId) return
+    setPanelNotesLoading(true)
+    setPanelNotes([])
+    setPanelNotesAthleteId(athleteId)
+    void supabase
+      .from('athlete_coach_notes')
+      .select('*')
+      .eq('athlete_id', athleteId)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        setPanelNotes((data ?? []).map((r: { id: string; content: string; author_name: string | null; created_at: string }) => ({
+          id:         r.id,
+          content:    r.content,
+          authorName: r.author_name ?? 'Admin',
+          createdAt:  r.created_at,
+        })))
+        setPanelNotesLoading(false)
+      })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId])
+
+  async function handleAddNote() {
+    if (!selectedId || !newNote.trim()) return
+    setSavingNote(true)
+    const { data, error } = await supabase
+      .from('athlete_coach_notes')
+      .insert({ athlete_id: selectedId, content: newNote.trim(), author_name: 'Coach' })
+      .select()
+      .single()
+    if (!error && data) {
+      const note: CoachNote = {
+        id:         (data as { id: string }).id,
+        content:    (data as { content: string }).content,
+        authorName: (data as { author_name: string | null }).author_name ?? 'Coach',
+        createdAt:  (data as { created_at: string }).created_at,
+      }
+      setPanelNotes(prev => [note, ...prev])
+      setNewNote('')
+    }
+    setSavingNote(false)
+  }
 
   function switchTab(tab: ActiveTab) {
     setActiveTab(tab)
@@ -814,7 +1198,7 @@ export default function AthletesPage() {
   async function handleDeleteAthlete(id: string) {
     setDeleting(true)
     try {
-      const { error } = await supabase.from('athletes').delete().eq('id', id)
+      const { error } = await supabase.rpc('delete_athlete_completely', { p_athlete_id: id })
       if (error) { showToast(`Failed to delete: ${error.message}`); return }
       setAthletes(prev => prev.filter(a => a.id !== id))
       if (selectedId === id) setSelectedId(null)
@@ -1174,7 +1558,10 @@ export default function AthletesPage() {
   }
 
   function openAthlete(id: string) {
-    setSelectedId(prev => prev === id ? null : id)
+    setSelectedId(prev => {
+      if (prev !== id) setPanelTab('overview')
+      return prev === id ? null : id
+    })
     setShowChangePlan(false)
     setPaymentSent(false)
   }
@@ -1521,8 +1908,21 @@ export default function AthletesPage() {
                 </div>
               </div>
 
-              {/* Scrollable body */}
-              <div className="flex-1 overflow-y-auto">
+              {/* Tab bar */}
+              <div className="flex shrink-0 border-b border-gray-100">
+                {(['overview', 'profile', 'notes'] as const).map(t => (
+                  <button key={t} type="button" onClick={() => setPanelTab(t)}
+                    className="flex-1 py-2.5 text-xs font-bold capitalize transition"
+                    style={panelTab === t
+                      ? { color: ACCENT, borderBottom: `2px solid ${ACCENT}` }
+                      : { color: '#9ca3af' }}>
+                    {t}
+                  </button>
+                ))}
+              </div>
+
+              {/* Scrollable body — Overview */}
+              {panelTab === 'overview' && <div className="flex-1 overflow-y-auto">
                 <div className="space-y-5 p-5">
 
                   {/* Personal */}
@@ -1915,7 +2315,29 @@ export default function AthletesPage() {
                   </section>
 
                 </div>
-              </div>
+              </div>}
+
+              {/* Profile tab */}
+              {panelTab === 'profile' && (
+                <div className="flex-1 overflow-y-auto">
+                  <ProfilePanelTab athlete={a} data={panelProfile} loading={panelProfileLoading} />
+                </div>
+              )}
+
+              {/* Notes tab */}
+              {panelTab === 'notes' && (
+                <div className="flex flex-1 flex-col overflow-hidden">
+                  <NotesPanelTab
+                    notes={panelNotes}
+                    loading={panelNotesLoading}
+                    newNote={newNote}
+                    setNewNote={setNewNote}
+                    onAdd={handleAddNote}
+                    saving={savingNote}
+                  />
+                </div>
+              )}
+
             </div>
           </>
         )

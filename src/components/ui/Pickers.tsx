@@ -23,16 +23,23 @@ export function DatePicker({
   onChange,
   accentColor = '#6BA3D6',
   minDate,
+  maxDate,
+  dark = false,
 }: {
   value: string
   onChange: (v: string) => void
   accentColor?: string
   minDate?: string
+  maxDate?: string
+  dark?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const [view, setView] = useState<'days' | 'months'>('days')
+  const [editingYear, setEditingYear] = useState(false)
+  const [yearInput, setYearInput] = useState('')
   const triggerRef = useRef<HTMLButtonElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
+  const yearInputRef = useRef<HTMLInputElement>(null)
   const [panelStyle, setPanelStyle] = useState({ top: 0, left: 0, width: 0 })
 
   const parsed = value ? new Date(value + 'T12:00:00') : null
@@ -106,6 +113,7 @@ export function DatePicker({
       String(date.getDate()).padStart(2, '0'),
     ].join('-')
     if (minDate && iso < minDate) return
+    if (maxDate && iso > maxDate) return
     onChange(iso)
     setOpen(false)
     setView('days')
@@ -127,6 +135,42 @@ export function DatePicker({
     }
     setOpen(o => !o)
     setView('days')
+    setEditingYear(false)
+  }
+
+  function startYearEdit() {
+    setYearInput(String(viewYear))
+    setEditingYear(true)
+    setTimeout(() => yearInputRef.current?.select(), 0)
+  }
+
+  function commitYearEdit() {
+    const y = parseInt(yearInput)
+    if (!isNaN(y) && y >= 1900 && y <= 2100) setViewYear(y)
+    setEditingYear(false)
+  }
+
+  // Dark-mode palette
+  const dk = dark ? {
+    trigger: { backgroundColor: '#2a2a2a', border: '1px solid rgba(255,255,255,0.08)', color: value ? '#fff' : '#4b5563' },
+    panel:   { backgroundColor: '#1e1e1e', border: '1px solid rgba(255,255,255,0.10)' },
+    nav:     'rounded p-1 text-gray-400 hover:bg-white/10',
+    header:  'text-xs font-semibold text-gray-200 transition hover:text-[#6BA3D6]',
+    dow:     'text-gray-600',
+    curDay:  'text-gray-200 hover:bg-white/10',
+    otherDay:'text-gray-600 hover:bg-white/5',
+    pastDay: 'cursor-not-allowed text-gray-700',
+    monthBtn:(sel: boolean) => sel ? 'font-semibold text-white' : 'text-gray-300 hover:bg-white/10',
+  } : {
+    trigger: {},
+    panel:   {},
+    nav:     'rounded p-1 text-gray-500 hover:bg-gray-100',
+    header:  'text-xs font-semibold text-gray-800 transition hover:text-[#6BA3D6]',
+    dow:     'text-gray-400',
+    curDay:  'text-gray-700 hover:bg-gray-100',
+    otherDay:'text-gray-300 hover:bg-gray-50',
+    pastDay: 'cursor-not-allowed text-gray-200',
+    monthBtn:(sel: boolean) => sel ? 'font-semibold text-white' : 'text-gray-700 hover:bg-gray-100',
   }
 
   return (
@@ -136,9 +180,14 @@ export function DatePicker({
         ref={triggerRef}
         type="button"
         onClick={handleToggle}
-        className="flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-800 outline-none transition focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/40"
+        className={`flex h-10 w-full items-center justify-center gap-2 rounded-lg px-3 text-sm outline-none transition focus:ring-1 focus:ring-[#6BA3D6]/40 ${
+          dark
+            ? 'focus:border-[#6BA3D6]'
+            : 'border border-gray-200 bg-white text-gray-800 focus:border-[#6BA3D6]'
+        }`}
+        style={dark ? dk.trigger : {}}
       >
-        <IconCalendar size={14} className="shrink-0 text-gray-400" />
+        <IconCalendar size={14} className={dark ? 'shrink-0 text-gray-500' : 'shrink-0 text-gray-400'} />
         <span className="truncate">{displayText}</span>
       </button>
 
@@ -146,24 +195,24 @@ export function DatePicker({
       {open && createPortal(
         <div
           ref={panelRef}
-          className="rounded-xl border border-gray-200 bg-white shadow-xl"
-          style={{ position: 'fixed', top: panelStyle.top, left: panelStyle.left, width: panelStyle.width, zIndex: 9999 }}
+          className={`rounded-xl shadow-xl ${dark ? '' : 'border border-gray-200 bg-white'}`}
+          style={{
+            position: 'fixed', top: panelStyle.top, left: panelStyle.left,
+            width: panelStyle.width, zIndex: 9999,
+            ...(dark ? dk.panel : {}),
+          }}
         >
           {view === 'days' ? (
             <>
               {/* Month / year nav */}
               <div className="flex items-center justify-between px-2 pt-2 pb-1">
-                <button type="button" onClick={prevMonth} className="rounded p-1 text-gray-500 hover:bg-gray-100">
+                <button type="button" onClick={prevMonth} className={dk.nav}>
                   <IconChevronLeft size={14} />
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setView('months')}
-                  className="text-xs font-semibold text-gray-800 transition hover:text-[#6BA3D6]"
-                >
+                <button type="button" onClick={() => setView('months')} className={dk.header}>
                   {MONTH_NAMES[viewMonth]} {viewYear}
                 </button>
-                <button type="button" onClick={nextMonth} className="rounded p-1 text-gray-500 hover:bg-gray-100">
+                <button type="button" onClick={nextMonth} className={dk.nav}>
                   <IconChevronRight size={14} />
                 </button>
               </div>
@@ -171,7 +220,7 @@ export function DatePicker({
               {/* Day-of-week headers */}
               <div className="grid grid-cols-7 px-1">
                 {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => (
-                  <div key={d} className="py-0.5 text-center text-[9px] font-semibold uppercase tracking-wide text-gray-400">
+                  <div key={d} className={`py-0.5 text-center text-[9px] font-semibold uppercase tracking-wide ${dk.dow}`}>
                     {d}
                   </div>
                 ))}
@@ -185,23 +234,20 @@ export function DatePicker({
                     String(cell.date.getMonth() + 1).padStart(2, '0'),
                     String(cell.date.getDate()).padStart(2, '0'),
                   ].join('-')
-                  const isPast = !!(minDate && cellIso < minDate)
+                  const isDisabled = !!(minDate && cellIso < minDate) || !!(maxDate && cellIso > maxDate)
                   const sel = isSel(cell.date)
                   return (
                     <button
                       key={i}
                       type="button"
                       onClick={() => pickDate(cell.date)}
-                      disabled={isPast}
+                      disabled={isDisabled}
                       className={[
                         'mx-auto flex h-6 w-6 items-center justify-center rounded-full text-[11px] transition',
-                        sel
-                          ? 'font-semibold text-white'
-                          : isPast
-                          ? 'cursor-not-allowed text-gray-200'
-                          : cell.current
-                          ? 'text-gray-700 hover:bg-gray-100'
-                          : 'text-gray-300 hover:bg-gray-50',
+                        sel      ? 'font-semibold text-white'
+                        : isDisabled ? dk.pastDay
+                        : cell.current ? dk.curDay
+                        : dk.otherDay,
                       ].join(' ')}
                       style={sel ? { backgroundColor: accentColor } : {}}
                     >
@@ -215,11 +261,26 @@ export function DatePicker({
             <>
               {/* Year nav */}
               <div className="flex items-center justify-between px-2 pt-2 pb-1">
-                <button type="button" onClick={() => setViewYear(y => y - 1)} className="rounded p-1 text-gray-500 hover:bg-gray-100">
+                <button type="button" onClick={() => setViewYear(y => y - 1)} className={dk.nav}>
                   <IconChevronLeft size={14} />
                 </button>
-                <span className="text-xs font-semibold text-gray-800">{viewYear}</span>
-                <button type="button" onClick={() => setViewYear(y => y + 1)} className="rounded p-1 text-gray-500 hover:bg-gray-100">
+                {editingYear ? (
+                  <input
+                    ref={yearInputRef}
+                    type="number"
+                    value={yearInput}
+                    onChange={e => setYearInput(e.target.value)}
+                    onBlur={commitYearEdit}
+                    onKeyDown={e => { if (e.key === 'Enter') commitYearEdit(); if (e.key === 'Escape') setEditingYear(false) }}
+                    className={`w-16 rounded border text-center text-xs font-semibold outline-none focus:ring-1 focus:ring-[#6BA3D6] ${dark ? 'border-white/20 bg-white/10 text-white' : 'border-gray-200 bg-white text-gray-800'}`}
+                    style={{ MozAppearance: 'textfield' }}
+                  />
+                ) : (
+                  <button type="button" onClick={startYearEdit} className={`text-xs font-semibold underline-offset-2 hover:underline ${dark ? 'text-gray-200' : 'text-gray-800'}`} title="Click to type a year">
+                    {viewYear}
+                  </button>
+                )}
+                <button type="button" onClick={() => setViewYear(y => y + 1)} className={dk.nav}>
                   <IconChevronRight size={14} />
                 </button>
               </div>
@@ -233,10 +294,7 @@ export function DatePicker({
                       key={name}
                       type="button"
                       onClick={() => { setViewMonth(i); setView('days') }}
-                      className={[
-                        'rounded-lg py-1.5 text-xs transition',
-                        sel ? 'font-semibold text-white' : 'text-gray-700 hover:bg-gray-100',
-                      ].join(' ')}
+                      className={`rounded-lg py-1.5 text-xs transition ${dk.monthBtn(sel)}`}
                       style={sel ? { backgroundColor: accentColor } : {}}
                     >
                       {name}
