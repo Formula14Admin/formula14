@@ -304,29 +304,39 @@ export default function BookPage() {
   // Check / set up payment method when athlete reaches the confirm step for a priced coached session
   useEffect(() => {
     if (step !== 'confirm' || !selectedTypeId || !athleteId) return
-    if (isSelfServe(selectedTypeId) || !bitMeta[selectedTypeId]?.priceDisplay) return
+    if (isSelfServe(selectedTypeId)) return
+    const hasPrice = !!(
+      bitMeta[selectedTypeId]?.priceDisplay ||
+      (bitMeta[selectedTypeId]?.durationTiers?.length ?? 0) > 0
+    )
+    if (!hasPrice) return
     setPmStatus('loading')
     setPmInfo(null)
     setSetupSecret(null)
     void (async () => {
-      const res  = await fetch(`/api/stripe/payment-method?athleteId=${encodeURIComponent(athleteId)}`)
-      const json = await res.json() as { paymentMethod: { brand: string; last4: string; expMonth: number; expYear: number } | null }
-      if (json.paymentMethod) {
-        setPmStatus('has-card')
-        setPmInfo(json.paymentMethod)
-      } else {
+      try {
+        const res  = await fetch(`/api/stripe/payment-method?athleteId=${encodeURIComponent(athleteId)}`)
+        const json = await res.json() as { paymentMethod: { brand: string; last4: string; expMonth: number; expYear: number } | null; error?: string }
+        if (json.error) { setPmStatus('no-card'); return }
+        if (json.paymentMethod) {
+          setPmStatus('has-card')
+          setPmInfo(json.paymentMethod)
+        } else {
+          setPmStatus('no-card')
+          const siRes  = await fetch('/api/stripe/create-setup-intent', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ athleteId }),
+          })
+          const siJson = await siRes.json() as { clientSecret?: string }
+          if (siJson.clientSecret) setSetupSecret(siJson.clientSecret)
+        }
+      } catch {
         setPmStatus('no-card')
-        const siRes  = await fetch('/api/stripe/create-setup-intent', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ athleteId }),
-        })
-        const siJson = await siRes.json() as { clientSecret?: string }
-        if (siJson.clientSecret) setSetupSecret(siJson.clientSecret)
       }
     })()
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, selectedTypeId, athleteId])
+  }, [step, selectedTypeId, athleteId, bitMeta])
 
   // ── Computed ──────────────────────────────────────────────────────────────────
 
