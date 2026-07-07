@@ -8,6 +8,11 @@ import { IconCalendarPlus, IconX, IconChevronRight } from '@tabler/icons-react'
 
 const ACCENT = '#6BA3D6'
 
+const COACH_NAMES: Record<string, string> = {
+  matt: 'Matt', jade: 'Jade', sam: 'Sam',
+  s1: 'Matt', s2: 'Jade', s3: 'Sam',
+}
+
 type Booking = {
   id: string
   date: string
@@ -72,7 +77,7 @@ export default function MyBookingsPage() {
         time:    fmtMins(b.start_mins),
         endTime: fmtMins(b.start_mins + (b.duration_mins ?? 60)),
         type:    b.session_type ?? '',
-        coach:   b.coach_id ?? null,
+        coach:   b.coach_id ? (COACH_NAMES[b.coach_id] ?? b.coach_id) : null,
         space:   b.space ?? null,
         status:  b.status ?? 'confirmed',
       }))

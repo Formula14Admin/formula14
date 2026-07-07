@@ -60,6 +60,16 @@ function fmtMins(mins: number): string {
   return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`
 }
 
+const COACH_NAMES: Record<string, string> = {
+  matt: 'Matt', jade: 'Jade', sam: 'Sam',
+  s1: 'Matt', s2: 'Jade', s3: 'Sam',
+}
+
+function resolveCoach(id: string | null): string {
+  if (!id) return ''
+  return COACH_NAMES[id] ?? id
+}
+
 function toSessionRow(b: { id: string; date: string; start_mins: number; session_type: string; coach_id: string | null; space: string | null; status: string | null }): SessionRow {
   const d = new Date(b.date + 'T12:00:00')
   return {
@@ -68,7 +78,7 @@ function toSessionRow(b: { id: string; date: string; start_mins: number; session
     day:    d.toLocaleDateString('en-AU', { weekday: 'long' }),
     time:   fmtMins(b.start_mins),
     type:   b.session_type ?? '',
-    coach:  b.coach_id ?? '',
+    coach:  resolveCoach(b.coach_id),
     space:  b.space ?? '',
     status: b.status ?? 'confirmed',
   }

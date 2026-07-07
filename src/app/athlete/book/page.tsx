@@ -11,6 +11,11 @@ import {
 } from '@tabler/icons-react'
 
 const ACCENT = '#6BA3D6'
+
+const COACH_NAMES: Record<string, string> = {
+  matt: 'Matt', jade: 'Jade', sam: 'Sam',
+  s1: 'Matt', s2: 'Jade', s3: 'Sam',
+}
 const BIT_LS_SETTINGS = 'f14_booking_settings'
 const BIT_LS_META     = 'f14_session_type_meta'
 const BIT_LS_PRICING  = 'f14_pricing_configs'
@@ -156,8 +161,9 @@ export default function BookPage() {
   const [dayBookings, setDayBookings] = useState<DayBooking[]>([])
 
   // Submit
-  const [submitting,   setSubmitting]   = useState(false)
-  const [submitError,  setSubmitError]  = useState<string | null>(null)
+  const [submitting,     setSubmitting]     = useState(false)
+  const [submitError,    setSubmitError]    = useState<string | null>(null)
+  const [assignedCoach,  setAssignedCoach]  = useState<string | null>(null)
 
   // Toast
   const [toast, setToast] = useState<string | null>(null)
@@ -497,6 +503,7 @@ export default function BookPage() {
       countByCoach.sort((a, b) => a.count - b.count)
       assignedCoachId = countByCoach[0]?.id ?? null
     }
+    setAssignedCoach(assignedCoachId ? (COACH_NAMES[assignedCoachId] ?? assignedCoachId) : null)
 
     const maxCapacity = selectedTypeId === 'casual-shooting' ? 6
       : selectedTypeId === 'small-group' ? 8
@@ -566,6 +573,7 @@ export default function BookPage() {
                 { label: 'Date',     value: fmtDateLong(selectedDate) },
                 { label: 'Time',     value: fmtTime(selectedTime) },
                 { label: 'Duration', value: fmtDuration(getDuration(selectedTypeId!)) },
+                ...(assignedCoach ? [{ label: 'Coach', value: assignedCoach }] : []),
                 { label: 'Status',   value: selfServe ? 'Confirmed' : 'Pending coach approval' },
               ].map(({ label, value }) => (
                 <div key={label} className="flex items-center justify-between text-sm">
