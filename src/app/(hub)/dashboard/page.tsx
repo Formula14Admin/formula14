@@ -279,6 +279,17 @@ export default function DashboardPage() {
     return d.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })
   })()
 
+  const sessionCardLabel = (() => {
+    const d = new Date(selectedDateStr + 'T12:00:00')
+    const diffDays = Math.round((d.getTime() - new Date(todayStr + 'T12:00:00').getTime()) / 86400000)
+    if (diffDays === 0) return "Sessions Today"
+    if (diffDays === 1) return "Tomorrow's Sessions"
+    if (diffDays <= 7) return `${d.toLocaleDateString('en-AU', { weekday: 'long' })}'s Sessions`
+    const day = d.getDate()
+    const ord = day === 1 || day === 21 || day === 31 ? 'st' : day === 2 || day === 22 ? 'nd' : day === 3 || day === 23 ? 'rd' : 'th'
+    return `${day}${ord} of ${d.toLocaleDateString('en-AU', { month: 'long' })}'s Sessions`
+  })()
+
   const QUICK_ACTIONS: { label: string; icon: React.ComponentType<{ size?: number; style?: React.CSSProperties }>; onClick: () => void; badge?: number; disabled?: boolean }[] = [
     { label: 'Add Athlete',     icon: IconUserPlus,       onClick: () => router.push('/athletes') },
     { label: 'Add Transaction', icon: IconCurrencyDollar, onClick: () => router.push('/bookkeeping') },
@@ -419,7 +430,7 @@ export default function DashboardPage() {
 
         <div className="rounded-xl bg-white p-5 shadow-sm">
           <div className="mb-4 flex items-start justify-between">
-            <p className="text-sm font-medium text-gray-500">Sessions Today</p>
+            <p className="text-sm font-medium text-gray-500">{sessionCardLabel}</p>
             <span
               className="flex h-9 w-9 items-center justify-center rounded-lg"
               style={{ backgroundColor: '#10b9811a' }}
@@ -428,7 +439,7 @@ export default function DashboardPage() {
             </span>
           </div>
           <p className="text-2xl font-bold text-gray-900">{statsLoaded ? dayBookings.length : '—'}</p>
-          <p className="mt-1 text-xs text-gray-400">Booked for today</p>
+          <p className="mt-1 text-xs text-gray-400">Booked for {isToday ? 'today' : selectedDateLabel.toLowerCase()}</p>
         </div>
 
         <div className="rounded-xl bg-white p-5 shadow-sm">
