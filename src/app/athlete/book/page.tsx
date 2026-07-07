@@ -534,13 +534,27 @@ export default function BookPage() {
       })
     }
 
-    // Notify admin
+    // Notify admin (in-app)
     await supabase.from('admin_notifications').insert({
       type:  'new_booking',
       title: 'New Booking',
       body:  `${session?.user?.name ?? 'An athlete'} booked a ${getLabel(selectedTypeId!)} on ${dateStr} at ${fmtTime(selectedTime!)}`,
       meta:  { booking_id: bookingId, session_type: selectedTypeId, date: dateStr, start_mins: selectedTime },
     })
+
+    // Push notification to assigned coach
+    if (assignedCoachId) {
+      const athleteName = athleteDisplayName || session?.user?.name || 'An athlete'
+      fetch('/api/push/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          coach_id: assignedCoachId,
+          title: 'New Booking — Formula14',
+          body: `${athleteName} booked a ${getLabel(selectedTypeId!)} on ${dateStr} at ${fmtTime(selectedTime!)}`,
+        }),
+      }).catch(() => {})
+    }
 
     setSubmitting(false)
     setStep('done')

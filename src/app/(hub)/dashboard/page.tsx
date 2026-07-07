@@ -185,7 +185,50 @@ export default function DashboardPage() {
     if (next <= maxDateStr) setSelectedDateStr(next)
   }
 
-  // Read pending join request count from localStorage (written by bookings page)
+  // ── Push notification subscription ────────────────────────────────────────
+  const [pushCoachId,   setPushCoachId]   = useState<string | null>(null)
+  const [pushEnabled,   setPushEnabled]   = useState(false)
+  const [pushPrompt,    setPushPrompt]    = useState(false)
+  const [pushWorking,   setPushWorking]   = useState(false)
+
+  useEffect(() => {
+    const stored = localStorage.getItem('f14_push_coach_id')
+    if (stored) setPushCoachId(stored)
+    if ('Notification' in window && Notification.permission === 'granted' && stored) {
+      setPushEnabled(true)
+    }
+  }, [])
+
+  async function enablePush(coachId: string) {
+    setPushWorking(true)
+    try {
+      const reg = await navigator.serviceWorker.register('/sw.js')
+      await navigator.serviceWorker.ready
+
+      const perm = await Notification.requestPermission()
+      if (perm !== 'granted') { setPushWorking(false); return }
+
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
+      })
+
+      await fetch('/api/push/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ coach_id: coachId, subscription: sub.toJSON() }),
+      })
+
+      localStorage.setItem('f14_push_coach_id', coachId)
+      setPushCoachId(coachId)
+      setPushEnabled(true)
+      setPushPrompt(false)
+    } finally {
+      setPushWorking(false)
+    }
+  }
+
+  // ── Read pending join request count from localStorage (written by bookings page)
   const [pendingJoinCount, setPendingJoinCount] = useState(0)
   useEffect(() => {
     const stored = localStorage.getItem('f14_pendingJoinCount')
@@ -255,10 +298,53 @@ export default function DashboardPage() {
     <div className="min-h-screen p-8" style={{ backgroundColor: '#f4f6f9' }}>
 
       {/* ── Header ── */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-        <p className="mt-0.5 text-sm text-gray-500">{dateStr}</p>
+      <div className="mb-6 flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+          <p className="mt-0.5 text-sm text-gray-500">{dateStr}</p>
+        </div>
+        <button
+          onClick={() => pushEnabled ? null : setPushPrompt(true)}
+          title={pushEnabled ? `Push notifications on (${pushCoachId})` : 'Enable push notifications'}
+          className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition-colors ${
+            pushEnabled
+              ? 'border-green-200 bg-green-50 text-green-700'
+              : 'border-gray-200 bg-white text-gray-500 hover:border-[#6BA3D6] hover:text-[#6BA3D6]'
+          }`}
+        >
+          <IconBell size={14} />
+          {pushEnabled ? `Notifications on` : 'Enable notifications'}
+        </button>
       </div>
+
+      {/* ── Push notification coach picker ── */}
+      {pushPrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-xs rounded-3xl bg-white p-6 shadow-2xl">
+            <h3 className="mb-1 text-base font-bold text-gray-900">Enable Push Notifications</h3>
+            <p className="mb-5 text-sm text-gray-500">Who are you? Bookings will be sent to your device when you&apos;re assigned as coach.</p>
+            <div className="space-y-2.5">
+              {['matt', 'jade', 'sam'].map(id => (
+                <button
+                  key={id}
+                  disabled={pushWorking}
+                  onClick={() => enablePush(id)}
+                  className="flex w-full items-center justify-between rounded-2xl border border-gray-200 px-4 py-3 text-sm font-semibold text-gray-800 transition hover:border-[#6BA3D6] hover:bg-[#6BA3D6]/5 disabled:opacity-50"
+                >
+                  <span className="capitalize">{id}</span>
+                  {pushWorking ? <span className="text-xs text-gray-400">Setting up…</span> : <IconChevronRight size={14} className="text-gray-300" />}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => setPushPrompt(false)}
+              className="mt-4 w-full rounded-2xl border border-gray-200 py-2.5 text-sm font-semibold text-gray-500 hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── New booking notifications ── */}
       {unreadNotifs.length > 0 && (

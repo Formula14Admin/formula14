@@ -21,13 +21,15 @@
     "@tiptap/pm": "^3.27.1",
     "@tiptap/react": "^3.27.1",
     "@tiptap/starter-kit": "^3.27.1",
+    "@types/web-push": "^3.6.4",
     "next": "16.2.9",
     "next-auth": "^4.24.14",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "recharts": "^3.9.0",
     "resend": "^6.16.0",
-    "stripe": "^22.3.0"
+    "stripe": "^22.3.0",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
