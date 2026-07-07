@@ -34,6 +34,17 @@ interface SessionPricingConfig {
   durationMins?: number
 }
 
+type PricingRow = {
+  id: string
+  sessionType: string   // canonical key or 'custom'
+  customLabel: string   // used when sessionType === 'custom'
+  variant: string       // e.g. 'U8', 'Seniors', '' for default
+  durationMins: number
+  priceDisplay: string  // free text shown in the table
+  priceValue: number    // numeric price for booking calculations
+  notes: string
+}
+
 interface PricingSettings {
   chargeNoShow: boolean
   chargeExcusedAbsence: boolean
@@ -189,17 +200,51 @@ const DURATION_OPTIONS = Array.from({ length: 24 }, (_, i) => {
   return { value: mins, label }
 })
 
+const DURATION_PICKER_OPTIONS = DURATION_OPTIONS.map(opt => ({ value: String(opt.value), label: opt.label }))
+
+const SESSION_TYPE_PICKER_OPTIONS = [
+  ...(Object.entries(SESSION_TYPE_LABELS) as [SessionType, string][]).map(([k, v]) => ({ value: k, label: v })),
+  { value: 'custom', label: 'Custom…' },
+]
+
 const INIT_SETTINGS: PricingSettings = {
   chargeNoShow: true,
   chargeExcusedAbsence: false,
 }
 
 const PRICING_CONFIGS_LS = 'f14_pricing_configs'
+const PRICING_ROWS_LS    = 'f14_pricing_rows'
+
+const INIT_ROWS: PricingRow[] = [
+  { id: 'sg-1',  sessionType: 'small-group',              customLabel: '', variant: '',        durationMins: 60,  priceDisplay: '$40 / athlete', priceValue: 40, notes: 'Max 8 athletes' },
+  { id: 'ind-1', sessionType: 'individual',               customLabel: '', variant: 'U8',      durationMins: 45,  priceDisplay: '$75',           priceValue: 75, notes: '' },
+  { id: 'ind-2', sessionType: 'individual',               customLabel: '', variant: 'U10+',    durationMins: 60,  priceDisplay: '$75',           priceValue: 75, notes: '' },
+  { id: 'tt-1',  sessionType: 'team-training',            customLabel: '', variant: '',        durationMins: 120, priceDisplay: '$80 / athlete', priceValue: 80, notes: '7–10 athletes' },
+  { id: 'cs-1',  sessionType: 'casual-shooting',          customLabel: '', variant: '',        durationMins: 60,  priceDisplay: '$10 / athlete', priceValue: 10, notes: 'Max 6 athletes per ring' },
+  { id: 'vs-1',  sessionType: 'volume-shooting',          customLabel: '', variant: '30 min',  durationMins: 30,  priceDisplay: '$30 flat',      priceValue: 30, notes: '' },
+  { id: 'vs-2',  sessionType: 'volume-shooting',          customLabel: '', variant: '45 min',  durationMins: 45,  priceDisplay: '$40 flat',      priceValue: 40, notes: '' },
+  { id: 'vs-3',  sessionType: 'volume-shooting',          customLabel: '', variant: '60 min',  durationMins: 60,  priceDisplay: '$50 flat',      priceValue: 50, notes: '' },
+  { id: 'wr-1',  sessionType: 'weight-room-session',      customLabel: '', variant: '',        durationMins: 60,  priceDisplay: '$15 / session', priceValue: 15, notes: '' },
+  { id: 'fr-1',  sessionType: 'film-room-session',        customLabel: '', variant: '',        durationMins: 60,  priceDisplay: '$20 / session', priceValue: 20, notes: '' },
+  { id: 'sm-1',  sessionType: 'shooting-machine-session', customLabel: '', variant: '30 min',  durationMins: 30,  priceDisplay: '$30 flat',      priceValue: 30, notes: 'Max 4 athletes' },
+]
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function uid(): string {
   return Math.random().toString(36).slice(2, 10)
+}
+
+function blankRow(): PricingRow {
+  return { id: uid(), sessionType: 'individual', customLabel: '', variant: '', durationMins: 60, priceDisplay: '', priceValue: 0, notes: '' }
+}
+
+function fmtDur(mins: number): string {
+  const h = Math.floor(mins / 60)
+  const m = mins % 60
+  if (h > 0 && m > 0) return `${h} hr ${m} min`
+  if (h > 0) return `${h} hr${h > 1 ? 's' : ''}`
+  return `${m} min`
 }
 
 function getPriceForCount(tiers: PricingTier[], count: number): number | null {
@@ -265,6 +310,13 @@ export default function PricingConfigPage() {
   const [addCardOpen, setAddCardOpen] = useState(false)
   const [newCardLabel, setNewCardLabel] = useState('')
   const [settings, setSettings] = useState<PricingSettings>(INIT_SETTINGS)
+
+  // ── Pricing rows (new flexible table) ────────────────────────────────────────
+  const [pricingRows,   setPricingRows]   = useState<PricingRow[]>(INIT_ROWS)
+  const [editingRowId,  setEditingRowId]  = useState<string | null>(null)
+  const [editRow,       setEditRow]       = useState<PricingRow | null>(null)
+  const [addingRow,     setAddingRow]     = useState(false)
+  const [newRow,        setNewRow]        = useState<PricingRow>(() => blankRow())
   const [catalogue, setCatalogue] = useState<ProgramCatalogueItem[]>(INIT_CATALOGUE)
   const [progModalOpen, setProgModalOpen] = useState(false)
   const [editingProg, setEditingProg] = useState<ProgramCatalogueItem | null>(null)
@@ -362,6 +414,63 @@ export default function PricingConfigPage() {
     } catch {}
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Load pricing rows from localStorage on mount
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const raw = localStorage.getItem(PRICING_ROWS_LS)
+    if (!raw) return
+    try {
+      const parsed = JSON.parse(raw) as PricingRow[]
+      if (Array.isArray(parsed) && parsed.length > 0) setPricingRows(parsed)
+    } catch {}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Persist pricing rows to localStorage whenever they change
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    localStorage.setItem(PRICING_ROWS_LS, JSON.stringify(pricingRows))
+  }, [pricingRows])
+
+  function startEditRow(row: PricingRow) {
+    setEditRow({ ...row })
+    setEditingRowId(row.id)
+    setAddingRow(false)
+  }
+
+  function saveEditRow() {
+    if (!editRow) return
+    setPricingRows(prev => prev.map(r => r.id === editRow.id ? editRow : r))
+    setEditingRowId(null)
+    setEditRow(null)
+  }
+
+  function cancelEditRow() {
+    setEditingRowId(null)
+    setEditRow(null)
+  }
+
+  function deleteRow(id: string) {
+    setPricingRows(prev => prev.filter(r => r.id !== id))
+    if (editingRowId === id) { setEditingRowId(null); setEditRow(null) }
+  }
+
+  function saveNewRow() {
+    if (!newRow.priceDisplay.trim() && newRow.priceValue === 0) return
+    setPricingRows(prev => [...prev, { ...newRow, id: uid() }])
+    setAddingRow(false)
+    setNewRow(blankRow())
+  }
+
+  function rowLabel(row: PricingRow): string {
+    if (row.sessionType === 'custom') return row.customLabel || 'Custom'
+    return (SESSION_TYPE_LABELS as Record<string, string>)[row.sessionType] ?? row.sessionType
+  }
+
+  function rowColor(row: PricingRow): { bg: string; color: string } {
+    return (SESSION_TYPE_COLORS as Record<string, { bg: string; color: string }>)[row.sessionType] ?? { bg: '#f3f4f6', color: '#6b7280' }
+  }
 
   // ── Pricing config helpers ────────────────────────────────────────────────
 
@@ -499,363 +608,224 @@ export default function PricingConfigPage() {
           </div>
         </div>
 
-        {/* Pricing Structure — all session types × 1–20 athletes, read-only */}
+        {/* ── Pricing Structure — editable table ── */}
         <div className="rounded-xl border border-gray-200 bg-white p-5">
-          <div className="mb-1 flex items-center justify-between gap-2">
-            <h2 className="flex items-center gap-2 text-base font-semibold text-gray-800">
-              <IconChartBar size={17} style={{ color: ACCENT }} /> Pricing Structure
-            </h2>
-            {editingPricing === 'small-group' && (
-              <span className="flex items-center gap-1.5 text-xs font-medium" style={{ color: ACCENT }}>
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full" style={{ backgroundColor: ACCENT }} />
-                Live preview
-              </span>
-            )}
+          <div className="mb-4 flex items-center justify-between gap-2">
+            <div>
+              <h2 className="flex items-center gap-2 text-base font-semibold text-gray-800">
+                <IconChartBar size={17} style={{ color: ACCENT }} /> Pricing Structure
+              </h2>
+              <p className="mt-0.5 text-xs text-gray-400">
+                Each row is a session variant. Edit inline — duration, price, and notes are fully customisable.
+              </p>
+            </div>
+            <button
+              onClick={() => { setAddingRow(true); setEditingRowId(null); setNewRow(blankRow()) }}
+              className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold text-white transition hover:opacity-90"
+              style={{ backgroundColor: ACCENT }}
+            >
+              <IconPlus size={13} /> Add Row
+            </button>
           </div>
-          <p className="mb-3 text-xs text-gray-400">
-            Edit pricing in the session cards below — this table updates automatically.
-          </p>
-          <div className="overflow-x-auto rounded-lg border border-gray-200">
-            <table className="text-sm" style={{ minWidth: 'max-content' }}>
+
+          <div className="overflow-hidden rounded-xl border border-gray-200">
+            <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-200 bg-gray-50">
-                  <th className="sticky left-0 z-10 bg-gray-50 px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wide text-gray-400 whitespace-nowrap">
-                    Session Type
-                  </th>
-                  {Array.from({ length: 20 }, (_, i) => (
-                    <th key={i + 1} className="px-3 py-2 text-center text-[10px] font-semibold uppercase tracking-wide text-gray-400">
-                      {i + 1}
-                    </th>
-                  ))}
+                  <th className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wide text-gray-400">Session Type</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wide text-gray-400">Variant / Age Group</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wide text-gray-400">Duration</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wide text-gray-400">Price</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wide text-gray-400">Notes</th>
+                  <th className="w-16" />
                 </tr>
               </thead>
-              <tbody>
-                {pricingConfigs.map(config => {
-                  const typeColor = configColor(config)
-                  const isVolume   = config.sessionType === 'volume-shooting'
-                  const isDevProg  = config.sessionType === 'development-programs'
-                  const isSocProg  = config.sessionType === 'social-programs'
-                  // Use live editTiers for small-group while editing, otherwise saved tiers
-                  const tiers = config.sessionType === 'small-group' && editingPricing === 'small-group'
-                    ? editTiers
-                    : config.tiers
-                  const catalogueSummary = isDevProg
-                    ? catalogue.filter(p => p.category === 'development')
-                    : isSocProg
-                    ? catalogue.filter(p => p.category === 'social')
-                    : null
+              <tbody className="divide-y divide-gray-100">
+                {pricingRows.map(row => {
+                  const isEditing = editingRowId === row.id
+                  const rc = rowColor(row)
+                  if (isEditing && editRow) {
+                    return (
+                      <tr key={row.id} className="bg-[#6BA3D6]/5">
+                        {/* Session Type */}
+                        <td className="px-4 py-2">
+                          <div className="flex flex-col gap-1">
+                            <SelectPicker
+                              value={editRow.sessionType}
+                              onChange={v => setEditRow(r => r && ({ ...r, sessionType: v, customLabel: v === 'custom' ? r.customLabel : '' }))}
+                              options={SESSION_TYPE_PICKER_OPTIONS}
+                            />
+                            {editRow.sessionType === 'custom' && (
+                              <input
+                                value={editRow.customLabel}
+                                onChange={e => setEditRow(r => r && ({ ...r, customLabel: e.target.value }))}
+                                placeholder="Custom label"
+                                className="rounded border border-gray-200 px-2 py-1 text-xs text-gray-700 outline-none focus:border-[#6BA3D6]"
+                              />
+                            )}
+                          </div>
+                        </td>
+                        {/* Variant */}
+                        <td className="px-3 py-2">
+                          <input
+                            value={editRow.variant}
+                            onChange={e => setEditRow(r => r && ({ ...r, variant: e.target.value }))}
+                            placeholder="e.g. U8, Seniors, All Ages"
+                            className="w-full rounded border border-gray-200 px-2 py-1 text-xs text-gray-700 outline-none focus:border-[#6BA3D6]"
+                          />
+                        </td>
+                        {/* Duration */}
+                        <td className="px-3 py-2">
+                          <SelectPicker
+                            value={String(editRow.durationMins)}
+                            onChange={v => setEditRow(r => r && ({ ...r, durationMins: parseInt(v) }))}
+                            options={DURATION_PICKER_OPTIONS}
+                          />
+                        </td>
+                        {/* Price display */}
+                        <td className="px-3 py-2">
+                          <input
+                            value={editRow.priceDisplay}
+                            onChange={e => setEditRow(r => r && ({ ...r, priceDisplay: e.target.value }))}
+                            placeholder="e.g. $40 / athlete, $75 flat"
+                            className="w-full rounded border border-gray-200 px-2 py-1 text-xs text-gray-700 outline-none focus:border-[#6BA3D6]"
+                          />
+                        </td>
+                        {/* Notes */}
+                        <td className="px-3 py-2">
+                          <input
+                            value={editRow.notes}
+                            onChange={e => setEditRow(r => r && ({ ...r, notes: e.target.value }))}
+                            placeholder="e.g. Max 8 athletes"
+                            className="w-full rounded border border-gray-200 px-2 py-1 text-xs text-gray-700 outline-none focus:border-[#6BA3D6]"
+                          />
+                        </td>
+                        {/* Actions */}
+                        <td className="px-3 py-2">
+                          <div className="flex items-center gap-1">
+                            <button onClick={cancelEditRow}
+                              className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
+                              <IconX size={13} />
+                            </button>
+                            <button onClick={saveEditRow}
+                              className="rounded p-1 text-[#6BA3D6] hover:bg-[#6BA3D6]/10">
+                              <IconCheck size={13} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  }
                   return (
-                    <tr key={config.sessionType} className="border-b border-gray-100 last:border-0">
-                      <td className="sticky left-0 z-10 bg-white px-4 py-2.5 whitespace-nowrap">
-                        <span className="rounded-full px-2 py-0.5 text-xs font-semibold"
-                          style={{ backgroundColor: typeColor.bg, color: typeColor.color }}>
-                          {configLabel(config)}
+                    <tr key={row.id} className="group hover:bg-gray-50/60 transition-colors">
+                      <td className="px-4 py-3">
+                        <span className="rounded-full px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap"
+                          style={{ backgroundColor: rc.bg, color: rc.color }}>
+                          {rowLabel(row)}
                         </span>
                       </td>
-                      {isVolume ? (
-                        <td colSpan={20} className="px-3 py-2.5 text-xs text-gray-400 whitespace-nowrap">
-                          Duration-based flat fee — 30 min $30 · 45 min $40 · 60 min $50
-                        </td>
-                      ) : catalogueSummary ? (
-                        <td colSpan={20} className="px-3 py-2.5 text-xs text-gray-400 whitespace-nowrap">
-                          {catalogueSummary.length > 0
-                            ? catalogueSummary.map(p => `${p.name} $${p.pricePerSession}`).join(' · ') + ` — max ${catalogueSummary[0].maxCapacity} per session`
-                            : 'No programs configured — add via Programme Catalogue below'}
-                        </td>
-                      ) : (
-                        Array.from({ length: 20 }, (_, i) => {
-                          const count = i + 1
-                          const price = getPriceForCount(tiers, count)
-                          return (
-                            <td key={count} className="px-3 py-2.5 text-center">
-                              {price != null
-                                ? <span className="font-semibold text-gray-900">${price.toFixed(0)}</span>
-                                : <span className="text-gray-300">—</span>}
-                            </td>
-                          )
-                        })
-                      )}
+                      <td className="px-3 py-3 text-sm text-gray-700">{row.variant || <span className="text-gray-300">—</span>}</td>
+                      <td className="px-3 py-3 text-sm text-gray-700 whitespace-nowrap">{fmtDur(row.durationMins)}</td>
+                      <td className="px-3 py-3">
+                        {row.priceDisplay
+                          ? <span className="font-semibold text-gray-900">{row.priceDisplay}</span>
+                          : <span className="text-gray-300">—</span>}
+                      </td>
+                      <td className="px-3 py-3 text-xs text-gray-500">{row.notes || <span className="text-gray-300">—</span>}</td>
+                      <td className="px-3 py-3">
+                        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button onClick={() => startEditRow(row)}
+                            className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700">
+                            <IconPencil size={13} />
+                          </button>
+                          <button onClick={() => deleteRow(row.id)}
+                            className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-500">
+                            <IconTrash size={13} />
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   )
                 })}
+
+                {/* New row form */}
+                {addingRow && (
+                  <tr className="bg-[#6BA3D6]/5">
+                    <td className="px-4 py-2">
+                      <div className="flex flex-col gap-1">
+                        <SelectPicker
+                          value={newRow.sessionType}
+                          onChange={v => setNewRow(r => ({ ...r, sessionType: v, customLabel: v === 'custom' ? r.customLabel : '' }))}
+                          options={SESSION_TYPE_PICKER_OPTIONS}
+                        />
+                        {newRow.sessionType === 'custom' && (
+                          <input
+                            value={newRow.customLabel}
+                            onChange={e => setNewRow(r => ({ ...r, customLabel: e.target.value }))}
+                            placeholder="Custom label"
+                            className="rounded border border-gray-200 px-2 py-1 text-xs text-gray-700 outline-none focus:border-[#6BA3D6]"
+                          />
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-3 py-2">
+                      <input
+                        value={newRow.variant}
+                        onChange={e => setNewRow(r => ({ ...r, variant: e.target.value }))}
+                        placeholder="e.g. U8, Seniors"
+                        autoFocus
+                        className="w-full rounded border border-gray-200 px-2 py-1 text-xs text-gray-700 outline-none focus:border-[#6BA3D6]"
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <SelectPicker
+                        value={String(newRow.durationMins)}
+                        onChange={v => setNewRow(r => ({ ...r, durationMins: parseInt(v) }))}
+                        options={DURATION_PICKER_OPTIONS}
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <input
+                        value={newRow.priceDisplay}
+                        onChange={e => setNewRow(r => ({ ...r, priceDisplay: e.target.value }))}
+                        placeholder="e.g. $40 / athlete"
+                        className="w-full rounded border border-gray-200 px-2 py-1 text-xs text-gray-700 outline-none focus:border-[#6BA3D6]"
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <input
+                        value={newRow.notes}
+                        onChange={e => setNewRow(r => ({ ...r, notes: e.target.value }))}
+                        placeholder="e.g. Max 6 athletes"
+                        className="w-full rounded border border-gray-200 px-2 py-1 text-xs text-gray-700 outline-none focus:border-[#6BA3D6]"
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => { setAddingRow(false); setNewRow(blankRow()) }}
+                          className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
+                          <IconX size={13} />
+                        </button>
+                        <button onClick={saveNewRow}
+                          className="rounded p-1 text-[#6BA3D6] hover:bg-[#6BA3D6]/10">
+                          <IconCheck size={13} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+
+                {pricingRows.length === 0 && !addingRow && (
+                  <tr>
+                    <td colSpan={6} className="py-10 text-center text-sm text-gray-400">
+                      No pricing rows yet — click Add Row to get started.
+                    </td>
+                  </tr>
+                )}
               </tbody>
-              <tfoot>
-                <tr>
-                  <td colSpan={21} className="px-4 pt-2.5 pb-1 text-xs text-gray-400">
-                    Values show price per athlete. Column numbers are athlete counts 1–20.
-                  </td>
-                </tr>
-              </tfoot>
             </table>
           </div>
         </div>
-
-        {/* Per-type pricing cards */}
-        <div className="grid grid-cols-2 gap-4">
-          {pricingConfigs.filter(c => c.sessionType !== 'development-programs' && c.sessionType !== 'social-programs').map(config => {
-            const label = configLabel(config)
-            const color = configColor(config)
-            const isEditing = editingPricing === config.sessionType
-            const isSpecial = config.sessionType === 'volume-shooting'
-
-            return (
-              <div key={config.sessionType}
-                id={`pricing-card-${config.sessionType}`}
-                className={`rounded-xl border bg-white p-5 transition ${isEditing ? 'border-[#6BA3D6] shadow-[0_0_0_3px_rgba(107,163,214,0.10)]' : 'border-gray-200'}`}>
-
-                {/* Card header */}
-                <div className="mb-4 flex items-center justify-between gap-2">
-                  <span className="rounded-full px-2.5 py-0.5 text-xs font-semibold"
-                    style={{ backgroundColor: color.bg, color: color.color }}>
-                    {label}
-                  </span>
-                  {isEditing ? (
-                    <div className="flex shrink-0 items-center gap-2">
-                      <button type="button" onClick={cancelEditPricing}
-                        className="rounded-lg border border-gray-200 px-3 py-1 text-xs font-semibold text-gray-600 transition hover:bg-gray-50">
-                        Cancel
-                      </button>
-                      <button type="button" onClick={saveEditPricing}
-                        className="rounded-lg px-3 py-1 text-xs font-semibold text-white transition hover:opacity-90"
-                        style={{ backgroundColor: ACCENT }}>
-                        Save
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="flex shrink-0 items-center gap-0.5">
-                      <button type="button" onClick={() => startEditPricing(config.sessionType)}
-                        title="Edit pricing"
-                        className="rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700">
-                        <IconPencil size={13} />
-                      </button>
-                      <button type="button" onClick={() => deleteCard(config.sessionType)}
-                        title="Delete card"
-                        className="rounded-lg p-1.5 text-gray-400 transition hover:bg-red-50 hover:text-red-500">
-                        <IconTrash size={13} />
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {/* Edit mode */}
-                {isEditing ? (
-                  isSpecial ? (
-                    <div className="space-y-2">
-                      <div className="overflow-hidden rounded-lg border border-gray-200">
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr className="border-b border-gray-100 bg-gray-50">
-                              <th className="px-3 py-1.5 text-left text-[10px] font-semibold uppercase tracking-wide text-gray-400">Duration</th>
-                              <th className="px-3 py-1.5 text-left text-[10px] font-semibold uppercase tracking-wide text-gray-400">Flat Price</th>
-                              <th className="w-8" />
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {editTiers.map(tier => (
-                              <tr key={tier.id} className="border-b border-gray-100 last:border-0">
-                                <td className="px-3 py-1.5">
-                                  <SelectPicker
-                                    value={String(tier.min)}
-                                    onChange={v => updateTierField(tier.id, { min: parseInt(v), max: parseInt(v) })}
-                                    options={[15,30,45,60,75,90,105,120].map(m => ({ value: String(m), label: `${m} min` }))}
-                                  />
-                                </td>
-                                <td className="px-3 py-1.5">
-                                  <div className="flex items-center gap-1">
-                                    <span className="text-sm text-gray-400">$</span>
-                                    <input type="number" min={0} step={1} value={tier.pricePerAthlete}
-                                      onChange={e => updateTierField(tier.id, { pricePerAthlete: parseFloat(e.target.value) || 0 })}
-                                      className="w-16 rounded border border-gray-200 px-2 py-1 text-sm text-gray-900 outline-none focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/30" />
-                                  </div>
-                                </td>
-                                <td className="pr-2">
-                                  <button type="button" onClick={() => removeTierRow(tier.id)}
-                                    className="rounded p-1 text-gray-300 transition hover:bg-red-50 hover:text-red-400">
-                                    <IconX size={13} />
-                                  </button>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                      {editTiers.length === 0 && (
-                        <p className="text-xs text-gray-400 italic">No duration tiers yet — add one below.</p>
-                      )}
-                      <button type="button" onClick={addTierRow}
-                        className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-gray-300 py-2 text-xs font-semibold text-gray-500 transition hover:border-gray-400 hover:text-gray-700">
-                        <IconPlus size={13} /> Add Duration
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-3">
-                        <label className="shrink-0 text-xs font-semibold text-gray-600">Duration</label>
-                        <SelectPicker
-                          value={String(editDurationMins)}
-                          onChange={v => setEditDurationMins(parseInt(v))}
-                          options={DURATION_OPTIONS.map(opt => ({ value: String(opt.value), label: opt.label }))}
-                        />
-                      </div>
-                      {editTiers.length > 0 && (
-                        <div className="overflow-hidden rounded-lg border border-gray-200">
-                          <table className="w-full text-sm">
-                            <thead>
-                              <tr className="border-b border-gray-100 bg-gray-50">
-                                <th className="px-3 py-1.5 text-left text-[10px] font-semibold uppercase tracking-wide text-gray-400">Min</th>
-                                <th className="px-3 py-1.5 text-left text-[10px] font-semibold uppercase tracking-wide text-gray-400">Max</th>
-                                <th className="px-3 py-1.5 text-left text-[10px] font-semibold uppercase tracking-wide text-gray-400">$/athlete</th>
-                                <th className="w-8" />
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {editTiers.map(tier => (
-                                <tr key={tier.id} className="border-b border-gray-100 last:border-0">
-                                  <td className="px-3 py-1.5">
-                                    <input type="number" min={1} value={tier.min}
-                                      onChange={e => updateTierField(tier.id, { min: parseInt(e.target.value) || 1 })}
-                                      className="w-14 rounded border border-gray-200 px-2 py-1 text-sm text-gray-900 outline-none focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/30" />
-                                  </td>
-                                  <td className="px-3 py-1.5">
-                                    <input type="number" min={tier.min} value={tier.max ?? ''}
-                                      placeholder="∞"
-                                      onChange={e => updateTierField(tier.id, { max: e.target.value === '' ? null : parseInt(e.target.value) || tier.min })}
-                                      className="w-14 rounded border border-gray-200 px-2 py-1 text-sm text-gray-900 outline-none focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/30 placeholder:text-gray-300" />
-                                  </td>
-                                  <td className="px-3 py-1.5">
-                                    <div className="flex items-center gap-1">
-                                      <span className="text-sm text-gray-400">$</span>
-                                      <input type="number" min={0} step={1} value={tier.pricePerAthlete}
-                                        onChange={e => updateTierField(tier.id, { pricePerAthlete: parseFloat(e.target.value) || 0 })}
-                                        className="w-16 rounded border border-gray-200 px-2 py-1 text-sm text-gray-900 outline-none focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/30" />
-                                    </div>
-                                  </td>
-                                  <td className="pr-2">
-                                    <button type="button" onClick={() => removeTierRow(tier.id)}
-                                      className="rounded p-1 text-gray-300 transition hover:bg-red-50 hover:text-red-400">
-                                      <IconX size={13} />
-                                    </button>
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
-                      {editTiers.length === 0 && (
-                        <p className="text-xs text-gray-400 italic">No tiers yet — add one below.</p>
-                      )}
-                      <button type="button" onClick={addTierRow}
-                        className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-gray-300 py-2 text-xs font-semibold text-gray-500 transition hover:border-gray-400 hover:text-gray-700">
-                        <IconPlus size={13} /> Add Tier
-                      </button>
-                    </div>
-                  )
-                ) : (
-                  /* View mode */
-                  config.sessionType === 'volume-shooting' ? (
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-gray-100">
-                          <th className="pb-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Duration</th>
-                          <th className="pb-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Flat Price</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(config.tiers.length > 0
-                          ? config.tiers.map(t => ({ duration: t.min, label: `${t.min} minutes`, price: t.pricePerAthlete }))
-                          : DEFAULT_VOLUME_PRICES
-                        ).map(row => (
-                          <tr key={row.duration} className="border-b border-gray-100">
-                            <td className="py-2 text-gray-700">{row.label}</td>
-                            <td className="py-2 font-semibold text-gray-900">${row.price ?? 0}.00</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                      <tfoot>
-                        <tr><td colSpan={2} className="pt-2 text-xs text-gray-400">Flat booking fee — not per athlete</td></tr>
-                      </tfoot>
-                    </table>
-                  ) : (
-                    <>
-                      {/* Duration badge */}
-                      <div className="mb-3 flex items-center gap-2">
-                        <span className="text-xs text-gray-500">Duration:</span>
-                        <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-semibold text-gray-700">
-                          {(() => {
-                            const d = config.durationMins ?? DEFAULT_DURATIONS[config.sessionType] ?? 60
-                            const h = Math.floor(d / 60)
-                            const m = d % 60
-                            return h > 0 ? (m > 0 ? `${h} hr ${m} min` : `${h} hr${h > 1 ? 's' : ''}`) : `${m} min`
-                          })()}
-                        </span>
-                      </div>
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b border-gray-100">
-                            <th className="pb-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Athletes</th>
-                            <th className="pb-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Price / Athlete</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {config.tiers.map(tier => (
-                            <tr key={tier.id} className="border-b border-gray-100">
-                              <td className="py-2 text-gray-700">
-                                {tier.max === null
-                                  ? `${tier.min}+ athletes`
-                                  : tier.min === tier.max
-                                  ? `${tier.min} athlete`
-                                  : `${tier.min}–${tier.max} athletes`}
-                              </td>
-                              <td className="py-2 font-semibold text-gray-900">${(tier.pricePerAthlete ?? 0).toFixed(0)} / each</td>
-                            </tr>
-                          ))}
-                          {config.tiers.length === 0 && (
-                            <tr>
-                              <td colSpan={2} className="py-4 text-center text-xs text-gray-400">No tiers — click edit to add pricing</td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </>
-                  )
-                )}
-              </div>
-            )
-          })}
-        </div>
-
-        {/* Add new session type card */}
-        {addCardOpen ? (
-          <div className="rounded-xl border border-dashed border-[#6BA3D6]/50 bg-white p-5">
-            <p className="mb-3 text-xs font-bold uppercase tracking-wide text-gray-500">New Session Type</p>
-            <div className="flex items-center gap-3">
-              <input
-                type="text"
-                value={newCardLabel}
-                onChange={e => setNewCardLabel(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') addCard(); if (e.key === 'Escape') { setAddCardOpen(false); setNewCardLabel('') } }}
-                placeholder="e.g. Skills Clinic, Private Lesson…"
-                autoFocus
-                className={INPUT + ' flex-1'}
-              />
-              <button type="button" onClick={addCard}
-                className="rounded-lg px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
-                style={{ backgroundColor: ACCENT }}>
-                Add
-              </button>
-              <button type="button" onClick={() => { setAddCardOpen(false); setNewCardLabel('') }}
-                className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50">
-                Cancel
-              </button>
-            </div>
-          </div>
-        ) : (
-          <button type="button" onClick={() => setAddCardOpen(true)}
-            className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-300 py-4 text-sm font-semibold text-gray-400 transition hover:border-gray-400 hover:text-gray-600">
-            <IconPlus size={16} /> Add Session Type
-          </button>
-        )}
 
 
         {/* ── Programme Catalogue ─────────────────────────────────────────── */}
