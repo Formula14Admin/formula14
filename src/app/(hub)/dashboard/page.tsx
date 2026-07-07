@@ -278,7 +278,7 @@ export default function DashboardPage() {
     { label: 'Add Transaction', icon: IconCurrencyDollar, onClick: () => router.push('/bookkeeping') },
     { label: 'Join Requests',   icon: IconClipboardList,  onClick: openJoinRequests, badge: pendingJoinCount },
     { label: 'New Booking',     icon: IconCalendarPlus,   onClick: () => router.push('/portal') },
-    { label: 'View Bookings',   icon: IconCalendarEvent,  onClick: () => router.push('/bookings') },
+    { label: 'View Bookings',   icon: IconCalendarEvent,  onClick: () => router.push('/upcoming') },
     { label: 'Send Prompt',     icon: IconBell,           onClick: () => {} },
   ]
 
