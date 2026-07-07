@@ -35,7 +35,6 @@ interface SessionPricingConfig {
 }
 
 interface PricingSettings {
-  lockoutMinutes: number
   chargeNoShow: boolean
   chargeExcusedAbsence: boolean
 }
@@ -191,7 +190,6 @@ const DURATION_OPTIONS = Array.from({ length: 24 }, (_, i) => {
 })
 
 const INIT_SETTINGS: PricingSettings = {
-  lockoutMinutes: 120,
   chargeNoShow: true,
   chargeExcusedAbsence: false,
 }
@@ -467,7 +465,7 @@ export default function PricingConfigPage() {
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Pricing Config</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Configure session pricing tiers, lockout rules, and the programme catalogue</p>
+        <p className="text-sm text-gray-500 mt-0.5">Configure session pricing tiers and the programme catalogue</p>
       </div>
 
       <PricingConfigErrorBoundary>
@@ -478,23 +476,7 @@ export default function PricingConfigPage() {
           <h2 className="mb-4 flex items-center gap-2 text-base font-semibold text-gray-800">
             <IconSettings size={17} style={{ color: ACCENT }} /> Global Settings
           </h2>
-          <div className="grid grid-cols-3 gap-6">
-            <div>
-              <label className={LABEL}>Lockout Period</label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  min={15}
-                  max={480}
-                  value={settings.lockoutMinutes}
-                  onChange={e => setSettings(s => ({ ...s, lockoutMinutes: parseInt(e.target.value) || 120 }))}
-                  className="w-24 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-[#6BA3D6] focus:ring-2 focus:ring-[#6BA3D6]/10"
-                />
-                <span className="text-sm text-gray-500">minutes before session</span>
-              </div>
-              <p className="mt-1 text-xs text-gray-400">Default: 120 min (2 hours)</p>
-            </div>
-
+          <div className="grid grid-cols-2 gap-6">
             <div>
               <label className={LABEL}>No Show Charge</label>
               <div className="mt-2 flex items-center gap-3">

@@ -468,7 +468,6 @@ function SessionTypeTile({
           <p className="text-sm font-semibold text-gray-400">Unavailable</p>
         ) : isSGS && sgsRange ? (
           <div className="text-center leading-tight">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Price at lockout</p>
             <p className="mt-1 text-xl font-bold" style={{ color: type.accentColor }}>
               {sgsRange.min === sgsRange.max ? `$${sgsRange.min}` : `$${sgsRange.min}–$${sgsRange.max}`}
             </p>
@@ -1384,7 +1383,7 @@ export function BookASession({
                           <span className="font-semibold text-gray-700">Cost</span>
                           {typeId === 'small-group'
                             ? <span className="font-bold" style={{ color: ACCENT }}>
-                                {sgsRange.min === sgsRange.max ? `$${sgsRange.min}` : `$${sgsRange.min}–$${sgsRange.max}`}/athlete · set at lockout
+                                {sgsRange.min === sgsRange.max ? `$${sgsRange.min}` : `$${sgsRange.min}–$${sgsRange.max}`}/athlete
                               </span>
                             : (() => {
                                 const sc = getScenario(typeId!, membership)

@@ -685,25 +685,34 @@ export default function BookingsPage() {
   useEffect(() => {
     void (async () => {
       try {
-        const { data, error } = await supabase.from('bookings').select('*').order('date')
+        const { data, error } = await supabase
+          .from('bookings')
+          .select('*, booking_athletes(athletes(first_name, last_name))')
+          .order('date')
         if (!error && data) {
-          setBookings(data.map(row => ({
-            id:          row.id,
-            date:        row.date,
-            spaceId:     (row.space ?? 'primary') as SpaceId,
-            startMins:   row.start_mins ?? 0,
-            duration:    row.duration_mins ?? 60,
-            sessionType: row.session_type,
-            athletes:    (row.athlete_names as string[]) ?? [],
-            coach:       (row.coach_id ?? '') as Booking['coach'],
-            bookingType: (row.booking_type ?? 'member') as Booking['bookingType'],
-            notes:       row.notes ?? '',
-            capacity:    row.max_capacity ?? 1,
-            seriesId:    row.series_id ?? undefined,
-            joinCode:    row.shareable_code ?? undefined,
-            adminOverride: row.admin_override ?? false,
-            ...(row.meta ?? {}),
-          })))
+          setBookings(data.map(row => {
+            const stored = ((row.athlete_names as string[]) ?? []).filter(Boolean)
+            const joined = ((row.booking_athletes as { athletes: { first_name: string; last_name: string } | null }[] | null) ?? [])
+              .map(ba => ba.athletes ? `${ba.athletes.first_name} ${ba.athletes.last_name}`.trim() : '')
+              .filter(Boolean)
+            return {
+              id:          row.id,
+              date:        row.date,
+              spaceId:     (row.space ?? 'primary') as SpaceId,
+              startMins:   row.start_mins ?? 0,
+              duration:    row.duration_mins ?? 60,
+              sessionType: row.session_type,
+              athletes:    stored.length > 0 ? stored : joined,
+              coach:       (row.coach_id ?? '') as Booking['coach'],
+              bookingType: (row.booking_type ?? 'member') as Booking['bookingType'],
+              notes:       row.notes ?? '',
+              capacity:    row.max_capacity ?? 1,
+              seriesId:    row.series_id ?? undefined,
+              joinCode:    row.shareable_code ?? undefined,
+              adminOverride: row.admin_override ?? false,
+              ...(row.meta ?? {}),
+            }
+          }))
         }
       } catch (err) {
         console.error('[bookings] fetch failed:', err)
@@ -4757,12 +4766,13 @@ function BookingInformationTab() {
                           ? sgsRange
                             ? (
                               <div className="text-center leading-tight">
-                                <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">At lockout</p>
-                                <p className="mt-0.5 text-xl font-bold" style={{ color: def.accentColor }}>${sgsRange.min}–${sgsRange.max}</p>
+                                <p className="mt-0.5 text-xl font-bold" style={{ color: def.accentColor }}>
+                                  {sgsRange.min === sgsRange.max ? `$${sgsRange.min}` : `$${sgsRange.min}–$${sgsRange.max}`}
+                                </p>
                                 <p className="text-[10px] text-gray-400">per athlete</p>
                               </div>
                             )
-                            : <p className="text-xs text-center text-gray-400">Set at lockout</p>
+                            : <p className="text-sm text-gray-400">—</p>
                           : lp !== null
                             ? <p className="text-2xl font-bold" style={{ color: BIT_ACCENT }}>${lp}</p>
                             : <p className="text-sm text-gray-400">—</p>

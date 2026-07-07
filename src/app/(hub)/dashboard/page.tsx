@@ -12,15 +12,17 @@ import {
   IconBell,
   IconClipboardList,
   IconChevronRight,
+  IconChevronLeft,
   IconCreditCard,
   IconCheck,
+  IconX,
 } from '@tabler/icons-react'
 import { supabase } from '@/lib/supabase'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type TimeStatus = 'past' | 'current' | 'upcoming'
 
-type TodayBooking = {
+type DayBooking = {
   id: string
   start_mins: number
   duration_mins: number | null
@@ -29,6 +31,13 @@ type TodayBooking = {
   athlete_names: string[]
   space: string
   status: string | null
+}
+
+type AdminNotif = {
+  id: string
+  title: string
+  body: string | null
+  created_at: string
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -74,43 +83,107 @@ export default function DashboardPage() {
   }, [])
 
   // ── Real data ──────────────────────────────────────────────────────────────
-  const [athleteCount, setAthleteCount] = useState(0)
-  const [todayBookings, setTodayBookings] = useState<TodayBooking[]>([])
-  const [statsLoaded, setStatsLoaded] = useState(false)
+  const [athleteCount, setAthleteCount]     = useState(0)
+  const [selectedDateStr, setSelectedDateStr] = useState(sydneyToday)
+  const [dayBookings, setDayBookings]       = useState<DayBooking[]>([])
+  const [statsLoaded, setStatsLoaded]       = useState(false)
+  const [unreadNotifs, setUnreadNotifs]     = useState<AdminNotif[]>([])
 
-  const fetchData = useCallback(async () => {
-    const today = sydneyToday()
-    const [athleteRes, bookingsRes] = await Promise.all([
-      supabase
-        .from('athletes')
-        .select('*', { count: 'exact', head: true })
-        .eq('is_active', true),
-      supabase
-        .from('bookings')
-        .select('id, start_mins, duration_mins, session_type, coach_id, athlete_names, space, status')
-        .eq('date', today)
-        .neq('status', 'cancelled')
-        .order('start_mins'),
-    ])
+  const todayStr = sydneyToday()
+  const maxDateStr = (() => {
+    const d = new Date(todayStr + 'T12:00:00')
+    d.setDate(d.getDate() + 30)
+    return d.toISOString().slice(0, 10)
+  })()
 
-    setAthleteCount(athleteRes.count ?? 0)
-    setTodayBookings((bookingsRes.data as TodayBooking[]) ?? [])
+  const fetchBookings = useCallback(async (dateStr: string) => {
+    const { data } = await supabase
+      .from('bookings')
+      .select('id, start_mins, duration_mins, session_type, coach_id, athlete_names, space, status, booking_athletes(athletes(first_name, last_name))')
+      .eq('date', dateStr)
+      .neq('status', 'cancelled')
+      .order('start_mins')
+
+    type RawBooking = {
+      id: string; start_mins: number; duration_mins: number | null
+      session_type: string; coach_id: string; space: string; status: string | null
+      athlete_names: string[] | null
+      booking_athletes: { athletes: { first_name: string; last_name: string } | null }[] | null
+    }
+
+    setDayBookings(((data ?? []) as unknown as RawBooking[]).map(r => {
+      const stored = (r.athlete_names ?? []).filter(Boolean)
+      const joined = (r.booking_athletes ?? [])
+        .map(ba => ba.athletes ? `${ba.athletes.first_name} ${ba.athletes.last_name}`.trim() : '')
+        .filter(Boolean)
+      return {
+        id: r.id, start_mins: r.start_mins, duration_mins: r.duration_mins,
+        session_type: r.session_type, coach_id: r.coach_id, space: r.space, status: r.status,
+        athlete_names: stored.length > 0 ? stored : joined,
+      }
+    }))
+  }, [])
+
+  const fetchStats = useCallback(async () => {
+    const { count } = await supabase
+      .from('athletes')
+      .select('*', { count: 'exact', head: true })
+      .eq('is_active', true)
+    setAthleteCount(count ?? 0)
     setStatsLoaded(true)
   }, [])
 
-  // Initial load
-  useEffect(() => { void fetchData() }, [fetchData])
+  const fetchNotifs = useCallback(async () => {
+    const { data } = await supabase
+      .from('admin_notifications')
+      .select('id, title, body, created_at')
+      .is('read_at', null)
+      .order('created_at', { ascending: false })
+    setUnreadNotifs((data as AdminNotif[]) ?? [])
+  }, [])
 
-  // Supabase Realtime — re-fetch when any booking row changes
+  useEffect(() => { void fetchStats() }, [fetchStats])
+  useEffect(() => { void fetchBookings(selectedDateStr) }, [selectedDateStr, fetchBookings])
+  useEffect(() => { void fetchNotifs() }, [fetchNotifs])
+
+  // Realtime: re-fetch bookings + notifications when rows change
   useEffect(() => {
     const channel = supabase
-      .channel('dashboard-bookings')
+      .channel('dashboard-live')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, () => {
-        void fetchData()
+        void fetchBookings(selectedDateStr)
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'admin_notifications' }, () => {
+        void fetchNotifs()
       })
       .subscribe()
     return () => { void supabase.removeChannel(channel) }
-  }, [fetchData])
+  }, [selectedDateStr, fetchBookings, fetchNotifs])
+
+  async function dismissNotif(id: string) {
+    await supabase.from('admin_notifications').update({ read_at: new Date().toISOString() }).eq('id', id)
+    setUnreadNotifs(prev => prev.filter(n => n.id !== id))
+  }
+
+  async function dismissAllNotifs() {
+    const ids = unreadNotifs.map(n => n.id)
+    await supabase.from('admin_notifications').update({ read_at: new Date().toISOString() }).in('id', ids)
+    setUnreadNotifs([])
+  }
+
+  function prevDay() {
+    const d = new Date(selectedDateStr + 'T12:00:00')
+    d.setDate(d.getDate() - 1)
+    const next = d.toISOString().slice(0, 10)
+    if (next >= todayStr) setSelectedDateStr(next)
+  }
+
+  function nextDay() {
+    const d = new Date(selectedDateStr + 'T12:00:00')
+    d.setDate(d.getDate() + 1)
+    const next = d.toISOString().slice(0, 10)
+    if (next <= maxDateStr) setSelectedDateStr(next)
+  }
 
   // Read pending join request count from localStorage (written by bookings page)
   const [pendingJoinCount, setPendingJoinCount] = useState(0)
@@ -140,17 +213,28 @@ export default function DashboardPage() {
     setTimeout(() => setPaymentsRan(false), 2500)
   }
 
-  const enrichedSessions = todayBookings.map(s => {
+  const isToday = selectedDateStr === todayStr
+
+  const enrichedSessions = dayBookings.map(s => {
     const dur     = s.duration_mins ?? 60
     const endMins = s.start_mins + dur
-    const timeStatus: TimeStatus =
-      nowMins >= endMins      ? 'past'    :
-      nowMins >= s.start_mins ? 'current' :
-                                'upcoming'
+    const timeStatus: TimeStatus = !isToday ? 'upcoming'
+      : nowMins >= endMins      ? 'past'
+      : nowMins >= s.start_mins ? 'current'
+      :                           'upcoming'
     return { ...s, dur, endMins, timeStatus }
   })
 
-  const nowIdx = enrichedSessions.findIndex(s => s.timeStatus !== 'past')
+  const nowIdx = isToday ? enrichedSessions.findIndex(s => s.timeStatus !== 'past') : -1
+
+  const selectedDateLabel = (() => {
+    const d = new Date(selectedDateStr + 'T12:00:00')
+    if (isToday) return 'Today'
+    const tomorrow = new Date(todayStr + 'T12:00:00')
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    if (selectedDateStr === tomorrow.toISOString().slice(0, 10)) return 'Tomorrow'
+    return d.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })
+  })()
 
   const QUICK_ACTIONS: { label: string; icon: React.ComponentType<{ size?: number; style?: React.CSSProperties }>; onClick: () => void; badge?: number; disabled?: boolean }[] = [
     { label: 'Add Athlete',     icon: IconUserPlus,       onClick: () => router.push('/athletes') },
@@ -175,6 +259,40 @@ export default function DashboardPage() {
         <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
         <p className="mt-0.5 text-sm text-gray-500">{dateStr}</p>
       </div>
+
+      {/* ── New booking notifications ── */}
+      {unreadNotifs.length > 0 && (
+        <div className="mb-4 overflow-hidden rounded-xl border border-blue-200 bg-blue-50">
+          <div className="flex items-center justify-between border-b border-blue-100 px-4 py-2.5">
+            <span className="flex items-center gap-2 text-sm font-semibold text-blue-800">
+              <IconBell size={15} />
+              {unreadNotifs.length} new booking{unreadNotifs.length !== 1 ? 's' : ''}
+            </span>
+            <button
+              onClick={dismissAllNotifs}
+              className="text-xs font-medium text-blue-500 hover:text-blue-700"
+            >
+              Dismiss all
+            </button>
+          </div>
+          <ul className="divide-y divide-blue-100">
+            {unreadNotifs.map(n => (
+              <li key={n.id} className="flex items-start justify-between gap-3 px-4 py-2.5">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-blue-900">{n.title}</p>
+                  {n.body && <p className="text-xs text-blue-700">{n.body}</p>}
+                </div>
+                <button
+                  onClick={() => dismissNotif(n.id)}
+                  className="mt-0.5 shrink-0 rounded p-0.5 text-blue-400 hover:bg-blue-100 hover:text-blue-700"
+                >
+                  <IconX size={13} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* ── Join Requests notification banner ── */}
       {pendingJoinCount > 0 && (
@@ -223,7 +341,7 @@ export default function DashboardPage() {
               <IconCalendar size={18} style={{ color: '#10b981' }} />
             </span>
           </div>
-          <p className="text-2xl font-bold text-gray-900">{statsLoaded ? todayBookings.length : '—'}</p>
+          <p className="text-2xl font-bold text-gray-900">{statsLoaded ? dayBookings.length : '—'}</p>
           <p className="mt-1 text-xs text-gray-400">Booked for today</p>
         </div>
 
@@ -259,9 +377,49 @@ export default function DashboardPage() {
       {/* ── Schedule + Quick Actions ── */}
       <div className="mb-6 grid grid-cols-5 gap-6">
 
-        {/* Today's Schedule */}
+        {/* Upcoming Bookings */}
         <div className="col-span-3 rounded-xl bg-white p-6 shadow-sm">
-          <h2 className="mb-5 text-base font-semibold text-gray-900">Today&apos;s Schedule</h2>
+          {/* Header with day nav */}
+          <div className="mb-5 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-semibold text-gray-900">Upcoming Bookings</h2>
+            </div>
+            <div className="flex items-center gap-1.5">
+              {!isToday && (
+                <button
+                  onClick={() => setSelectedDateStr(todayStr)}
+                  className="rounded-lg border border-gray-200 px-3 py-1 text-xs font-semibold text-gray-600 hover:border-[#6BA3D6] hover:text-[#6BA3D6] transition-colors"
+                >
+                  Today
+                </button>
+              )}
+              <button
+                onClick={prevDay}
+                disabled={isToday}
+                className="flex h-7 w-7 items-center justify-center rounded-lg border border-gray-200 text-gray-500 transition-colors hover:border-[#6BA3D6] hover:text-[#6BA3D6] disabled:cursor-not-allowed disabled:opacity-30"
+              >
+                <IconChevronLeft size={14} />
+              </button>
+              <span className="min-w-[90px] text-center text-sm font-semibold text-gray-700">
+                {selectedDateLabel}
+              </span>
+              <button
+                onClick={nextDay}
+                disabled={selectedDateStr >= maxDateStr}
+                className="flex h-7 w-7 items-center justify-center rounded-lg border border-gray-200 text-gray-500 transition-colors hover:border-[#6BA3D6] hover:text-[#6BA3D6] disabled:cursor-not-allowed disabled:opacity-30"
+              >
+                <IconChevronRight size={14} />
+              </button>
+              {selectedDateStr >= maxDateStr && (
+                <a
+                  href="/bookings"
+                  className="ml-1 text-xs font-semibold text-[#6BA3D6] underline hover:text-[#4a7fb5]"
+                >
+                  View calendar →
+                </a>
+              )}
+            </div>
+          </div>
 
           <div>
             {enrichedSessions.length === 0 ? (
@@ -269,7 +427,7 @@ export default function DashboardPage() {
                 <svg className="mb-3 h-10 w-10 text-gray-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
-                <p className="text-sm font-medium text-gray-400">No sessions scheduled for today</p>
+                <p className="text-sm font-medium text-gray-400">No sessions booked for {selectedDateLabel.toLowerCase()}</p>
               </div>
             ) : (
               enrichedSessions.map((s, i) => {

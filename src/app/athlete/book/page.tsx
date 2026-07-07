@@ -86,7 +86,9 @@ function fmtDateLong(d: Date): string {
 function fmtDateShort(d: Date): string {
   return d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })
 }
-function dateKey(d: Date): string { return d.toISOString().slice(0, 10) }
+function dateKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 
 function timeToMins(t: string): number {
   const [h, m] = t.slice(0, 5).split(':').map(Number)
@@ -123,8 +125,9 @@ export default function BookPage() {
   const { data: session } = useSession()
   const email = session?.user?.email ?? null
 
-  const [athleteId,      setAthleteId]      = useState<string | null>(null)
-  const [membershipTier, setMembershipTier] = useState<string | null>(null)
+  const [athleteId,           setAthleteId]           = useState<string | null>(null)
+  const [membershipTier,      setMembershipTier]      = useState<string | null>(null)
+  const [athleteDisplayName,  setAthleteDisplayName]  = useState<string>('')
 
   // Booking Information settings (localStorage)
   const [bitSettings, setBitSettings] = useState<Record<string, BITSettings>>({})
@@ -171,8 +174,12 @@ export default function BookPage() {
   useEffect(() => {
     if (!email) return
     void (async () => {
-      const { data } = await supabase.from('athletes').select('id, membership_tier').eq('email', email).maybeSingle()
-      if (data) { setAthleteId(data.id as string); setMembershipTier((data.membership_tier as string | null) ?? null) }
+      const { data } = await supabase.from('athletes').select('id, membership_tier, first_name, last_name').eq('email', email).maybeSingle()
+      if (data) {
+        setAthleteId(data.id as string)
+        setMembershipTier((data.membership_tier as string | null) ?? null)
+        setAthleteDisplayName(`${data.first_name as string ?? ''} ${data.last_name as string ?? ''}`.trim())
+      }
     })()
   }, [email])
 
@@ -308,9 +315,9 @@ export default function BookPage() {
     if (!facDay || facDay.disabledTypes.has(typeId)) return []
     if (isFacilityBlockedOnDate(dateStr)) return []
 
-    // 2-hour lockout if today
+    // Filter past slots when booking today
     const nowMins = dateKey(date) === dateKey(today)
-      ? new Date().getHours() * 60 + new Date().getMinutes() + 120
+      ? new Date().getHours() * 60 + new Date().getMinutes()
       : 0
 
     // Snap up to the next on-the-hour / half-hour boundary
@@ -506,7 +513,7 @@ export default function BookPage() {
       status,
       notes:         notes.trim() || null,
       max_capacity:  maxCapacity,
-      athlete_names: athleteId ? [] : [session?.user?.name ?? ''],
+      athlete_names: [athleteDisplayName || session?.user?.name || ''].filter(n => n.trim() !== ''),
     })
 
     if (bErr) { setSubmitError('Failed to create booking. Please try again.'); setSubmitting(false); return }
@@ -519,6 +526,14 @@ export default function BookPage() {
         payment_status: 'unpaid',
       })
     }
+
+    // Notify admin
+    await supabase.from('admin_notifications').insert({
+      type:  'new_booking',
+      title: 'New Booking',
+      body:  `${session?.user?.name ?? 'An athlete'} booked a ${getLabel(selectedTypeId!)} on ${dateStr} at ${fmtTime(selectedTime!)}`,
+      meta:  { booking_id: bookingId, session_type: selectedTypeId, date: dateStr, start_mins: selectedTime },
+    })
 
     setSubmitting(false)
     setStep('done')

@@ -3,8 +3,6 @@
 import React, { useState, useMemo, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import {
-  IconLock,
-  IconLockOpen,
   IconClock,
   IconCheck,
   IconX,
@@ -44,7 +42,6 @@ interface SessionPricingConfig {
 }
 
 interface PricingSettings {
-  lockoutMinutes: number
   chargeNoShow: boolean
   chargeExcusedAbsence: boolean
 }
@@ -68,15 +65,13 @@ interface Session {
   startTime: string
   sessionType: SessionType
   athletes: SessionAthlete[]
-  status: 'upcoming' | 'locked' | 'completed'
+  status: 'upcoming' | 'completed'
   completedAt: string | null
-  lockedPricePerAthlete: number | null
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const ACCENT = '#6BA3D6'
-const DEMO_NOW = new Date('2026-06-20T11:00:00')
 
 const SESSION_TYPE_LABELS: Record<SessionType, string> = {
   'small-group':            'Small Group Session',
@@ -247,7 +242,6 @@ const PROGRAM_PRICING: Record<'development-programs' | 'social-programs', { name
 }
 
 const INIT_SETTINGS: PricingSettings = {
-  lockoutMinutes: 120,
   chargeNoShow: true,
   chargeExcusedAbsence: false,
 }
@@ -272,23 +266,6 @@ function getSessionDateTime(date: string, time: string): Date {
   return new Date(`${date}T${time}:00`)
 }
 
-function getLockoutDate(sessionStart: Date, lockoutMinutes: number): Date {
-  return new Date(sessionStart.getTime() - lockoutMinutes * 60 * 1000)
-}
-
-function msUntilLockout(session: Session, now: Date, lockoutMinutes: number): number {
-  const start = getSessionDateTime(session.date, session.startTime)
-  return getLockoutDate(start, lockoutMinutes).getTime() - now.getTime()
-}
-
-function formatCountdown(ms: number): string {
-  if (ms <= 0) return '0m'
-  const totalMins = Math.floor(ms / 60000)
-  const h = Math.floor(totalMins / 60)
-  const m = totalMins % 60
-  return h > 0 ? `${h}h ${m}m` : `${m}m`
-}
-
 function fmtDate(d: string): string {
   return new Date(d + 'T00:00:00').toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })
 }
@@ -298,12 +275,6 @@ function fmtTime(t: string): string {
   return `${h % 12 || 12}:${m.toString().padStart(2, '0')}${h >= 12 ? 'pm' : 'am'}`
 }
 
-function lockoutTimeStr(session: Session, lockoutMinutes: number): string {
-  const start = getSessionDateTime(session.date, session.startTime)
-  const lockout = getLockoutDate(start, lockoutMinutes)
-  return `${lockout.getHours().toString().padStart(2, '0')}:${lockout.getMinutes().toString().padStart(2, '0')}`
-}
-
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function PaymentsPage() {
@@ -311,12 +282,10 @@ export default function PaymentsPage() {
   const [settings] = useState<PricingSettings>(INIT_SETTINGS)
   const [sessions, setSessions] = useState<Session[]>([])
   const [expandedSession, setExpandedSession] = useState<string | null>(null)
-  const [sessionFilter, setSessionFilter] = useState<'all' | 'upcoming' | 'locked' | 'completed'>('upcoming')
+  const [sessionFilter, setSessionFilter] = useState<'all' | 'upcoming' | 'completed'>('upcoming')
   const [addingTo, setAddingTo] = useState<string | null>(null)
   const [editingSession, setEditingSession] = useState<string | null>(null)
   const [editAttendance, setEditAttendance] = useState<Record<string, AttendanceStatus>>({})
-
-  const now = DEMO_NOW
 
   // Load pricing configs from Supabase on mount (read-only — used to look up prices for sessions)
   useEffect(() => {
@@ -348,11 +317,10 @@ export default function PaymentsPage() {
   }, [])
 
   // Derive live computed state per session
-  const computed = useMemo(() => sessions.map(s => {
-    if (s.status === 'completed') return { ...s, computedState: 'completed' as const, lockMs: 0 }
-    const lockMs = msUntilLockout(s, now, settings.lockoutMinutes)
-    return { ...s, computedState: lockMs <= 0 ? ('locked' as const) : ('upcoming' as const), lockMs }
-  }), [sessions, settings.lockoutMinutes])
+  const computed = useMemo(() => sessions.map(s => ({
+    ...s,
+    computedState: s.status === 'completed' ? ('completed' as const) : ('upcoming' as const),
+  })), [sessions])
 
   const filtered = useMemo(() => {
     if (sessionFilter === 'all') return computed
@@ -409,7 +377,7 @@ export default function PaymentsPage() {
         }
         return { ...sa, paymentStatus }
       })
-      return { ...s, athletes: updated, status: 'completed', completedAt: now.toISOString() }
+      return { ...s, athletes: updated, status: 'completed', completedAt: new Date().toISOString() }
     }))
   }
 
@@ -501,12 +469,12 @@ export default function PaymentsPage() {
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Payments</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Session lockout management, attendance, and payment tracking</p>
+        <p className="text-sm text-gray-500 mt-0.5">Session attendance and payment tracking</p>
       </div>
 
       {/* Filter pills */}
       <div className="mb-4 flex gap-2">
-        {(['upcoming', 'locked', 'completed', 'all'] as const).map(f => (
+        {(['upcoming', 'completed', 'all'] as const).map(f => (
           <button
             key={f}
             onClick={() => setSessionFilter(f)}
@@ -530,8 +498,6 @@ export default function PaymentsPage() {
           const usedIds = new Set(session.athletes.map(sa => sa.athleteId))
           const available = ATHLETES.filter(a => !usedIds.has(a.id))
           const allMarked = count > 0 && session.athletes.every(sa => sa.attendanceStatus !== null)
-          const sessionStarted = getSessionDateTime(session.date, session.startTime) <= now
-
           return (
             <div key={session.id} className="overflow-hidden rounded-xl border border-gray-200 bg-white">
               {/* Card header */}
@@ -540,7 +506,7 @@ export default function PaymentsPage() {
                 onClick={() => setExpandedSession(isExpanded ? null : session.id)}
               >
                 {/* State dot */}
-                <span className={`h-2 w-2 shrink-0 rounded-full ${state === 'completed' ? 'bg-green-500' : state === 'locked' ? 'bg-red-500' : 'bg-blue-400'}`} />
+                <span className={`h-2 w-2 shrink-0 rounded-full ${state === 'completed' ? 'bg-green-500' : 'bg-blue-400'}`} />
 
                 {/* Session type */}
                 <span className="shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold" style={{ backgroundColor: typeColor.bg, color: typeColor.color }}>
@@ -566,26 +532,13 @@ export default function PaymentsPage() {
                       <IconShieldCheck size={13} /> Completed
                     </span>
                   )}
-                  {state === 'locked' && (
-                    <>
-                      <span className="flex items-center gap-1.5 rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700">
-                        <IconLock size={13} /> {sessionStarted ? 'Awaiting Completion' : 'Locked'}
-                      </span>
-                      {session.lockedPricePerAthlete != null && (
-                        <span className="text-sm font-semibold text-gray-800">
-                          Locked: ${session.lockedPricePerAthlete}/athlete
-                        </span>
-                      )}
-                    </>
-                  )}
                   {state === 'upcoming' && (
                     <>
                       <span className="flex items-center gap-1.5 rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-600">
-                        <IconClock size={13} />
-                        {session.lockMs < 3_600_000 ? `Locks in ${formatCountdown(session.lockMs)}` : 'Unlocked'}
+                        <IconClock size={13} /> Upcoming
                       </span>
                       {estPrice != null && count > 0 && (
-                        <span className="text-sm text-gray-400">Est. ${estPrice}/athlete</span>
+                        <span className="text-sm text-gray-400">${estPrice}/athlete</span>
                       )}
                     </>
                   )}
@@ -597,15 +550,11 @@ export default function PaymentsPage() {
               {isExpanded && (
                 <div className="border-t border-gray-100 px-5 py-4">
 
-                  {/* ── UPCOMING: add/remove athletes, estimated price ── */}
+                  {/* ── UPCOMING: add/remove athletes, price ── */}
                   {state === 'upcoming' && (
                     <>
                       <div className="mb-3 flex items-center justify-between">
                         <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Registered Athletes</p>
-                        <span className="flex items-center gap-1 text-xs text-blue-500">
-                          <IconLockOpen size={12} />
-                          Estimated price — locks at {fmtTime(lockoutTimeStr(session, settings.lockoutMinutes))}
-                        </span>
                       </div>
 
                       <div className="mb-4 space-y-2">
@@ -653,63 +602,16 @@ export default function PaymentsPage() {
                         )
                       )}
 
-                      {/* Estimated total */}
+                      {/* Total */}
                       {estPrice != null && count > 0 && (
                         <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3">
                           <p className="text-xs font-medium text-blue-700">
-                            Estimated total: <strong>${(estPrice * count).toFixed(0)}</strong> ({count} × ${estPrice}/athlete)
-                            — price locks at {fmtTime(lockoutTimeStr(session, settings.lockoutMinutes))}
+                            Total paid at booking: <strong>${(estPrice * count).toFixed(0)}</strong> ({count} × ${estPrice}/athlete)
                           </p>
                         </div>
                       )}
-                    </>
-                  )}
 
-                  {/* ── LOCKED: mark attendance + complete ── */}
-                  {state === 'locked' && (
-                    <>
-                      <div className="mb-3 flex items-center justify-between">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Mark Attendance</p>
-                        <span className="flex items-center gap-1 text-xs font-medium text-red-600">
-                          <IconLock size={12} /> Roster locked — no athlete changes allowed
-                        </span>
-                      </div>
-
-                      <div className="mb-4 space-y-2">
-                        {session.athletes.map(sa => {
-                          const athlete = ATHLETES.find(a => a.id === sa.athleteId)!
-                          return (
-                            <div key={sa.athleteId} className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2.5">
-                              <div className="flex items-center gap-2">
-                                <IconUser size={14} className="text-gray-400" />
-                                <span className="text-sm font-medium text-gray-800">{athlete.name}</span>
-                                <span className="text-xs text-gray-400">
-                                  {session.lockedPricePerAthlete != null ? `Locked: $${session.lockedPricePerAthlete}` : ''}
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-1.5">
-                                {(['attended', 'no-show', 'excused'] as AttendanceStatus[]).map(status => (
-                                  <button
-                                    key={status as string}
-                                    onClick={() => markAttendance(session.id, sa.athleteId, status)}
-                                    className={`rounded-full border px-3 py-1 text-xs font-semibold transition-all ${
-                                      sa.attendanceStatus === status
-                                        ? status === 'attended' ? 'border-green-400 bg-green-100 text-green-700'
-                                        : status === 'no-show' ? 'border-red-400 bg-red-100 text-red-700'
-                                        : 'border-amber-400 bg-amber-100 text-amber-700'
-                                        : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
-                                    }`}
-                                  >
-                                    {status === 'attended' ? '✓ Attended' : status === 'no-show' ? '✗ No Show' : '~ Excused'}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                          )
-                        })}
-                      </div>
-
-                      <div className="flex items-center justify-between">
+                      <div className="mt-3 flex items-center justify-between">
                         {!allMarked && count > 0 && (
                           <p className="text-xs text-amber-600">Mark attendance for all athletes to enable completion</p>
                         )}

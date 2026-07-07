@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import { useActiveAthlete } from '@/lib/activeAthlete'
+import { supabase } from '@/lib/supabase'
 import {
   IconCalendar, IconFlame, IconCurrencyDollar, IconTrophy,
   IconCheck, IconX, IconChevronRight,
@@ -50,7 +51,28 @@ function fmtLongDate() {
   return new Date().toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 }
 
-const UPCOMING_SESSIONS: { id: string; date: string; day: string; time: string; type: string; coach: string; space: string; status: string }[] = []
+type SessionRow = { id: string; date: string; day: string; time: string; type: string; coach: string; space: string; status: string }
+const UPCOMING_SESSIONS: SessionRow[] = []
+
+function fmtMins(mins: number): string {
+  const h = Math.floor(mins / 60)
+  const m = mins % 60
+  return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`
+}
+
+function toSessionRow(b: { id: string; date: string; start_mins: number; session_type: string; coach_id: string | null; space: string | null; status: string | null }): SessionRow {
+  const d = new Date(b.date + 'T12:00:00')
+  return {
+    id:     b.id,
+    date:   b.date,
+    day:    d.toLocaleDateString('en-AU', { weekday: 'long' }),
+    time:   fmtMins(b.start_mins),
+    type:   b.session_type ?? '',
+    coach:  b.coach_id ?? '',
+    space:  b.space ?? '',
+    status: b.status ?? 'confirmed',
+  }
+}
 
 const NOTIFICATIONS: { id: string; icon: string; text: string; time: string }[] = []
 
@@ -325,13 +347,27 @@ export default function AthleteDashboard() {
   }
   const activeGoals = goals.filter(g => goalPct(g) < 100 && daysUntil(g.targetDate) >= 0)
 
+  // Load real upcoming bookings for this athlete
+  const loadSessions = useCallback(async () => {
+    if (!athleteId) return
+    const today = new Date().toISOString().split('T')[0]
+    const { data } = await supabase
+      .from('booking_athletes')
+      .select('bookings(id, date, start_mins, session_type, coach_id, space, status)')
+      .eq('athlete_id', athleteId)
+    if (!data) return
+    const rows = (data as unknown as { bookings: { id: string; date: string; start_mins: number; session_type: string; coach_id: string | null; space: string | null; status: string | null } | null }[])
+      .map(r => r.bookings)
+      .filter((b): b is NonNullable<typeof b> => !!b && b.date >= today && b.status !== 'cancelled')
+      .sort((a, b) => a.date.localeCompare(b.date) || a.start_mins - b.start_mins)
+    setSessions(rows.map(toSessionRow))
+  }, [athleteId])
+
+  useEffect(() => { void loadSessions() }, [loadSessions])
+
   // Sessions
-  function sessionIsWithin2Hours(s: typeof UPCOMING_SESSIONS[0]) {
-    const dt = new Date(`${s.date}T${s.time.replace(' AM','').replace(' PM','')}`)
-    if (s.time.includes('PM') && !s.time.startsWith('12')) dt.setHours(dt.getHours() + 12)
-    return (dt.getTime() - Date.now()) < 2 * 60 * 60 * 1000
-  }
-  function cancelSession(id: string) {
+  async function cancelSession(id: string) {
+    await supabase.from('bookings').update({ status: 'cancelled' }).eq('id', id)
     setSessions(prev => prev.filter(s => s.id !== id))
     showToast('Session cancelled.')
   }
@@ -444,7 +480,6 @@ export default function AthleteDashboard() {
           ) : (
             <ul className="divide-y divide-gray-50">
               {sessions.slice(0, 4).map(s => {
-                const locked = sessionIsWithin2Hours(s)
                 return (
                   <li key={s.id} className="flex items-center justify-between gap-3 px-5 py-3.5">
                     <div className="flex-1 min-w-0">
@@ -462,9 +497,8 @@ export default function AthleteDashboard() {
                     </div>
                     <button
                       type="button"
-                      onClick={() => !locked && setCancelTarget(s)}
-                      disabled={locked}
-                      title={locked ? 'Within 2-hour lockout window' : 'Cancel session'}
+                      onClick={() => setCancelTarget(s)}
+                      title="Cancel session"
                       className="shrink-0 rounded-lg p-1.5 text-gray-300 transition hover:bg-red-50 hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-30"
                     >
                       <IconX size={15} />
