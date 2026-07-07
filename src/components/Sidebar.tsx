@@ -82,7 +82,6 @@ const NAV: NavSection[] = [
           { label: 'Personal',     href: '/finances/personal',     icon: IconUser },
           { label: 'Ask Claude',   href: '/finances/claude',       icon: IconSparkles },
           { label: 'Payments',     href: '/pricing',               icon: IconCreditCard },
-          { label: 'Pricing',      href: '/pricing/config',        icon: IconTag },
         ],
       },
       {

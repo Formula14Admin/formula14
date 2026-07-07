@@ -4538,6 +4538,8 @@ interface BITMeta {
   emoji?: string
   location?: string
   style?: string
+  priceDisplay?: string
+  notes?: string
 }
 
 interface BITPricingTier   { min: number; max: number | null; pricePerAthlete: number }
@@ -4571,8 +4573,8 @@ function BookingInformationTab() {
   const [catalogue, setCatalogue] = useState<ProgramCatalogueItem[]>(INIT_CATALOGUE_FALLBACK)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editIsProg, setEditIsProg] = useState(false)
-  const [editDraft, setEditDraft] = useState({ label: '', description: '', durationMins: '', emoji: '', location: '', style: '' })
-  const [progDraft, setProgDraft] = useState({ name: '', description: '', colourTag: '' })
+  const [editDraft, setEditDraft] = useState({ label: '', description: '', durationMins: '', emoji: '', location: '', style: '', priceDisplay: '', notes: '' })
+  const [progDraft, setProgDraft] = useState({ name: '', description: '', colourTag: '', priceDisplay: '', notes: '' })
 
   // ── Persist
   useEffect(() => {
@@ -4653,6 +4655,8 @@ function BookingInformationTab() {
       emoji: '',
       location: m.location ?? (('location' in def) ? def.location : ''),
       style: m.style ?? (('style' in def) ? def.style : ''),
+      priceDisplay: m.priceDisplay ?? '',
+      notes: m.notes ?? '',
     })
     setEditIsProg(false)
     setEditingId(id)
@@ -4661,7 +4665,8 @@ function BookingInformationTab() {
   function openProgEdit(id: string) {
     const prog = catalogue.find(p => p.id === id)
     if (!prog) return
-    setProgDraft({ name: prog.name, description: prog.description, colourTag: prog.colourTag })
+    const m = meta[id] ?? {}
+    setProgDraft({ name: prog.name, description: prog.description, colourTag: prog.colourTag, priceDisplay: m.priceDisplay ?? `$${prog.pricePerSession} per session`, notes: m.notes ?? `Max ${prog.maxCapacity} athletes` })
     setEditIsProg(true)
     setEditingId(id)
   }
@@ -4677,6 +4682,8 @@ function BookingInformationTab() {
         ...(editDraft.emoji        ? { emoji: editDraft.emoji }                       : {}),
         ...(editDraft.location     ? { location: editDraft.location }                 : {}),
         ...(editDraft.style        ? { style: editDraft.style }                       : {}),
+        priceDisplay: editDraft.priceDisplay,
+        notes:        editDraft.notes,
       },
     }))
     setEditingId(null)
@@ -4693,6 +4700,10 @@ function BookingInformationTab() {
       try { localStorage.setItem(BIT_LS_CAT, JSON.stringify(next)) } catch {}
       return next
     })
+    setMeta(prev => ({
+      ...prev,
+      [editingId]: { ...(prev[editingId] ?? {}), priceDisplay: progDraft.priceDisplay, notes: progDraft.notes },
+    }))
     setEditingId(null)
   }
 
@@ -4824,30 +4835,13 @@ function BookingInformationTab() {
                         ))}
                       </div>
 
-                      {/* Pricing (read-only) */}
-                      <div className="flex shrink-0 flex-col items-center justify-center gap-1 border-l border-gray-100 px-5 py-5" style={{ minWidth: 128 }}>
-                        {def.id === 'small-group'
-                          ? sgsRange
-                            ? (
-                              <div className="text-center leading-tight">
-                                <p className="mt-0.5 text-xl font-bold" style={{ color: def.accentColor }}>
-                                  {sgsRange.min === sgsRange.max ? `$${sgsRange.min}` : `$${sgsRange.min}–$${sgsRange.max}`}
-                                </p>
-                                <p className="text-[10px] text-gray-400">per athlete</p>
-                              </div>
-                            )
-                            : <p className="text-sm text-gray-400">—</p>
-                          : lp !== null
-                            ? <p className="text-2xl font-bold" style={{ color: BIT_ACCENT }}>${lp}</p>
-                            : <p className="text-sm text-gray-400">—</p>
+                      {/* Pricing */}
+                      <div className="flex shrink-0 flex-col items-center justify-center gap-1 border-l border-gray-100 px-5 py-5" style={{ minWidth: 140 }}>
+                        {m.priceDisplay
+                          ? <p className="text-center text-base font-bold text-gray-900">{m.priceDisplay}</p>
+                          : <p className="text-sm text-gray-300">No price set</p>
                         }
-                        <p className="mt-1 text-[9px] font-semibold uppercase tracking-wide text-gray-400">Source: Pricing Config</p>
-                        <a
-                          href={`/pricing?tab=pricing&session=${def.id}`}
-                          className="mt-1 text-[10px] font-semibold text-blue-400 underline hover:text-blue-600"
-                        >
-                          Edit pricing →
-                        </a>
+                        {m.notes && <p className="mt-0.5 text-center text-[11px] text-gray-400">{m.notes}</p>}
                       </div>
                     </div>
 
@@ -4912,16 +4906,15 @@ function BookingInformationTab() {
                                   </div>
                                 ))}
                               </div>
-                              <div className="flex shrink-0 flex-col items-center justify-center gap-1 border-l border-gray-100 px-5 py-5" style={{ minWidth: 128 }}>
-                                <p className="text-2xl font-bold" style={{ color: prog.colourTag }}>${prog.pricePerSession}</p>
-                                <p className="text-[10px] text-gray-400">per session</p>
-                                <p className="mt-1 text-[9px] font-semibold uppercase tracking-wide text-gray-400">Source: Pricing Config</p>
-                                <a
-                                  href="/pricing?tab=pricing"
-                                  className="mt-1 text-[10px] font-semibold text-blue-400 underline hover:text-blue-600"
-                                >
-                                  Edit pricing →
-                                </a>
+                              <div className="flex shrink-0 flex-col items-center justify-center gap-1 border-l border-gray-100 px-5 py-5" style={{ minWidth: 140 }}>
+                                {(meta[prog.id]?.priceDisplay)
+                                  ? <p className="text-center text-base font-bold text-gray-900">{meta[prog.id].priceDisplay}</p>
+                                  : <p className="text-2xl font-bold" style={{ color: prog.colourTag }}>${prog.pricePerSession}</p>
+                                }
+                                {(meta[prog.id]?.notes)
+                                  ? <p className="mt-0.5 text-center text-[11px] text-gray-400">{meta[prog.id].notes}</p>
+                                  : <p className="text-[10px] text-gray-400">per session</p>
+                                }
                               </div>
                             </div>
                             <AdminCol id={prog.id} accentColor={prog.colourTag} isProg />
@@ -4993,8 +4986,21 @@ function BookingInformationTab() {
                       />
                     </div>
                   </div>
-                  <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2.5 text-center">
-                    <p className="text-xs text-blue-600">Pricing is managed in <strong>Pricing &amp; Payments → Pricing Config</strong></p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className={LBL_CLS}>Price Display</label>
+                      <input value={editDraft.priceDisplay}
+                        onChange={e => setEditDraft(d => ({ ...d, priceDisplay: e.target.value }))}
+                        placeholder="e.g. $75 flat, $40/athlete"
+                        className={FIELD_CLS} />
+                    </div>
+                    <div>
+                      <label className={LBL_CLS}>Notes / Capacity</label>
+                      <input value={editDraft.notes}
+                        onChange={e => setEditDraft(d => ({ ...d, notes: e.target.value }))}
+                        placeholder="e.g. Max 8 athletes"
+                        className={FIELD_CLS} />
+                    </div>
                   </div>
                 </>
               ) : (
@@ -5022,8 +5028,21 @@ function BookingInformationTab() {
                         placeholder="#6BA3D6" className={FIELD_CLS} />
                     </div>
                   </div>
-                  <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2.5 text-center">
-                    <p className="text-xs text-blue-600">Pricing &amp; capacity are managed in <strong>Pricing &amp; Payments → Pricing Config</strong></p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className={LBL_CLS}>Price Display</label>
+                      <input value={progDraft.priceDisplay}
+                        onChange={e => setProgDraft(d => ({ ...d, priceDisplay: e.target.value }))}
+                        placeholder="e.g. $20 per session"
+                        className={FIELD_CLS} />
+                    </div>
+                    <div>
+                      <label className={LBL_CLS}>Notes / Capacity</label>
+                      <input value={progDraft.notes}
+                        onChange={e => setProgDraft(d => ({ ...d, notes: e.target.value }))}
+                        placeholder="e.g. Max 15 athletes"
+                        className={FIELD_CLS} />
+                    </div>
                   </div>
                 </>
               )}
