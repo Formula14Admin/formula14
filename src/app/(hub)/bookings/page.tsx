@@ -4653,13 +4653,10 @@ function BookingInformationTab() {
   // ── Persist
   useEffect(() => {
     localStorage.setItem(BIT_LS_SETTINGS, JSON.stringify(settings))
-    // Sync to Supabase so athletes on other devices see the correct enabled state
-    void supabase.from('booking_session_settings').upsert({ id: 'singleton', settings, updated_at: new Date().toISOString() })
-  }, [settings])
-
-  useEffect(() => {
     if (Object.keys(meta).length > 0) localStorage.setItem(BIT_LS_META, JSON.stringify(meta))
-  }, [meta])
+    // Sync settings + meta to Supabase so athletes see correct toggles and pricing on all devices
+    void supabase.from('booking_session_settings').upsert({ id: 'singleton', settings, meta, updated_at: new Date().toISOString() })
+  }, [settings, meta])
 
   useEffect(() => { localStorage.setItem(BIT_LS_CUSTOM,  JSON.stringify(customTypes))           }, [customTypes])
   useEffect(() => { localStorage.setItem(BIT_LS_DELETED, JSON.stringify([...deletedTypeIds]))   }, [deletedTypeIds])

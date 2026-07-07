@@ -9,6 +9,7 @@ import {
   IconMapPin, IconUsers, IconArrowLeft, IconCalendar,
   IconAlertCircle, IconLoader2,
 } from '@tabler/icons-react'
+import { StripeCardStep } from '@/components/StripeCardModal'
 
 const ACCENT = '#6BA3D6'
 
@@ -27,7 +28,7 @@ type Step = 'type' | 'date' | 'time' | 'confirm' | 'done'
 interface BITSettings { enabled: boolean; reason: string }
 interface BITMeta {
   label?: string; description?: string; durationMins?: number
-  location?: string; style?: string
+  location?: string; style?: string; priceDisplay?: string
 }
 interface PricingTier   { min: number; max: number | null; pricePerAthlete: number }
 interface PricingConfig { sessionType: string; tiers: PricingTier[]; durationMins?: number }
@@ -169,6 +170,11 @@ export default function BookPage() {
   const [toast, setToast] = useState<string | null>(null)
   function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(null), 3000) }
 
+  // Payment method state (used in confirm step for priced coached sessions)
+  const [pmStatus,    setPmStatus]    = useState<'idle' | 'loading' | 'has-card' | 'no-card'>('idle')
+  const [pmInfo,      setPmInfo]      = useState<{ brand: string; last4: string; expMonth: number; expYear: number } | null>(null)
+  const [setupSecret, setSetupSecret] = useState<string | null>(null)
+
   // ── Load data ────────────────────────────────────────────────────────────────
 
   useEffect(() => {
@@ -193,18 +199,20 @@ export default function BookPage() {
         try { const r = localStorage.getItem(BIT_LS_PRICING); if (r) setPricing(JSON.parse(r)) } catch {}
       }
     })
-    // Load settings from Supabase so admin toggles apply across all devices
+    // Load settings + meta from Supabase so admin toggles and pricing apply across all devices
     void supabase
       .from('booking_session_settings')
-      .select('settings')
+      .select('settings, meta')
       .eq('id', 'singleton')
       .maybeSingle()
       .then(({ data }) => {
-        if (data?.settings && Object.keys(data.settings).length > 0) {
+        if (data?.settings && Object.keys(data.settings as Record<string, unknown>).length > 0) {
           setBitSettings(data.settings as Record<string, BITSettings>)
         } else {
-          // Fall back to localStorage if Supabase row not yet seeded
           try { const r = localStorage.getItem(BIT_LS_SETTINGS); if (r) setBitSettings(JSON.parse(r)) } catch {}
+        }
+        if (data?.meta && Object.keys(data.meta as Record<string, unknown>).length > 0) {
+          setBitMeta(data.meta as Record<string, BITMeta>)
         }
       })
   }, [])
@@ -287,6 +295,33 @@ export default function BookPage() {
     })()
   }, [selectedDate])
 
+  // Check / set up payment method when athlete reaches the confirm step for a priced coached session
+  useEffect(() => {
+    if (step !== 'confirm' || !selectedTypeId || !athleteId) return
+    if (isSelfServe(selectedTypeId) || !bitMeta[selectedTypeId]?.priceDisplay) return
+    setPmStatus('loading')
+    setPmInfo(null)
+    setSetupSecret(null)
+    void (async () => {
+      const res  = await fetch(`/api/stripe/payment-method?athleteId=${encodeURIComponent(athleteId)}`)
+      const json = await res.json() as { paymentMethod: { brand: string; last4: string; expMonth: number; expYear: number } | null }
+      if (json.paymentMethod) {
+        setPmStatus('has-card')
+        setPmInfo(json.paymentMethod)
+      } else {
+        setPmStatus('no-card')
+        const siRes  = await fetch('/api/stripe/create-setup-intent', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ athleteId }),
+        })
+        const siJson = await siRes.json() as { clientSecret?: string }
+        if (siJson.clientSecret) setSetupSecret(siJson.clientSecret)
+      }
+    })()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, selectedTypeId, athleteId])
+
   // ── Computed ──────────────────────────────────────────────────────────────────
 
   const ON_BY_DEFAULT = new Set(['individual','small-group','team-training','casual-shooting','shooting-machine-session','weight-room-session'])
@@ -310,14 +345,7 @@ export default function BookPage() {
   function isSelfServe(id: string): boolean { return CANONICAL_SESSION_TYPES.find(t=>t.id===id)?.selfServe ?? false }
 
   function getPrice(id: string): string | null {
-    const cfg = pricing.find(p => p.sessionType === id)
-    if (!cfg || cfg.tiers.length === 0) return null
-    if (id === 'small-group') {
-      const prices = cfg.tiers.map(t => t.pricePerAthlete)
-      const mn = Math.min(...prices), mx = Math.max(...prices)
-      return mn === mx ? `$${mn}` : `$${mn}–$${mx}`
-    }
-    return `$${cfg.tiers[0].pricePerAthlete}`
+    return bitMeta[id]?.priceDisplay ?? null
   }
 
   // ── Availability helpers ──────────────────────────────────────────────────────
@@ -598,6 +626,19 @@ export default function BookPage() {
 
     setSubmitting(false)
     setStep('done')
+  }
+
+  async function handleCardSaved(pmId: string) {
+    if (!athleteId) return
+    await fetch('/api/stripe/save-payment-method', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ athleteId, paymentMethodId: pmId }),
+    })
+    const res  = await fetch(`/api/stripe/payment-method?athleteId=${encodeURIComponent(athleteId)}`)
+    const json = await res.json() as { paymentMethod: { brand: string; last4: string; expMonth: number; expYear: number } | null }
+    setPmStatus('has-card')
+    setPmInfo(json.paymentMethod)
   }
 
   // ── Render ────────────────────────────────────────────────────────────────────
@@ -976,19 +1017,68 @@ export default function BookPage() {
                 className="w-full resize-none rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-800 outline-none transition placeholder:text-gray-300 focus:border-[#6BA3D6] focus:ring-2 focus:ring-[#6BA3D6]/20" />
             </div>
 
+            {/* Payment section — coached sessions with admin-configured pricing */}
+            {!isSelfServe(selectedTypeId) && getPrice(selectedTypeId) && athleteId && (
+              <div className="mb-4 rounded-2xl bg-white p-5 shadow-sm">
+                <h3 className="mb-3 text-sm font-bold text-gray-800">Payment</h3>
+
+                {(pmStatus === 'idle' || pmStatus === 'loading') && (
+                  <div className="flex items-center gap-2 text-sm text-gray-400">
+                    <IconLoader2 size={15} className="animate-spin" /> Checking payment method…
+                  </div>
+                )}
+
+                {pmStatus === 'has-card' && (
+                  <div className="flex items-center gap-2 rounded-xl border border-green-100 bg-green-50 px-4 py-3">
+                    <IconCheck size={15} className="shrink-0 text-green-600" />
+                    <span className="text-sm text-green-700">
+                      {pmInfo
+                        ? `${pmInfo.brand.charAt(0).toUpperCase()}${pmInfo.brand.slice(1)} •••• ${pmInfo.last4} — charged once your booking is approved.`
+                        : 'Card saved — you\'ll be charged once your booking is approved.'}
+                    </span>
+                  </div>
+                )}
+
+                {pmStatus === 'no-card' && !setupSecret && (
+                  <div className="flex items-center gap-2 text-sm text-gray-400">
+                    <IconLoader2 size={15} className="animate-spin" /> Setting up payment…
+                  </div>
+                )}
+
+                {pmStatus === 'no-card' && setupSecret && (
+                  <>
+                    <p className="mb-3 text-sm text-gray-500">
+                      Add a payment card to complete your booking. You&apos;ll only be charged once your session is approved.
+                    </p>
+                    <StripeCardStep
+                      clientSecret={setupSecret}
+                      onSuccess={(pmId) => { void handleCardSaved(pmId) }}
+                      onBack={() => setStep('time')}
+                      submitLabel="Save Card"
+                    />
+                  </>
+                )}
+              </div>
+            )}
+
             {submitError && (
               <div className="mb-4 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
                 {submitError}
               </div>
             )}
 
-            <button type="button" disabled={submitting} onClick={() => void handleConfirm()}
-              className="flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-bold text-white transition hover:opacity-90 disabled:opacity-50"
-              style={{ backgroundColor: ACCENT }}>
-              {submitting
-                ? 'Confirming…'
-                : isSelfServe(selectedTypeId) ? 'Confirm Booking' : 'Submit Request'}
-            </button>
+            {/* Hide confirm button while card form is active */}
+            {!(pmStatus === 'no-card' && getPrice(selectedTypeId) && !isSelfServe(selectedTypeId)) && (
+              <button type="button"
+                disabled={submitting || (!!athleteId && !isSelfServe(selectedTypeId) && !!getPrice(selectedTypeId) && pmStatus !== 'has-card')}
+                onClick={() => void handleConfirm()}
+                className="flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-bold text-white transition hover:opacity-90 disabled:opacity-50"
+                style={{ backgroundColor: ACCENT }}>
+                {submitting
+                  ? 'Confirming…'
+                  : isSelfServe(selectedTypeId) ? 'Confirm Booking' : 'Submit Request'}
+              </button>
+            )}
           </div>
         )}
       </div>
