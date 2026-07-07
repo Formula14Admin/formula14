@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
 import { useState, useEffect, useCallback, type ComponentType, type CSSProperties } from 'react'
+import { supabase } from '@/lib/supabase'
 import {
   IconLayoutDashboard,
   IconCalendar,
@@ -224,12 +225,26 @@ export default function Sidebar() {
   useEffect(() => {
     refreshBadges()
     window.addEventListener('storage', refreshBadges)
-    // Also poll so badges update when changed by the same tab
     const id = setInterval(refreshBadges, 2000)
     return () => {
       window.removeEventListener('storage', refreshBadges)
       clearInterval(id)
     }
+  }, [refreshBadges])
+
+  // Seed localStorage from Supabase on mount so badge shows without visiting Bookings page
+  useEffect(() => {
+    void supabase
+      .from('admin_notifications')
+      .select('id', { count: 'exact', head: true })
+      .eq('type', 'new_booking')
+      .is('read_at', null)
+      .then(({ count }) => {
+        if (count !== null) {
+          localStorage.setItem('f14_pendingJoinCount', String(count))
+          refreshBadges()
+        }
+      })
   }, [refreshBadges])
 
   // Track which expandable items are open (keyed by href)

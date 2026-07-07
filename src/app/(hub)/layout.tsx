@@ -1,5 +1,6 @@
 import { Suspense } from 'react'
 import Sidebar from '@/components/Sidebar'
+import BookingNotificationBell from '@/components/BookingNotificationBell'
 
 export default function HubLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -10,6 +11,7 @@ export default function HubLayout({ children }: { children: React.ReactNode }) {
       <main className="flex-1 overflow-y-auto" style={{ backgroundColor: '#f4f6f9' }}>
         {children}
       </main>
+      <BookingNotificationBell />
     </div>
   )
 }
