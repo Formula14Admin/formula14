@@ -13,8 +13,7 @@ import {
   IconClipboardList,
   IconChevronRight,
   IconChevronLeft,
-  IconCreditCard,
-  IconCheck,
+  IconCalendarEvent,
   IconX,
 } from '@tabler/icons-react'
 import { supabase } from '@/lib/supabase'
@@ -235,25 +234,9 @@ export default function DashboardPage() {
     setPendingJoinCount(stored !== null ? parseInt(stored, 10) || 0 : 0)
   }, [])
 
-  // Read pending payment count from localStorage (written by pricing page)
-  const [pendingPaymentCount, setPendingPaymentCount] = useState(0)
-  const [paymentsRan, setPaymentsRan] = useState(false)
-  useEffect(() => {
-    const stored = localStorage.getItem('f14_pendingPaymentCount')
-    setPendingPaymentCount(stored !== null ? parseInt(stored, 10) || 0 : 0)
-  }, [])
-
   function openJoinRequests() {
     localStorage.setItem('f14_openTab', 'join-requests')
     router.push('/bookings')
-  }
-
-  function runPayments() {
-    localStorage.setItem('f14_runPayments', 'true')
-    localStorage.setItem('f14_pendingPaymentCount', '0')
-    setPendingPaymentCount(0)
-    setPaymentsRan(true)
-    setTimeout(() => setPaymentsRan(false), 2500)
   }
 
   const isToday = selectedDateStr === todayStr
@@ -294,14 +277,8 @@ export default function DashboardPage() {
     { label: 'Add Athlete',     icon: IconUserPlus,       onClick: () => router.push('/athletes') },
     { label: 'Add Transaction', icon: IconCurrencyDollar, onClick: () => router.push('/bookkeeping') },
     { label: 'Join Requests',   icon: IconClipboardList,  onClick: openJoinRequests, badge: pendingJoinCount },
-    { label: 'New Booking',     icon: IconCalendarPlus,   onClick: () => router.push('/bookings') },
-    {
-      label:    paymentsRan ? 'Payments Ran!' : 'Run Payments',
-      icon:     paymentsRan ? IconCheck : IconCreditCard,
-      onClick:  runPayments,
-      disabled: pendingPaymentCount === 0,
-      badge:    paymentsRan ? undefined : pendingPaymentCount,
-    },
+    { label: 'New Booking',     icon: IconCalendarPlus,   onClick: () => router.push('/athlete/book') },
+    { label: 'View Bookings',   icon: IconCalendarEvent,  onClick: () => router.push('/bookings') },
     { label: 'Send Prompt',     icon: IconBell,           onClick: () => {} },
   ]
 
