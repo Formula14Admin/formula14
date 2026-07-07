@@ -4529,6 +4529,8 @@ const BIT_LS_SETTINGS = 'f14_booking_settings'
 const BIT_LS_META     = 'f14_session_type_meta'
 const BIT_LS_PRICING  = 'f14_pricing_configs'
 const BIT_LS_CAT      = 'f14_program_catalogue'
+const BIT_LS_CUSTOM   = 'f14_custom_session_types'
+const BIT_LS_DELETED  = 'f14_deleted_session_types'
 const BIT_ACCENT      = '#6BA3D6'
 
 interface BITMeta {
@@ -4547,6 +4549,16 @@ interface BITMeta {
 
 interface BITPricingTier   { min: number; max: number | null; pricePerAthlete: number }
 interface BITPricingConfig { sessionType: string; tiers: BITPricingTier[]; durationMins?: number }
+
+interface CustomSessionType {
+  id: string
+  label: string
+  description: string
+  durationMins: number
+  style: string
+  location: string
+  accentColor: string
+}
 
 // First 6 canonical types default ON; film-room-session and volume-shooting default OFF (new)
 const ON_BY_DEFAULT = new Set(['individual','small-group','team-training','casual-shooting','shooting-machine-session','weight-room-session'])
@@ -4576,8 +4588,14 @@ function BookingInformationTab() {
   const [catalogue, setCatalogue] = useState<ProgramCatalogueItem[]>(INIT_CATALOGUE_FALLBACK)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editIsProg, setEditIsProg] = useState(false)
-  const [editDraft, setEditDraft] = useState({ label: '', description: '', durationMins: '', emoji: '', location: '', style: '', priceDisplay: '', notes: '', pricingType: 'flat' as 'flat' | 'per-athlete', minAthletes: '', maxAthletes: '' })
+  const [editDraft, setEditDraft] = useState({ label: '', description: '', durationMins: '', emoji: '', location: '', style: '', priceDisplay: '', notes: '', pricingType: 'flat' as 'flat' | 'per-athlete', minAthletes: '', maxAthletes: '', accentColor: BIT_ACCENT })
   const [progDraft, setProgDraft] = useState({ name: '', description: '', colourTag: '', priceDisplay: '', notes: '' })
+  const [customTypes,    setCustomTypes]    = useState<CustomSessionType[]>(() => {
+    try { const r = typeof window !== 'undefined' ? localStorage.getItem(BIT_LS_CUSTOM) : null; if (r) return JSON.parse(r) } catch {} return []
+  })
+  const [deletedTypeIds, setDeletedTypeIds] = useState<Set<string>>(() => {
+    try { const r = typeof window !== 'undefined' ? localStorage.getItem(BIT_LS_DELETED) : null; if (r) return new Set(JSON.parse(r)) } catch {} return new Set()
+  })
 
   // ── Persist
   useEffect(() => {
@@ -4587,6 +4605,9 @@ function BookingInformationTab() {
   useEffect(() => {
     if (Object.keys(meta).length > 0) localStorage.setItem(BIT_LS_META, JSON.stringify(meta))
   }, [meta])
+
+  useEffect(() => { localStorage.setItem(BIT_LS_CUSTOM,  JSON.stringify(customTypes))           }, [customTypes])
+  useEffect(() => { localStorage.setItem(BIT_LS_DELETED, JSON.stringify([...deletedTypeIds]))   }, [deletedTypeIds])
 
   useEffect(() => {
     void (async () => {
@@ -4646,23 +4667,30 @@ function BookingInformationTab() {
   }
 
   // ── Edit helpers
+  function openNewType() {
+    setEditDraft({ label: '', description: '', durationMins: '60', emoji: '', location: '', style: 'Coached', priceDisplay: '', notes: '', pricingType: 'flat', minAthletes: '', maxAthletes: '', accentColor: BIT_ACCENT })
+    setEditIsProg(false)
+    setEditingId('__new__')
+  }
+
   function openSessionEdit(id: string) {
-    const def = CANONICAL_SESSION_TYPES.find(t => t.id === id) ?? {
-      label: id, description: '', durationMins: 60, location: '', style: '',
-    }
+    const canonical = CANONICAL_SESSION_TYPES.find(t => t.id === id)
+    const custom    = customTypes.find(t => t.id === id)
+    const def = canonical ?? custom ?? { label: id, description: '', durationMins: 60, location: '', style: '', accentColor: BIT_ACCENT }
     const m = meta[id] ?? {}
     setEditDraft({
-      label: m.label ?? def.label,
-      description: m.description ?? def.description,
+      label:        m.label        ?? def.label,
+      description:  m.description  ?? def.description,
       durationMins: String(m.durationMins ?? def.durationMins),
       emoji: '',
-      location: m.location ?? (('location' in def) ? def.location : ''),
-      style: m.style ?? (('style' in def) ? def.style : ''),
+      location:     m.location     ?? (('location' in def)    ? (def as { location: string }).location    : ''),
+      style:        m.style        ?? (('style' in def)       ? (def as { style: string }).style          : ''),
       priceDisplay: m.priceDisplay ?? '',
-      notes: m.notes ?? '',
-      pricingType: m.pricingType ?? 'flat',
-      minAthletes: m.minAthletes != null ? String(m.minAthletes) : '',
-      maxAthletes: m.maxAthletes != null ? String(m.maxAthletes) : '',
+      notes:        m.notes        ?? '',
+      pricingType:  m.pricingType  ?? 'flat',
+      minAthletes:  m.minAthletes  != null ? String(m.minAthletes) : '',
+      maxAthletes:  m.maxAthletes  != null ? String(m.maxAthletes) : '',
+      accentColor:  ('accentColor' in def) ? (def as { accentColor: string }).accentColor : BIT_ACCENT,
     })
     setEditIsProg(false)
     setEditingId(id)
@@ -4679,6 +4707,38 @@ function BookingInformationTab() {
 
   function saveSessionEdit() {
     if (!editingId) return
+    if (editingId === '__new__') {
+      if (!editDraft.label.trim()) return
+      const newId = `custom_${Date.now()}`
+      const newType: CustomSessionType = {
+        id:          newId,
+        label:       editDraft.label.trim(),
+        description: editDraft.description,
+        durationMins: Number(editDraft.durationMins) || 60,
+        style:        editDraft.style,
+        location:     editDraft.location,
+        accentColor:  editDraft.accentColor,
+      }
+      setCustomTypes(prev => [...prev, newType])
+      setMeta(prev => ({
+        ...prev,
+        [newId]: {
+          priceDisplay: editDraft.priceDisplay,
+          notes:        editDraft.notes,
+          pricingType:  editDraft.pricingType,
+          ...(editDraft.minAthletes !== '' ? { minAthletes: Number(editDraft.minAthletes) } : {}),
+          ...(editDraft.maxAthletes !== '' ? { maxAthletes: Number(editDraft.maxAthletes) } : {}),
+        },
+      }))
+      setSettings(prev => ({ ...prev, [newId]: { enabled: true, reason: '' } }))
+      setEditingId(null)
+      return
+    }
+    // Update custom type's own fields if it's a custom type
+    setCustomTypes(prev => prev.map(t => t.id === editingId
+      ? { ...t, label: editDraft.label || t.label, description: editDraft.description, durationMins: Number(editDraft.durationMins) || t.durationMins, style: editDraft.style, location: editDraft.location, accentColor: editDraft.accentColor }
+      : t
+    ))
     setMeta(prev => ({
       ...prev,
       [editingId]: {
@@ -4696,6 +4756,15 @@ function BookingInformationTab() {
       },
     }))
     setEditingId(null)
+  }
+
+  function deleteType(id: string) {
+    const isCustom = customTypes.some(t => t.id === id)
+    if (isCustom) {
+      setCustomTypes(prev => prev.filter(t => t.id !== id))
+    } else {
+      setDeletedTypeIds(prev => new Set([...prev, id]))
+    }
   }
 
   function saveProgEdit() {
@@ -4720,21 +4789,16 @@ function BookingInformationTab() {
   const socialProgs = catalogue.filter(p => p.category === 'social')
 
   const EXCLUDED_FROM_BIT = new Set(['development-programs', 'social-programs'])
-  const dynamicBitTypes = pricingConfigs.length > 0
-    ? pricingConfigs
-        .map(c => c.sessionType)
-        .filter(id => !EXCLUDED_FROM_BIT.has(id))
-        .map(id => {
-          const canonical = CANONICAL_SESSION_TYPES.find(t => t.id === id)
-          if (!canonical) return null
-          const config = pricingConfigs.find(c => c.sessionType === id)
-          return {
-            ...canonical,
-            ...(config?.durationMins ? { durationMins: config.durationMins } : {}),
-          }
-        })
-        .filter((t): t is typeof CANONICAL_SESSION_TYPES[0] => t !== null && t !== undefined)
-    : CANONICAL_SESSION_TYPES
+  const canonicalBitTypes = CANONICAL_SESSION_TYPES
+    .filter(t => !EXCLUDED_FROM_BIT.has(t.id) && !deletedTypeIds.has(t.id))
+    .map(t => {
+      const config = pricingConfigs.find(c => c.sessionType === t.id)
+      return { ...t, ...(config?.durationMins ? { durationMins: config.durationMins } : {}) }
+    })
+  const customBitTypes = customTypes
+    .filter(t => !deletedTypeIds.has(t.id))
+    .map(t => ({ ...t, selfServe: false, whoFor: '', availability: '' }))
+  const dynamicBitTypes = [...canonicalBitTypes, ...customBitTypes]
 
   const FIELD_CLS  = 'h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-center text-sm text-gray-800 outline-none transition focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/40'
   const FIELD_AREA = 'w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-center text-sm text-gray-800 outline-none transition resize-none focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/40'
@@ -4745,7 +4809,7 @@ function BookingInformationTab() {
     return { value: mins, label: h > 0 ? (m > 0 ? `${h} hr ${m} min` : `${h} hr${h > 1 ? 's' : ''}`) : `${m} min` }
   })
 
-  // ── Shared admin right-column (toggle + edit button)
+  // ── Shared admin right-column (toggle + edit + delete)
   function AdminCol({ id, accentColor, isProg }: { id: string; accentColor: string; isProg?: boolean }) {
     const tog = settings[id] ?? { enabled: true, reason: '' }
     return (
@@ -4758,10 +4822,18 @@ function BookingInformationTab() {
         </div>
         <button
           onClick={() => isProg ? openProgEdit(id) : openSessionEdit(id)}
-          className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 transition hover:bg-gray-100 hover:border-gray-300"
+          className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 transition hover:bg-gray-100 hover:border-gray-300"
         >
           <IconPencil size={12} /> Edit
         </button>
+        {!isProg && (
+          <button
+            onClick={() => deleteType(id)}
+            className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-red-100 bg-white px-3 py-1.5 text-xs font-semibold text-red-400 transition hover:bg-red-50 hover:border-red-200"
+          >
+            <IconTrash size={12} /> Delete
+          </button>
+        )}
       </div>
     )
   }
@@ -4878,6 +4950,13 @@ function BookingInformationTab() {
               )
             })}
           </div>
+          {/* Add Session Type button */}
+          <button
+            onClick={openNewType}
+            className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-300 py-3 text-sm font-semibold text-gray-400 transition hover:border-[#6BA3D6] hover:text-[#6BA3D6]"
+          >
+            <IconPlus size={15} /> Add Session Type
+          </button>
         </div>
 
         {/* ── Programmes ─────────────────────────────────────────────── */}
@@ -4960,9 +5039,12 @@ function BookingInformationTab() {
           <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl">
             <div className="relative flex items-center justify-center border-b border-gray-100 bg-white px-6 py-4">
               <h3 className="text-base font-bold text-gray-900">
-                Edit — {editIsProg
-                  ? catalogue.find(p => p.id === editingId)?.name
-                  : (meta[editingId]?.label ?? CANONICAL_SESSION_TYPES.find(t => t.id === editingId)?.label ?? editingId)
+                {editingId === '__new__'
+                  ? 'Add Session Type'
+                  : `Edit — ${editIsProg
+                      ? catalogue.find(p => p.id === editingId)?.name
+                      : (meta[editingId]?.label ?? CANONICAL_SESSION_TYPES.find(t => t.id === editingId)?.label ?? customTypes.find(t => t.id === editingId)?.label ?? editingId)
+                    }`
                 }
               </h3>
               <button onClick={() => setEditingId(null)}
@@ -4975,11 +5057,19 @@ function BookingInformationTab() {
               {!editIsProg ? (
                 <>
                   <div className="space-y-4">
-                    <div>
-                      <label className={LBL_CLS}>Session Name</label>
-                      <input value={editDraft.label}
-                        onChange={e => setEditDraft(d => ({ ...d, label: e.target.value }))}
-                        className={FIELD_CLS} />
+                    <div className="grid grid-cols-[1fr_auto] items-end gap-3">
+                      <div>
+                        <label className={LBL_CLS}>Session Name</label>
+                        <input value={editDraft.label}
+                          onChange={e => setEditDraft(d => ({ ...d, label: e.target.value }))}
+                          className={FIELD_CLS} />
+                      </div>
+                      <div className="flex flex-col items-center gap-1">
+                        <label className={LBL_CLS}>Colour</label>
+                        <input type="color" value={editDraft.accentColor}
+                          onChange={e => setEditDraft(d => ({ ...d, accentColor: e.target.value }))}
+                          className="h-10 w-12 cursor-pointer rounded-lg border border-gray-200 p-1" />
+                      </div>
                     </div>
                     <div>
                       <label className={LBL_CLS}>Description</label>
