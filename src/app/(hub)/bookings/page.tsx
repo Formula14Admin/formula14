@@ -4540,6 +4540,9 @@ interface BITMeta {
   style?: string
   priceDisplay?: string
   notes?: string
+  pricingType?: 'flat' | 'per-athlete'
+  minAthletes?: number
+  maxAthletes?: number
 }
 
 interface BITPricingTier   { min: number; max: number | null; pricePerAthlete: number }
@@ -4573,7 +4576,7 @@ function BookingInformationTab() {
   const [catalogue, setCatalogue] = useState<ProgramCatalogueItem[]>(INIT_CATALOGUE_FALLBACK)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editIsProg, setEditIsProg] = useState(false)
-  const [editDraft, setEditDraft] = useState({ label: '', description: '', durationMins: '', emoji: '', location: '', style: '', priceDisplay: '', notes: '' })
+  const [editDraft, setEditDraft] = useState({ label: '', description: '', durationMins: '', emoji: '', location: '', style: '', priceDisplay: '', notes: '', pricingType: 'flat' as 'flat' | 'per-athlete', minAthletes: '', maxAthletes: '' })
   const [progDraft, setProgDraft] = useState({ name: '', description: '', colourTag: '', priceDisplay: '', notes: '' })
 
   // ── Persist
@@ -4657,6 +4660,9 @@ function BookingInformationTab() {
       style: m.style ?? (('style' in def) ? def.style : ''),
       priceDisplay: m.priceDisplay ?? '',
       notes: m.notes ?? '',
+      pricingType: m.pricingType ?? 'flat',
+      minAthletes: m.minAthletes != null ? String(m.minAthletes) : '',
+      maxAthletes: m.maxAthletes != null ? String(m.maxAthletes) : '',
     })
     setEditIsProg(false)
     setEditingId(id)
@@ -4684,6 +4690,9 @@ function BookingInformationTab() {
         ...(editDraft.style        ? { style: editDraft.style }                       : {}),
         priceDisplay: editDraft.priceDisplay,
         notes:        editDraft.notes,
+        pricingType:  editDraft.pricingType,
+        ...(editDraft.minAthletes !== '' ? { minAthletes: Number(editDraft.minAthletes) } : {}),
+        ...(editDraft.maxAthletes !== '' ? { maxAthletes: Number(editDraft.maxAthletes) } : {}),
       },
     }))
     setEditingId(null)
@@ -4841,6 +4850,20 @@ function BookingInformationTab() {
                           ? <p className="text-center text-base font-bold text-gray-900">{m.priceDisplay}</p>
                           : <p className="text-sm text-gray-300">No price set</p>
                         }
+                        {m.pricingType && (
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+                            {m.pricingType === 'flat' ? 'Flat Rate' : 'Per Athlete'}
+                          </p>
+                        )}
+                        {(m.minAthletes != null || m.maxAthletes != null) && (
+                          <p className="text-[11px] text-gray-400">
+                            {m.minAthletes != null && m.maxAthletes != null
+                              ? `${m.minAthletes}–${m.maxAthletes} athletes`
+                              : m.maxAthletes != null
+                              ? `Max ${m.maxAthletes} athletes`
+                              : `Min ${m.minAthletes} athletes`}
+                          </p>
+                        )}
                         {m.notes && <p className="mt-0.5 text-center text-[11px] text-gray-400">{m.notes}</p>}
                       </div>
                     </div>
@@ -4986,19 +5009,54 @@ function BookingInformationTab() {
                       />
                     </div>
                   </div>
+                  {/* Pricing structure */}
+                  <div>
+                    <label className={LBL_CLS}>Pricing Structure</label>
+                    <div className="flex overflow-hidden rounded-lg border border-gray-200">
+                      {(['flat', 'per-athlete'] as const).map((opt, i) => (
+                        <button
+                          key={opt}
+                          type="button"
+                          onClick={() => setEditDraft(d => ({ ...d, pricingType: opt }))}
+                          className={`flex-1 py-2 text-sm font-semibold transition ${i === 0 ? '' : 'border-l border-gray-200'} ${editDraft.pricingType === opt ? 'text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}
+                          style={editDraft.pricingType === opt ? { backgroundColor: BIT_ACCENT } : {}}
+                        >
+                          {opt === 'flat' ? 'Flat Rate' : 'Per Athlete'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className={LBL_CLS}>Min Athletes</label>
+                      <input
+                        type="number" min={1} value={editDraft.minAthletes}
+                        onChange={e => setEditDraft(d => ({ ...d, minAthletes: e.target.value }))}
+                        placeholder="1"
+                        className={FIELD_CLS} />
+                    </div>
+                    <div>
+                      <label className={LBL_CLS}>Max Athletes</label>
+                      <input
+                        type="number" min={1} value={editDraft.maxAthletes}
+                        onChange={e => setEditDraft(d => ({ ...d, maxAthletes: e.target.value }))}
+                        placeholder="e.g. 8"
+                        className={FIELD_CLS} />
+                    </div>
+                  </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className={LBL_CLS}>Price Display</label>
                       <input value={editDraft.priceDisplay}
                         onChange={e => setEditDraft(d => ({ ...d, priceDisplay: e.target.value }))}
-                        placeholder="e.g. $75 flat, $40/athlete"
+                        placeholder="e.g. $75, $40/athlete"
                         className={FIELD_CLS} />
                     </div>
                     <div>
-                      <label className={LBL_CLS}>Notes / Capacity</label>
+                      <label className={LBL_CLS}>Notes</label>
                       <input value={editDraft.notes}
                         onChange={e => setEditDraft(d => ({ ...d, notes: e.target.value }))}
-                        placeholder="e.g. Max 8 athletes"
+                        placeholder="e.g. Includes equipment"
                         className={FIELD_CLS} />
                     </div>
                   </div>
