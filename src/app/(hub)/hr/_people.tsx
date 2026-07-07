@@ -42,6 +42,9 @@ export function PeopleTab({ staff, setStaff, appRoles, setAppRoles }: {
   const [deleting, setDeleting] = useState(false)
   const [actionMenuId, setActionMenuId] = useState<string | null>(null)
   const [staffToast, setStaffToast] = useState<string | null>(null)
+  const [showEdit, setShowEdit]   = useState(false)
+  const [editForm, setEditForm]   = useState<typeof EMPTY_STAFF>({ ...EMPTY_STAFF })
+  const [editSection, setEditSection] = useState<string>('personal')
 
   function showStaffToast(msg: string) { setStaffToast(msg); setTimeout(() => setStaffToast(null), 4000) }
 
@@ -65,6 +68,34 @@ export function PeopleTab({ staff, setStaff, appRoles, setAppRoles }: {
     setConfirmDeleteId(null)
     setDeleting(false)
     showStaffToast('Staff member deleted.')
+  }
+
+  function openEdit(s: StaffMember) {
+    setEditForm({
+      firstName: s.firstName, lastName: s.lastName, role: s.role,
+      employmentType: s.employmentType, status: s.status,
+      email: s.email, phone: s.phone, startDate: s.startDate,
+      payRate: s.payRate, payRateType: s.payRateType,
+      bsb: s.bsb, accountNumber: s.accountNumber, tfn: s.tfn,
+      emergencyContactName: s.emergencyContactName, emergencyContactPhone: s.emergencyContactPhone,
+      notes: s.notes, appRole: appRoles[s.id] ?? 'employed-coach',
+    })
+    setEditSection('personal')
+    setShowEdit(true)
+  }
+
+  function handleEditSave(id: string) {
+    const updated = staff.map(s => s.id === id
+      ? { ...s, ...editForm }
+      : s
+    )
+    const newRoles = { ...appRoles, [id]: editForm.appRole }
+    saveStaff(updated)
+    saveAppRoles(newRoles)
+    setStaff(updated)
+    setAppRoles(newRoles)
+    setShowEdit(false)
+    showStaffToast('Changes saved.')
   }
 
   const filtered = useMemo(() =>
@@ -213,7 +244,7 @@ export function PeopleTab({ staff, setStaff, appRoles, setAppRoles }: {
                 )}
                 <button type="button" onClick={() => setConfirmDeleteId(selectedStaff.id)}
                   className="rounded-lg border border-red-200 px-2.5 py-1 text-xs font-semibold text-red-500 hover:bg-red-50">Delete</button>
-                <button className="rounded-lg p-2 text-gray-400 hover:bg-gray-100"><IconEdit size={16} /></button>
+                <button type="button" onClick={() => openEdit(selectedStaff)} className="rounded-lg p-2 text-gray-400 hover:bg-gray-100"><IconEdit size={16} /></button>
               </div>
             </div>
 
@@ -347,6 +378,88 @@ export function PeopleTab({ staff, setStaff, appRoles, setAppRoles }: {
                 className="rounded-xl px-5 py-2 text-sm font-bold text-white disabled:opacity-40"
                 style={{ backgroundColor: ACCENT }}>
                 Save & Send Invitation
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Employee Modal */}
+      {showEdit && selectedStaff && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+          <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-xl">
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-100 bg-white px-6 py-4">
+              <h2 className="text-base font-bold text-gray-900">Edit {selectedStaff.firstName} {selectedStaff.lastName}</h2>
+              <button type="button" onClick={() => setShowEdit(false)} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100"><IconX size={18} /></button>
+            </div>
+            <div className="flex gap-1 overflow-x-auto border-b border-gray-100 px-6 py-2">
+              {ADD_SECTIONS.map(sec => (
+                <button key={sec} type="button" onClick={() => setEditSection(sec)}
+                  className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold capitalize transition ${editSection === sec ? 'text-white' : 'text-gray-500 hover:bg-gray-100'}`}
+                  style={editSection === sec ? { backgroundColor: ACCENT } : undefined}>
+                  {sec}
+                </button>
+              ))}
+            </div>
+            <div className="p-6 space-y-4">
+              {editSection === 'personal' && <>
+                <div className="grid grid-cols-2 gap-4">
+                  <ModalField label="First Name" value={editForm.firstName} onChange={v => setEditForm(f => ({...f, firstName: v}))} />
+                  <ModalField label="Last Name"  value={editForm.lastName}  onChange={v => setEditForm(f => ({...f, lastName: v}))} />
+                </div>
+                <ModalField label="Email Address" value={editForm.email} onChange={v => setEditForm(f => ({...f, email: v}))} type="email" />
+                <ModalField label="Phone Number"  value={editForm.phone} onChange={v => setEditForm(f => ({...f, phone: v}))} />
+                <div className="grid grid-cols-2 gap-4">
+                  <ModalField label="Emergency Contact Name"  value={editForm.emergencyContactName}  onChange={v => setEditForm(f => ({...f, emergencyContactName: v}))} />
+                  <ModalField label="Emergency Contact Phone" value={editForm.emergencyContactPhone} onChange={v => setEditForm(f => ({...f, emergencyContactPhone: v}))} />
+                </div>
+              </>}
+              {editSection === 'employment' && <>
+                <ModalField label="Job Title / Role" value={editForm.role} onChange={v => setEditForm(f => ({...f, role: v}))} />
+                <div className="grid grid-cols-2 gap-4">
+                  <ModalSelect label="Employment Type" value={editForm.employmentType} onChange={v => setEditForm(f => ({...f, employmentType: v as EmploymentType}))}
+                    options={[['full-time','Full Time'],['part-time','Part Time'],['casual','Casual'],['contractor','Contractor']]} />
+                  <ModalSelect label="App Role" value={editForm.appRole} onChange={v => setEditForm(f => ({...f, appRole: v as AppRole}))}
+                    options={[['director','Director'],['employed-coach','Employed Coach']]} />
+                </div>
+                <ModalField label="Start Date" value={editForm.startDate} onChange={v => setEditForm(f => ({...f, startDate: v}))} type="date" />
+              </>}
+              {editSection === 'compensation' && <>
+                <div className="grid grid-cols-2 gap-4">
+                  <ModalField label="Pay Rate ($)" value={String(editForm.payRate)} onChange={v => setEditForm(f => ({...f, payRate: parseFloat(v) || 0}))} type="number" />
+                  <ModalSelect label="Rate Type" value={editForm.payRateType} onChange={v => setEditForm(f => ({...f, payRateType: v as PayRateType}))}
+                    options={[['hourly','Per Hour'],['per-session','Per Session']]} />
+                </div>
+              </>}
+              {editSection === 'banking' && <>
+                <ModalField label="BSB" value={editForm.bsb} onChange={v => setEditForm(f => ({...f, bsb: v}))} placeholder="000-000" />
+                <ModalField label="Account Number" value={editForm.accountNumber} onChange={v => setEditForm(f => ({...f, accountNumber: v}))} />
+              </>}
+              {editSection === 'tax' && <>
+                <ModalField label="Tax File Number (TFN)" value={editForm.tfn} onChange={v => setEditForm(f => ({...f, tfn: v}))} placeholder="123 456 789" />
+                <p className="text-xs text-gray-500">TFN is stored securely and only shown to Directors.</p>
+              </>}
+              {editSection === 'documents' && (
+                <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-6 text-center">
+                  <IconUpload size={24} className="mx-auto mb-2 text-gray-400" />
+                  <p className="text-sm font-medium text-gray-600">Document management is available in the full profile view.</p>
+                </div>
+              )}
+              {editSection === 'notes' && (
+                <div>
+                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">Internal Notes</label>
+                  <textarea rows={5} value={editForm.notes} onChange={e => setEditForm(f => ({...f, notes: e.target.value}))}
+                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#6BA3D6] resize-none"
+                    placeholder="Notes visible to Directors only…" />
+                </div>
+              )}
+            </div>
+            <div className="sticky bottom-0 flex items-center justify-between border-t border-gray-100 bg-white px-6 py-4">
+              <button type="button" onClick={() => setShowEdit(false)} className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50">Cancel</button>
+              <button type="button" onClick={() => handleEditSave(selectedStaff.id)} disabled={!editForm.firstName || !editForm.lastName || !editForm.email}
+                className="rounded-xl px-5 py-2 text-sm font-bold text-white disabled:opacity-40"
+                style={{ backgroundColor: ACCENT }}>
+                Save Changes
               </button>
             </div>
           </div>
