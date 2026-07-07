@@ -353,25 +353,27 @@ export default function BookPage() {
     if (!facDay || facDay.disabledTypes.has(typeId)) return []
     if (isFacilityBlockedOnDate(dateStr)) return []
 
-    // Block slots less than 8 hours away (applies across midnight too)
-    const MIN_ADVANCE = 8 * 60
+    // Filter past slots when booking today
+    const nowMins = dateKey(date) === dateKey(today)
+      ? new Date().getHours() * 60 + new Date().getMinutes()
+      : 0
+
+    // After 10pm, the 6:00am slot the next day is unavailable
     const nowTotalMins = new Date().getHours() * 60 + new Date().getMinutes()
     const daysAhead = Math.round((new Date(dateStr + 'T12:00:00').getTime() - new Date(dateKey(today) + 'T12:00:00').getTime()) / 86400000)
-    const cutoffMins = daysAhead === 0
-      ? nowTotalMins + MIN_ADVANCE          // today: block everything before now+8h
-      : daysAhead === 1
-        ? Math.max(0, nowTotalMins + MIN_ADVANCE - 1440) // tomorrow: only block if now+8h crosses midnight
-        : 0                                  // day after tomorrow+: no restriction
+    const blockSixAm = nowTotalMins >= 22 * 60 && daysAhead === 1
 
     // Snap up to the next on-the-hour / half-hour boundary
-    const rawStart = Math.max(facDay.startMins, cutoffMins)
+    const rawStart = Math.max(facDay.startMins, nowMins)
     const facStart = Math.ceil(rawStart / SLOT_INTERVAL) * SLOT_INTERVAL
     const facEnd   = facDay.endMins
+
+    const SIX_AM = 6 * 60
 
     if (selfServe) {
       const slots: number[] = []
       for (let t = facStart; t + duration <= facEnd; t += SLOT_INTERVAL) slots.push(t)
-      return slots
+      return blockSixAm ? slots.filter(t => t !== SIX_AM) : slots
     }
 
     // Coached: slots within facility AND at least one coach window
@@ -383,7 +385,8 @@ export default function BookPage() {
       const coachCovers = coaches.some(c => t >= c.startMins && t + duration <= c.endMins)
       if (coachCovers) slotsSet.add(t)
     }
-    return Array.from(slotsSet).sort((a, b) => a - b)
+    const slots = Array.from(slotsSet).sort((a, b) => a - b)
+    return blockSixAm ? slots.filter(t => t !== SIX_AM) : slots
   }
 
   // Whether a specific date has ANY available slots for the selected session type
