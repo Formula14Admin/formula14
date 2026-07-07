@@ -312,7 +312,7 @@ export default function DashboardPage() {
             <h3 className="mb-1 text-base font-bold text-gray-900">Enable Push Notifications</h3>
             <p className="mb-5 text-sm text-gray-500">Who are you? Bookings will be sent to your device when you&apos;re assigned as coach.</p>
             <div className="space-y-2.5">
-              {['matt', 'jade', 'sam'].map(id => (
+              {['matt', 'jade'].map(id => (
                 <button
                   key={id}
                   disabled={pushWorking}
