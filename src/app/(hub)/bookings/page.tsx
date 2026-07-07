@@ -4632,6 +4632,7 @@ function BookingInformationTab() {
 
   const [pricingConfigs, setPricingConfigs] = useState<BITPricingConfig[]>([])
   const [catalogue, setCatalogue] = useState<ProgramCatalogueItem[]>(INIT_CATALOGUE_FALLBACK)
+  const [bitSaveStatus, setBitSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editIsProg, setEditIsProg] = useState(false)
   const [editDraft, setEditDraft] = useState({ label: '', description: '', durationMins: '', emoji: '', location: '', style: '', priceDisplay: '', notes: '', pricingType: 'flat' as 'flat' | 'per-athlete', minAthletes: '', maxAthletes: '', accentColor: BIT_ACCENT, durationTiers: [] as Array<{ durationMins: string; priceDisplay: string }> })
@@ -4651,12 +4652,15 @@ function BookingInformationTab() {
     return new Set()
   })
 
-  // ── Persist settings + meta to localStorage and Supabase on every change
-  useEffect(() => {
-    localStorage.setItem(BIT_LS_SETTINGS, JSON.stringify(settings))
-    if (Object.keys(meta).length > 0) localStorage.setItem(BIT_LS_META, JSON.stringify(meta))
-    void supabase.from('booking_session_settings').upsert({ id: 'singleton', settings, meta, updated_at: new Date().toISOString() })
-  }, [settings, meta])
+  // ── Write settings + meta to Supabase (called explicitly on every change)
+  const persistToSupabase = useCallback(async (nextSettings: Record<string, { enabled: boolean; reason: string }>, nextMeta: Record<string, BITMeta>) => {
+    setBitSaveStatus('saving')
+    localStorage.setItem(BIT_LS_SETTINGS, JSON.stringify(nextSettings))
+    if (Object.keys(nextMeta).length > 0) localStorage.setItem(BIT_LS_META, JSON.stringify(nextMeta))
+    const { error } = await supabase.from('booking_session_settings').upsert({ id: 'singleton', settings: nextSettings, meta: nextMeta, updated_at: new Date().toISOString() })
+    setBitSaveStatus(error ? 'error' : 'saved')
+    setTimeout(() => setBitSaveStatus('idle'), 2500)
+  }, [])
 
   useEffect(() => { localStorage.setItem(BIT_LS_CUSTOM,  JSON.stringify(customTypes))           }, [customTypes])
   useEffect(() => { localStorage.setItem(BIT_LS_DELETED, JSON.stringify([...deletedTypeIds]))   }, [deletedTypeIds])
@@ -4712,10 +4716,18 @@ function BookingInformationTab() {
 
   // ── Toggle / reason helpers
   function setEnabled(id: string, v: boolean) {
-    setSettings(prev => ({ ...prev, [id]: { ...(prev[id] ?? { enabled: true, reason: '' }), enabled: v } }))
+    setSettings(prev => {
+      const next = { ...prev, [id]: { ...(prev[id] ?? { enabled: true, reason: '' }), enabled: v } }
+      void persistToSupabase(next, meta)
+      return next
+    })
   }
   function setReason(id: string, v: string) {
-    setSettings(prev => ({ ...prev, [id]: { ...(prev[id] ?? { enabled: true, reason: '' }), reason: v } }))
+    setSettings(prev => {
+      const next = { ...prev, [id]: { ...(prev[id] ?? { enabled: true, reason: '' }), reason: v } }
+      void persistToSupabase(next, meta)
+      return next
+    })
   }
 
   // ── Edit helpers
@@ -4773,18 +4785,19 @@ function BookingInformationTab() {
         accentColor:  editDraft.accentColor,
       }
       setCustomTypes(prev => [...prev, newType])
-      setMeta(prev => ({
-        ...prev,
-        [newId]: {
-          priceDisplay:  editDraft.priceDisplay,
-          notes:         editDraft.notes,
-          pricingType:   editDraft.pricingType,
-          ...(editDraft.minAthletes !== '' ? { minAthletes: Number(editDraft.minAthletes) } : {}),
-          ...(editDraft.maxAthletes !== '' ? { maxAthletes: Number(editDraft.maxAthletes) } : {}),
-          durationTiers: editDraft.durationTiers.map(t => ({ durationMins: Number(t.durationMins) || 60, priceDisplay: t.priceDisplay })),
-        },
-      }))
-      setSettings(prev => ({ ...prev, [newId]: { enabled: true, reason: '' } }))
+      const newMeta: BITMeta = {
+        priceDisplay: editDraft.priceDisplay,
+        notes:        editDraft.notes,
+        pricingType:  editDraft.pricingType,
+        ...(editDraft.minAthletes !== '' ? { minAthletes: Number(editDraft.minAthletes) } : {}),
+        ...(editDraft.maxAthletes !== '' ? { maxAthletes: Number(editDraft.maxAthletes) } : {}),
+        durationTiers: editDraft.durationTiers.map(t => ({ durationMins: Number(t.durationMins) || 60, priceDisplay: t.priceDisplay })),
+      }
+      const nextMeta = { ...meta, [newId]: newMeta }
+      setMeta(nextMeta)
+      const nextSettings = { ...settings, [newId]: { enabled: true, reason: '' } }
+      setSettings(nextSettings)
+      void persistToSupabase(nextSettings, nextMeta)
       setEditingId(null)
       return
     }
@@ -4793,23 +4806,23 @@ function BookingInformationTab() {
       ? { ...t, label: editDraft.label || t.label, description: editDraft.description, durationMins: Number(editDraft.durationMins) || t.durationMins, style: editDraft.style, location: editDraft.location, accentColor: editDraft.accentColor }
       : t
     ))
-    setMeta(prev => ({
-      ...prev,
-      [editingId]: {
-        ...(editDraft.label        ? { label: editDraft.label }                       : {}),
-        ...(editDraft.description  ? { description: editDraft.description }           : {}),
-        ...(editDraft.durationMins ? { durationMins: Number(editDraft.durationMins) } : {}),
-        ...(editDraft.emoji        ? { emoji: editDraft.emoji }                       : {}),
-        ...(editDraft.location     ? { location: editDraft.location }                 : {}),
-        ...(editDraft.style        ? { style: editDraft.style }                       : {}),
-        priceDisplay:  editDraft.priceDisplay,
-        notes:         editDraft.notes,
-        pricingType:   editDraft.pricingType,
-        ...(editDraft.minAthletes !== '' ? { minAthletes: Number(editDraft.minAthletes) } : {}),
-        ...(editDraft.maxAthletes !== '' ? { maxAthletes: Number(editDraft.maxAthletes) } : {}),
-        durationTiers: editDraft.durationTiers.map(t => ({ durationMins: Number(t.durationMins) || 60, priceDisplay: t.priceDisplay })),
-      },
-    }))
+    const updatedMeta: BITMeta = {
+      ...(editDraft.label        ? { label: editDraft.label }                       : {}),
+      ...(editDraft.description  ? { description: editDraft.description }           : {}),
+      ...(editDraft.durationMins ? { durationMins: Number(editDraft.durationMins) } : {}),
+      ...(editDraft.emoji        ? { emoji: editDraft.emoji }                       : {}),
+      ...(editDraft.location     ? { location: editDraft.location }                 : {}),
+      ...(editDraft.style        ? { style: editDraft.style }                       : {}),
+      priceDisplay:  editDraft.priceDisplay,
+      notes:         editDraft.notes,
+      pricingType:   editDraft.pricingType,
+      ...(editDraft.minAthletes !== '' ? { minAthletes: Number(editDraft.minAthletes) } : {}),
+      ...(editDraft.maxAthletes !== '' ? { maxAthletes: Number(editDraft.maxAthletes) } : {}),
+      durationTiers: editDraft.durationTiers.map(t => ({ durationMins: Number(t.durationMins) || 60, priceDisplay: t.priceDisplay })),
+    }
+    const nextMeta = { ...meta, [editingId]: updatedMeta }
+    setMeta(nextMeta)
+    void persistToSupabase(settings, nextMeta)
     setEditingId(null)
   }
 
@@ -4907,11 +4920,23 @@ function BookingInformationTab() {
     <div className="flex flex-1 min-h-0 flex-col overflow-y-auto" style={{ backgroundColor: '#f4f6f9' }}>
       <div className="mx-auto w-full max-w-[1040px] px-6 py-8">
 
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">Booking Information</h1>
-          <p className="mt-0.5 text-sm text-gray-500">
-            Control which session types athletes can see and book. Toggle off to hide a type; add a reason to show it greyed with a message.
-          </p>
+        <div className="mb-6 flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Booking Information</h1>
+            <p className="mt-0.5 text-sm text-gray-500">
+              Control which session types athletes can see and book. Toggle off to hide a type; add a reason to show it greyed with a message.
+            </p>
+          </div>
+          {bitSaveStatus !== 'idle' && (
+            <div className={[
+              'shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold',
+              bitSaveStatus === 'saving' ? 'bg-blue-50 text-blue-600' :
+              bitSaveStatus === 'saved'  ? 'bg-green-50 text-green-700' :
+              'bg-red-50 text-red-600',
+            ].join(' ')}>
+              {bitSaveStatus === 'saving' ? 'Saving…' : bitSaveStatus === 'saved' ? '✓ Saved' : '⚠ Save failed — check connection'}
+            </div>
+          )}
         </div>
 
         {/* ── Session Types ─────────────────────────────────────────── */}
