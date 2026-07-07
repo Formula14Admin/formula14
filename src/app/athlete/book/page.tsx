@@ -172,9 +172,27 @@ export default function BookPage() {
   // ── Load data ────────────────────────────────────────────────────────────────
 
   useEffect(() => {
-    // Load meta and pricing from localStorage (admin-device only, best-effort)
-    try { const r = localStorage.getItem(BIT_LS_META);    if (r) setBitMeta(JSON.parse(r))   } catch {}
-    try { const r = localStorage.getItem(BIT_LS_PRICING); if (r) setPricing(JSON.parse(r))   } catch {}
+    // Load meta from localStorage (best-effort)
+    try { const r = localStorage.getItem(BIT_LS_META); if (r) setBitMeta(JSON.parse(r)) } catch {}
+    // Load pricing from Supabase (source of truth) with localStorage fallback
+    void supabase.from('session_types').select('session_type_id, tiers, duration_minutes').then(({ data }) => {
+      if (data && data.length > 0) {
+        setPricing(data.map(r => {
+          let tiers: PricingTier[] = []
+          try {
+            const raw = Array.isArray(r.tiers) ? r.tiers : JSON.parse((r.tiers as string) ?? '[]')
+            tiers = (raw as Record<string, unknown>[]).map(t => ({
+              min:             (t.min as number) ?? 1,
+              max:             (t.max as number | null) ?? null,
+              pricePerAthlete: (t.pricePerAthlete as number) ?? 0,
+            }))
+          } catch {}
+          return { sessionType: r.session_type_id as string, tiers, durationMins: r.duration_minutes as number }
+        }))
+      } else {
+        try { const r = localStorage.getItem(BIT_LS_PRICING); if (r) setPricing(JSON.parse(r)) } catch {}
+      }
+    })
     // Load settings from Supabase so admin toggles apply across all devices
     void supabase
       .from('booking_session_settings')
@@ -335,13 +353,18 @@ export default function BookPage() {
     if (!facDay || facDay.disabledTypes.has(typeId)) return []
     if (isFacilityBlockedOnDate(dateStr)) return []
 
-    // Filter past slots when booking today
-    const nowMins = dateKey(date) === dateKey(today)
-      ? new Date().getHours() * 60 + new Date().getMinutes()
-      : 0
+    // Block slots less than 8 hours away (applies across midnight too)
+    const MIN_ADVANCE = 8 * 60
+    const nowTotalMins = new Date().getHours() * 60 + new Date().getMinutes()
+    const daysAhead = Math.round((new Date(dateStr + 'T12:00:00').getTime() - new Date(dateKey(today) + 'T12:00:00').getTime()) / 86400000)
+    const cutoffMins = daysAhead === 0
+      ? nowTotalMins + MIN_ADVANCE          // today: block everything before now+8h
+      : daysAhead === 1
+        ? Math.max(0, nowTotalMins + MIN_ADVANCE - 1440) // tomorrow: only block if now+8h crosses midnight
+        : 0                                  // day after tomorrow+: no restriction
 
     // Snap up to the next on-the-hour / half-hour boundary
-    const rawStart = Math.max(facDay.startMins, nowMins)
+    const rawStart = Math.max(facDay.startMins, cutoffMins)
     const facStart = Math.ceil(rawStart / SLOT_INTERVAL) * SLOT_INTERVAL
     const facEnd   = facDay.endMins
 

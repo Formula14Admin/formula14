@@ -532,7 +532,7 @@ export default function BookingsPage() {
   type PendingAthleteBooking = {
     id: string; date: string; startMins: number; durationMins: number
     sessionType: string; coachId: string | null; space: string | null
-    athleteNames: string[]
+    athleteNames: string[]; athleteIds: string[]
   }
   const [pendingAthleteBookings, setPendingAthleteBookings] = useState<PendingAthleteBooking[]>([])
   const [view,       setView]       = useState<'day' | 'week'>('day')
@@ -733,7 +733,7 @@ export default function BookingsPage() {
   const loadPendingAthleteBookings = useCallback(async () => {
     const { data } = await supabase
       .from('bookings')
-      .select('id, date, start_mins, duration_mins, session_type, coach_id, space, athlete_names, booking_athletes(athletes(first_name, last_name))')
+      .select('id, date, start_mins, duration_mins, session_type, coach_id, space, athlete_names, booking_athletes(athlete_id, athletes(first_name, last_name))')
       .eq('status', 'pending')
       .order('date')
       .order('start_mins')
@@ -741,7 +741,7 @@ export default function BookingsPage() {
       id: string; date: string; start_mins: number; duration_mins: number | null
       session_type: string; coach_id: string | null; space: string | null
       athlete_names: string[] | null
-      booking_athletes: { athletes: { first_name: string; last_name: string } | null }[] | null
+      booking_athletes: { athlete_id: string | null; athletes: { first_name: string; last_name: string } | null }[] | null
     }
     setPendingAthleteBookings(((data ?? []) as unknown as RawPending[]).map(r => {
       const stored = (r.athlete_names ?? []).filter(Boolean)
@@ -752,6 +752,7 @@ export default function BookingsPage() {
         id: r.id, date: r.date, startMins: r.start_mins, durationMins: r.duration_mins ?? 60,
         sessionType: r.session_type, coachId: r.coach_id, space: r.space,
         athleteNames: stored.length > 0 ? stored : joined,
+        athleteIds: (r.booking_athletes ?? []).map(ba => ba.athlete_id).filter(Boolean) as string[],
       }
     }))
   }, [])
@@ -771,9 +772,53 @@ export default function BookingsPage() {
   const COACH_NAMES: Record<string, string> = { matt: 'Matt', jade: 'Jade', sam: 'Sam', s1: 'Matt', s2: 'Jade', s3: 'Sam' }
 
   async function acceptAthleteBooking(id: string) {
+    const booking = pendingAthleteBookings.find(b => b.id === id)
+
+    // Confirm in DB first
     await supabase.from('bookings').update({ status: 'confirmed' }).eq('id', id)
     setPendingAthleteBookings(prev => prev.filter(b => b.id !== id))
-    setBookings(prev => prev.map(b => b.id === id ? { ...b } : b))
+
+    if (!booking || booking.athleteIds.length === 0) {
+      showToast('Booking confirmed.')
+      return
+    }
+
+    // Look up price for this session type
+    const sessionTypeId = CANONICAL_SESSION_TYPES.find(t => t.label === booking.sessionType)?.id ?? null
+    let pricePerAthlete = 0
+    if (sessionTypeId) {
+      const { data: stRow } = await supabase
+        .from('session_types')
+        .select('tiers')
+        .eq('session_type_id', sessionTypeId)
+        .maybeSingle()
+      const tiers = (stRow?.tiers ?? []) as { min: number; max: number | null; pricePerAthlete: number }[]
+      if (tiers.length > 0) pricePerAthlete = tiers[0].pricePerAthlete
+    }
+
+    if (pricePerAthlete === 0) {
+      showToast('Booking confirmed — no price configured, charge athlete manually.')
+      return
+    }
+
+    // Charge each athlete
+    const res = await fetch('/api/stripe/session-payment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        payments: booking.athleteIds.map(athleteId => ({
+          athleteId,
+          amount:      pricePerAthlete,
+          description: `${booking.sessionType} — ${booking.date}`,
+          bookingIds:  [id],
+        })),
+      }),
+    })
+    const d = await res.json() as { summary?: { success: number; failed: number; skipped: number } }
+    const s = d.summary
+    if (s?.success) showToast(`Booking confirmed — $${pricePerAthlete} charged successfully.`)
+    else if (s?.skipped) showToast('Booking confirmed — no card on file. Arrange payment manually.')
+    else showToast('Booking confirmed — payment failed. Check athlete billing.')
   }
 
   async function declineAthleteBooking(id: string) {
