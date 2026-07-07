@@ -4651,31 +4651,8 @@ function BookingInformationTab() {
     return new Set()
   })
 
-  // ── Load from Supabase on mount (source of truth, overrides stale localStorage)
-  const bitInitialised = useRef(false)
+  // ── Persist settings + meta to localStorage and Supabase on every change
   useEffect(() => {
-    void supabase
-      .from('booking_session_settings')
-      .select('settings, meta')
-      .eq('id', 'singleton')
-      .maybeSingle()
-      .then(({ data }) => {
-        if (data?.settings && Object.keys(data.settings as Record<string, unknown>).length > 0) {
-          const loaded = data.settings as Record<string, { enabled: boolean; reason: string }>
-          setSettings({ ...INIT_BIT_SETTINGS, ...loaded })
-          localStorage.setItem(BIT_LS_SETTINGS, JSON.stringify(loaded))
-        }
-        if (data?.meta && Object.keys(data.meta as Record<string, unknown>).length > 0) {
-          setMeta(data.meta as Record<string, BITMeta>)
-          localStorage.setItem(BIT_LS_META, JSON.stringify(data.meta))
-        }
-        bitInitialised.current = true
-      })
-  }, [])
-
-  // ── Persist (skip until Supabase has loaded so we don't clobber it on mount)
-  useEffect(() => {
-    if (!bitInitialised.current) return
     localStorage.setItem(BIT_LS_SETTINGS, JSON.stringify(settings))
     if (Object.keys(meta).length > 0) localStorage.setItem(BIT_LS_META, JSON.stringify(meta))
     void supabase.from('booking_session_settings').upsert({ id: 'singleton', settings, meta, updated_at: new Date().toISOString() })
