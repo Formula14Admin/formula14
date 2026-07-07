@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useMemo } from 'react'
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase } from '@/lib/supabase'
 import { sendEmail } from '@/lib/send-email'
@@ -527,6 +527,14 @@ export default function BookingsPage() {
   const [bookings,   setBookings]   = useState<Booking[]>([])
   const [creditUsage, setCreditUsage] = useState<Record<string, number>>({})
   const [anchor,     setAnchor]     = useState<Date>(() => new Date())
+
+  // Pending bookings created by athletes (status='pending' in Supabase)
+  type PendingAthleteBooking = {
+    id: string; date: string; startMins: number; durationMins: number
+    sessionType: string; coachId: string | null; space: string | null
+    athleteNames: string[]
+  }
+  const [pendingAthleteBookings, setPendingAthleteBookings] = useState<PendingAthleteBooking[]>([])
   const [view,       setView]       = useState<'day' | 'week'>('day')
   const [modal,      setModal]      = useState<Modal>(null)
   const [nowY,       setNowY]       = useState(() => toY(nowMins()))
@@ -720,6 +728,58 @@ export default function BookingsPage() {
     })()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Load + realtime: pending athlete bookings
+  const loadPendingAthleteBookings = useCallback(async () => {
+    const { data } = await supabase
+      .from('bookings')
+      .select('id, date, start_mins, duration_mins, session_type, coach_id, space, athlete_names, booking_athletes(athletes(first_name, last_name))')
+      .eq('status', 'pending')
+      .order('date')
+      .order('start_mins')
+    type RawPending = {
+      id: string; date: string; start_mins: number; duration_mins: number | null
+      session_type: string; coach_id: string | null; space: string | null
+      athlete_names: string[] | null
+      booking_athletes: { athletes: { first_name: string; last_name: string } | null }[] | null
+    }
+    setPendingAthleteBookings(((data ?? []) as unknown as RawPending[]).map(r => {
+      const stored = (r.athlete_names ?? []).filter(Boolean)
+      const joined = (r.booking_athletes ?? [])
+        .map(ba => ba.athletes ? `${ba.athletes.first_name} ${ba.athletes.last_name}`.trim() : '')
+        .filter(Boolean)
+      return {
+        id: r.id, date: r.date, startMins: r.start_mins, durationMins: r.duration_mins ?? 60,
+        sessionType: r.session_type, coachId: r.coach_id, space: r.space,
+        athleteNames: stored.length > 0 ? stored : joined,
+      }
+    }))
+  }, [])
+
+  useEffect(() => { void loadPendingAthleteBookings() }, [loadPendingAthleteBookings])
+
+  useEffect(() => {
+    const ch = supabase
+      .channel('pending-bookings-live')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, () => {
+        void loadPendingAthleteBookings()
+      })
+      .subscribe()
+    return () => { void supabase.removeChannel(ch) }
+  }, [loadPendingAthleteBookings])
+
+  const COACH_NAMES: Record<string, string> = { matt: 'Matt', jade: 'Jade', sam: 'Sam', s1: 'Matt', s2: 'Jade', s3: 'Sam' }
+
+  async function acceptAthleteBooking(id: string) {
+    await supabase.from('bookings').update({ status: 'confirmed' }).eq('id', id)
+    setPendingAthleteBookings(prev => prev.filter(b => b.id !== id))
+    setBookings(prev => prev.map(b => b.id === id ? { ...b } : b))
+  }
+
+  async function declineAthleteBooking(id: string) {
+    await supabase.from('bookings').update({ status: 'cancelled' }).eq('id', id)
+    setPendingAthleteBookings(prev => prev.filter(b => b.id !== id))
+  }
 
   // Athlete names from Supabase for booking dropdowns
   useEffect(() => {
@@ -1186,7 +1246,7 @@ export default function BookingsPage() {
   const pendingEnrolmentCount = bookings.reduce((sum, b) =>
     sum + (b.enrolments?.filter(e => e.status === 'pending-approval').length ?? 0), 0
   )
-  const totalPendingCount = pendingJoinRequestCount + pendingEnrolmentCount
+  const totalPendingCount = pendingJoinRequestCount + pendingEnrolmentCount + pendingAthleteBookings.length
 
   // Sync pending count to localStorage so the Dashboard can display it
   useEffect(() => {
@@ -1631,11 +1691,15 @@ export default function BookingsPage() {
       {pageTab === 'join-requests' && (
         <JoinRequestsTab
           bookings={bookings}
+          pendingAthleteBookings={pendingAthleteBookings}
+          coachNames={COACH_NAMES}
           onAccept={acceptJoinRequest}
           onDecline={declineJoinRequest}
           onApproveEnrolment={approveEnrolment}
           onDeclineEnrolment={declineEnrolment}
           onMarkPaid={markEnrolmentPaid}
+          onAcceptAthleteBooking={acceptAthleteBooking}
+          onDeclineAthleteBooking={declineAthleteBooking}
         />
       )}
 
@@ -5648,21 +5712,27 @@ function ProgramEnrolmentPanel({
 
 // ── Join Requests Tab ───────────────────────────────────────────────────────────
 function JoinRequestsTab({
-  bookings, onAccept, onDecline, onApproveEnrolment, onDeclineEnrolment, onMarkPaid,
+  bookings, pendingAthleteBookings, coachNames, onAccept, onDecline,
+  onApproveEnrolment, onDeclineEnrolment, onMarkPaid,
+  onAcceptAthleteBooking, onDeclineAthleteBooking,
 }: {
   bookings: Booking[]
+  pendingAthleteBookings: { id: string; date: string; startMins: number; durationMins: number; sessionType: string; coachId: string | null; space: string | null; athleteNames: string[] }[]
+  coachNames: Record<string, string>
   onAccept: (bookingId: string, requestId: string, athleteName: string) => void
   onDecline: (bookingId: string, requestId: string) => void
   onApproveEnrolment: (bookingId: string, enrolmentId: string) => void
   onDeclineEnrolment: (bookingId: string, enrolmentId: string) => void
   onMarkPaid: (bookingId: string, enrolmentId: string) => void
+  onAcceptAthleteBooking: (id: string) => void
+  onDeclineAthleteBooking: (id: string) => void
 }) {
   const ACCEPT     = '#6BA3D6'
   const PROG_ACCENT = '#D4A520'
   const DECLINE    = '#ef4444'
   const withPendingJoins = bookings.filter(b => (b.joinRequests ?? []).some(jr => jr.status === 'pending'))
   const withPendingEnrols = bookings.filter(b => (b.enrolments ?? []).some(e => e.status === 'pending-approval'))
-  const allEmpty = withPendingJoins.length === 0 && withPendingEnrols.length === 0
+  const allEmpty = withPendingJoins.length === 0 && withPendingEnrols.length === 0 && pendingAthleteBookings.length === 0
 
   return (
     <div className="flex-1 overflow-y-auto min-h-0 bg-[#f4f6f9]">
@@ -5671,7 +5741,7 @@ function JoinRequestsTab({
           <IconClipboardList size={22} style={{ color: ACCEPT }} />
           <div>
             <h1 className="text-xl font-bold text-gray-900">Join Requests</h1>
-            <p className="text-sm text-gray-500">Pending requests for Small Group Sessions and Program Enrolments</p>
+            <p className="text-sm text-gray-500">Pending booking requests from athletes</p>
           </div>
         </div>
       </div>
@@ -5684,6 +5754,54 @@ function JoinRequestsTab({
           </div>
         ) : (
           <>
+            {/* ── Athlete Booking Requests (from athlete app) ── */}
+            {pendingAthleteBookings.length > 0 && (
+              <div className="space-y-3">
+                <h2 className="text-xs font-bold uppercase tracking-wide text-gray-400">New Booking Requests</h2>
+                {pendingAthleteBookings.map(b => {
+                  const coachName = b.coachId ? (coachNames[b.coachId] ?? b.coachId) : null
+                  const d = new Date(b.date + 'T12:00:00')
+                  const dateLabel = d.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })
+                  return (
+                    <div key={b.id} className="rounded-xl border border-[#6BA3D6]/30 bg-white p-5 shadow-sm">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-bold text-gray-900">{b.sessionType}</p>
+                          <p className="mt-0.5 text-xs text-gray-500">
+                            {dateLabel} · {fmtTime(b.startMins)} – {fmtTime(b.startMins + b.durationMins)}
+                          </p>
+                          {coachName && <p className="text-xs text-gray-400">Coach: {coachName}</p>}
+                          {b.athleteNames.length > 0 && (
+                            <div className="mt-2 flex flex-wrap gap-1.5">
+                              {b.athleteNames.map((n, i) => (
+                                <span key={i} className="rounded-full bg-[#6BA3D6]/10 px-2.5 py-0.5 text-xs font-semibold text-[#4a7fb5]">{n}</span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <button
+                            onClick={() => onDeclineAthleteBooking(b.id)}
+                            className="flex h-8 w-8 items-center justify-center rounded-full border border-red-100 text-red-400 transition hover:bg-red-50"
+                            title="Decline"
+                          >
+                            <IconX size={15} />
+                          </button>
+                          <button
+                            onClick={() => onAcceptAthleteBooking(b.id)}
+                            className="flex h-8 w-8 items-center justify-center rounded-full border border-green-100 text-green-500 transition hover:bg-green-50"
+                            title="Confirm"
+                          >
+                            <IconCheck size={15} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
             {/* ── Small Group Join Requests ── */}
             {withPendingJoins.length > 0 && (
               <div className="space-y-4">
