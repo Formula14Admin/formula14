@@ -178,6 +178,7 @@ export default function BookPage() {
   const [pmStatus,    setPmStatus]    = useState<'idle' | 'loading' | 'has-card' | 'no-card'>('idle')
   const [pmInfo,      setPmInfo]      = useState<{ brand: string; last4: string; expMonth: number; expYear: number } | null>(null)
   const [setupSecret, setSetupSecret] = useState<string | null>(null)
+  const [pmError,     setPmError]     = useState<string | null>(null)
 
   // ── Load data ────────────────────────────────────────────────────────────────
 
@@ -313,11 +314,13 @@ export default function BookPage() {
     setPmStatus('loading')
     setPmInfo(null)
     setSetupSecret(null)
+    setPmError(null)
     void (async () => {
       try {
         const res  = await fetch(`/api/stripe/payment-method?athleteId=${encodeURIComponent(athleteId)}`)
+        if (!res.ok) { setPmStatus('no-card'); setPmError(`Payment check failed (${res.status})`); return }
         const json = await res.json() as { paymentMethod: { brand: string; last4: string; expMonth: number; expYear: number } | null; error?: string }
-        if (json.error) { setPmStatus('no-card'); return }
+        if (json.error) { setPmStatus('no-card'); setPmError(json.error); return }
         if (json.paymentMethod) {
           setPmStatus('has-card')
           setPmInfo(json.paymentMethod)
@@ -328,11 +331,18 @@ export default function BookPage() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ athleteId }),
           })
-          const siJson = await siRes.json() as { clientSecret?: string }
-          if (siJson.clientSecret) setSetupSecret(siJson.clientSecret)
+          if (!siRes.ok) { setPmError(`Card setup failed (${siRes.status})`); return }
+          const siJson = await siRes.json() as { clientSecret?: string; error?: string }
+          if (siJson.error) { setPmError(siJson.error); return }
+          if (siJson.clientSecret) {
+            setSetupSecret(siJson.clientSecret)
+          } else {
+            setPmError('No client secret returned from payment setup')
+          }
         }
-      } catch {
+      } catch (err) {
         setPmStatus('no-card')
+        setPmError(err instanceof Error ? err.message : 'Payment setup error')
       }
     })()
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1087,7 +1097,13 @@ export default function BookPage() {
               <div className="mb-4 rounded-2xl bg-white p-5 shadow-sm">
                 <h3 className="mb-3 text-sm font-bold text-gray-800">Payment</h3>
 
-                {(pmStatus === 'idle' || pmStatus === 'loading') && (
+                {pmError && (
+                  <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
+                    {pmError}
+                  </div>
+                )}
+
+                {!pmError && (pmStatus === 'idle' || pmStatus === 'loading') && (
                   <div className="flex items-center gap-2 text-sm text-gray-400">
                     <IconLoader2 size={15} className="animate-spin" /> Checking payment method…
                   </div>
@@ -1104,7 +1120,7 @@ export default function BookPage() {
                   </div>
                 )}
 
-                {pmStatus === 'no-card' && !setupSecret && (
+                {pmStatus === 'no-card' && !setupSecret && !pmError && (
                   <div className="flex items-center gap-2 text-sm text-gray-400">
                     <IconLoader2 size={15} className="animate-spin" /> Setting up payment…
                   </div>
