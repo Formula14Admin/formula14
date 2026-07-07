@@ -683,6 +683,8 @@ export default function PortalPage() {
   const [enrolStep, setEnrolStep]         = useState<'confirm' | 'payment' | null>(null)
   const [enrolModal, setEnrolModal]       = useState<PortalProgram | null>(null)
   const [enrolName, setEnrolName]         = useState('')
+  const [enrolPaying, setEnrolPaying]     = useState(false)
+  const [enrolPayError, setEnrolPayError] = useState<string | null>(null)
   const [shareModal, setShareModal]       = useState<{ url: string; sessionType: string } | null>(null)
   const [portalPrograms, setPortalPrograms] = useState<PortalProgram[]>(PORTAL_PROGRAMS)
 
@@ -779,7 +781,11 @@ export default function PortalPage() {
   // ── Program handlers ────────────────────────────────────────────────────────
   function openEnrolModal(prog: PortalProgram) {
     setEnrolModal(prog)
-    setEnrolName('')
+    const prefilledName = selectedAthlete
+      ? `${selectedAthlete.firstName} ${selectedAthlete.lastName}`
+      : ''
+    setEnrolName(prefilledName)
+    setEnrolPayError(null)
     setEnrolStep('confirm')
   }
 
@@ -810,20 +816,59 @@ export default function PortalPage() {
     }
   }
 
-  function confirmPayment() {
+  async function confirmPayment() {
     if (!enrolModal) return
     const prog = enrolModal
-    if (prog.enrolled >= prog.capacity) {
-      setWaitlistPrograms(prev => new Set([...prev, prog.id]))
-      setToastMsg(`Added to waitlist for ${prog.name}`)
+    setEnrolPayError(null)
+
+    if (selectedAthleteId) {
+      setEnrolPaying(true)
+      try {
+        const res = await fetch('/api/stripe/session-payment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            payments: [{
+              athleteId:   selectedAthleteId,
+              amount:      prog.termFee,
+              description: `Program enrolment: ${prog.name}`,
+            }],
+          }),
+        })
+        const d = await res.json() as { results?: { status: string; error?: string }[] }
+        const result = d.results?.[0]
+
+        if (result?.status === 'succeeded') {
+          setEnrolledPrograms(prev => new Set([...prev, prog.id]))
+          setEnrolModal(null)
+          setEnrolStep(null)
+          setEnrolName('')
+          setToastMsg(`Payment confirmed! ${enrolName} is enrolled in ${prog.name}`)
+          setTimeout(() => setToastMsg(''), 4000)
+        } else if (result?.status === 'skipped') {
+          setEnrolPayError(result.error ?? 'No saved payment method. The athlete must add a card in their membership settings before they can be charged.')
+        } else {
+          setEnrolPayError(result?.error ?? 'Payment failed. Please try again or contact the athlete.')
+        }
+      } catch {
+        setEnrolPayError('Something went wrong. Please try again.')
+      } finally {
+        setEnrolPaying(false)
+      }
     } else {
-      setEnrolledPrograms(prev => new Set([...prev, prog.id]))
-      setToastMsg(`Payment confirmed! You're enrolled in ${prog.name} 🎉`)
+      // No athlete selected — record enrolment without charging
+      if (prog.enrolled >= prog.capacity) {
+        setWaitlistPrograms(prev => new Set([...prev, prog.id]))
+        setToastMsg(`Added to waitlist for ${prog.name}`)
+      } else {
+        setEnrolledPrograms(prev => new Set([...prev, prog.id]))
+        setToastMsg(`Enrolled in ${prog.name} — arrange payment separately`)
+      }
+      setEnrolModal(null)
+      setEnrolStep(null)
+      setEnrolName('')
+      setTimeout(() => setToastMsg(''), 4000)
     }
-    setEnrolModal(null)
-    setEnrolStep(null)
-    setEnrolName('')
-    setTimeout(() => setToastMsg(''), 4000)
   }
 
   const todayIso = new Date().toISOString().slice(0, 10)
@@ -1224,25 +1269,32 @@ export default function PortalPage() {
                   <span className="text-base font-bold text-gray-900">${enrolModal.termFee.toFixed(2)}</span>
                 </div>
               </div>
-              <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-center">
-                <p className="text-xs font-semibold text-gray-500">🔒 Demo mode — no real payment will be processed</p>
-                <p className="mt-0.5 text-xs text-gray-400">In production this connects to Stripe</p>
-              </div>
-              <p className="text-center text-xs text-gray-400 leading-relaxed">
-                Need help with the term fee?{' '}
-                <a href="mailto:admin@formula14.com.au" className="underline hover:text-gray-600">Contact us at admin@formula14.com.au</a>{' '}
-                to discuss payment options.
-              </p>
+              {enrolPayError ? (
+                <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {enrolPayError}
+                </div>
+              ) : selectedAthleteId ? (
+                <div className="flex items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+                  <span className="text-base">💳</span>
+                  <span>Charging <strong>{enrolName}&apos;s</strong> saved card on file via Stripe</span>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                  No athlete selected — enrolment will be recorded without a payment charge.
+                </div>
+              )}
             </div>
             <div className="flex justify-end gap-2 border-t border-gray-100 px-6 py-4">
-              <button type="button" onClick={() => setEnrolStep('confirm')}
-                className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50">
+              <button type="button" onClick={() => { setEnrolStep('confirm'); setEnrolPayError(null) }}
+                disabled={enrolPaying}
+                className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50 disabled:opacity-40">
                 Back
               </button>
-              <button type="button" onClick={confirmPayment}
-                className="rounded-xl px-5 py-2 text-sm font-bold text-white transition hover:opacity-90"
+              <button type="button" onClick={() => void confirmPayment()} disabled={enrolPaying}
+                className="flex items-center gap-2 rounded-xl px-5 py-2 text-sm font-bold text-white transition hover:opacity-90 disabled:opacity-50"
                 style={{ backgroundColor: '#10b981' }}>
-                Confirm & Pay ${enrolModal.termFee.toFixed(2)}
+                {enrolPaying && <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />}
+                {enrolPaying ? 'Processing…' : `Confirm & Pay $${enrolModal.termFee.toFixed(2)}`}
               </button>
             </div>
           </div>
