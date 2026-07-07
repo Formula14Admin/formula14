@@ -4600,6 +4600,8 @@ function BookingInformationTab() {
   // ── Persist
   useEffect(() => {
     localStorage.setItem(BIT_LS_SETTINGS, JSON.stringify(settings))
+    // Sync to Supabase so athletes on other devices see the correct enabled state
+    void supabase.from('booking_session_settings').upsert({ id: 'singleton', settings, updated_at: new Date().toISOString() })
   }, [settings])
 
   useEffect(() => {

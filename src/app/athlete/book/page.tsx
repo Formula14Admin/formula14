@@ -172,9 +172,23 @@ export default function BookPage() {
   // ── Load data ────────────────────────────────────────────────────────────────
 
   useEffect(() => {
-    try { const r = localStorage.getItem(BIT_LS_SETTINGS); if (r) setBitSettings(JSON.parse(r)) } catch {}
-    try { const r = localStorage.getItem(BIT_LS_META);      if (r) setBitMeta(JSON.parse(r))     } catch {}
-    try { const r = localStorage.getItem(BIT_LS_PRICING);   if (r) setPricing(JSON.parse(r))     } catch {}
+    // Load meta and pricing from localStorage (admin-device only, best-effort)
+    try { const r = localStorage.getItem(BIT_LS_META);    if (r) setBitMeta(JSON.parse(r))   } catch {}
+    try { const r = localStorage.getItem(BIT_LS_PRICING); if (r) setPricing(JSON.parse(r))   } catch {}
+    // Load settings from Supabase so admin toggles apply across all devices
+    void supabase
+      .from('booking_session_settings')
+      .select('settings')
+      .eq('id', 'singleton')
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.settings && Object.keys(data.settings).length > 0) {
+          setBitSettings(data.settings as Record<string, BITSettings>)
+        } else {
+          // Fall back to localStorage if Supabase row not yet seeded
+          try { const r = localStorage.getItem(BIT_LS_SETTINGS); if (r) setBitSettings(JSON.parse(r)) } catch {}
+        }
+      })
   }, [])
 
   useEffect(() => {
