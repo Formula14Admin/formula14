@@ -4590,6 +4590,7 @@ interface BITMeta {
   pricingType?: 'flat' | 'per-athlete'
   minAthletes?: number
   maxAthletes?: number
+  durationTiers?: Array<{ durationMins: number; priceDisplay: string }>
 }
 
 interface BITPricingTier   { min: number; max: number | null; pricePerAthlete: number }
@@ -4633,7 +4634,7 @@ function BookingInformationTab() {
   const [catalogue, setCatalogue] = useState<ProgramCatalogueItem[]>(INIT_CATALOGUE_FALLBACK)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editIsProg, setEditIsProg] = useState(false)
-  const [editDraft, setEditDraft] = useState({ label: '', description: '', durationMins: '', emoji: '', location: '', style: '', priceDisplay: '', notes: '', pricingType: 'flat' as 'flat' | 'per-athlete', minAthletes: '', maxAthletes: '', accentColor: BIT_ACCENT })
+  const [editDraft, setEditDraft] = useState({ label: '', description: '', durationMins: '', emoji: '', location: '', style: '', priceDisplay: '', notes: '', pricingType: 'flat' as 'flat' | 'per-athlete', minAthletes: '', maxAthletes: '', accentColor: BIT_ACCENT, durationTiers: [] as Array<{ durationMins: string; priceDisplay: string }> })
   const [progDraft, setProgDraft] = useState({ name: '', description: '', colourTag: '', priceDisplay: '', notes: '' })
   const [customTypes,    setCustomTypes]    = useState<CustomSessionType[]>(() => {
     try { const r = typeof window !== 'undefined' ? localStorage.getItem(BIT_LS_CUSTOM) : null; if (r) return JSON.parse(r) } catch {} return []
@@ -4720,7 +4721,7 @@ function BookingInformationTab() {
 
   // ── Edit helpers
   function openNewType() {
-    setEditDraft({ label: '', description: '', durationMins: '60', emoji: '', location: '', style: 'Coached', priceDisplay: '', notes: '', pricingType: 'flat', minAthletes: '', maxAthletes: '', accentColor: BIT_ACCENT })
+    setEditDraft({ label: '', description: '', durationMins: '60', emoji: '', location: '', style: 'Coached', priceDisplay: '', notes: '', pricingType: 'flat', minAthletes: '', maxAthletes: '', accentColor: BIT_ACCENT, durationTiers: [] })
     setEditIsProg(false)
     setEditingId('__new__')
   }
@@ -4743,6 +4744,7 @@ function BookingInformationTab() {
       minAthletes:  m.minAthletes  != null ? String(m.minAthletes) : '',
       maxAthletes:  m.maxAthletes  != null ? String(m.maxAthletes) : '',
       accentColor:  ('accentColor' in def) ? (def as { accentColor: string }).accentColor : BIT_ACCENT,
+      durationTiers: (m.durationTiers ?? []).map(t => ({ durationMins: String(t.durationMins), priceDisplay: t.priceDisplay })),
     })
     setEditIsProg(false)
     setEditingId(id)
@@ -4775,11 +4777,12 @@ function BookingInformationTab() {
       setMeta(prev => ({
         ...prev,
         [newId]: {
-          priceDisplay: editDraft.priceDisplay,
-          notes:        editDraft.notes,
-          pricingType:  editDraft.pricingType,
+          priceDisplay:  editDraft.priceDisplay,
+          notes:         editDraft.notes,
+          pricingType:   editDraft.pricingType,
           ...(editDraft.minAthletes !== '' ? { minAthletes: Number(editDraft.minAthletes) } : {}),
           ...(editDraft.maxAthletes !== '' ? { maxAthletes: Number(editDraft.maxAthletes) } : {}),
+          durationTiers: editDraft.durationTiers.map(t => ({ durationMins: Number(t.durationMins) || 60, priceDisplay: t.priceDisplay })),
         },
       }))
       setSettings(prev => ({ ...prev, [newId]: { enabled: true, reason: '' } }))
@@ -4800,11 +4803,12 @@ function BookingInformationTab() {
         ...(editDraft.emoji        ? { emoji: editDraft.emoji }                       : {}),
         ...(editDraft.location     ? { location: editDraft.location }                 : {}),
         ...(editDraft.style        ? { style: editDraft.style }                       : {}),
-        priceDisplay: editDraft.priceDisplay,
-        notes:        editDraft.notes,
-        pricingType:  editDraft.pricingType,
+        priceDisplay:  editDraft.priceDisplay,
+        notes:         editDraft.notes,
+        pricingType:   editDraft.pricingType,
         ...(editDraft.minAthletes !== '' ? { minAthletes: Number(editDraft.minAthletes) } : {}),
         ...(editDraft.maxAthletes !== '' ? { maxAthletes: Number(editDraft.maxAthletes) } : {}),
+        durationTiers: editDraft.durationTiers.map(t => ({ durationMins: Number(t.durationMins) || 60, priceDisplay: t.priceDisplay })),
       },
     }))
     setEditingId(null)
@@ -5143,6 +5147,60 @@ function BookingInformationTab() {
                       />
                     </div>
                   </div>
+                  {/* Duration Tiers — for sessions with variable durations (e.g. Shooting Machine 30/45/60 min) */}
+                  <div>
+                    <div className="mb-1 flex items-center justify-between">
+                      <label className={LBL_CLS} style={{ marginBottom: 0 }}>Duration Tiers</label>
+                      <button
+                        type="button"
+                        onClick={() => setEditDraft(d => ({ ...d, durationTiers: [...d.durationTiers, { durationMins: '60', priceDisplay: '' }] }))}
+                        className="flex items-center gap-1 text-xs font-semibold text-[#6BA3D6] hover:underline"
+                      >
+                        <IconPlus size={11} strokeWidth={2.5} /> Add Tier
+                      </button>
+                    </div>
+                    {editDraft.durationTiers.length === 0 ? (
+                      <p className="text-xs text-gray-400">Optional — add if this session has multiple durations with different prices (e.g. 30 min = $30, 60 min = $50).</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {editDraft.durationTiers.map((tier, i) => (
+                          <div key={i} className="flex items-center gap-2">
+                            <select
+                              value={tier.durationMins}
+                              onChange={e => setEditDraft(d => {
+                                const tiers = [...d.durationTiers]
+                                tiers[i] = { ...tiers[i], durationMins: e.target.value }
+                                return { ...d, durationTiers: tiers }
+                              })}
+                              className="flex-1 rounded-lg border border-gray-200 px-2 py-2 text-sm text-gray-800 outline-none focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/20"
+                            >
+                              {DURATION_OPTIONS_BIT.map(opt => (
+                                <option key={opt.value} value={String(opt.value)}>{opt.label}</option>
+                              ))}
+                            </select>
+                            <input
+                              value={tier.priceDisplay}
+                              onChange={e => setEditDraft(d => {
+                                const tiers = [...d.durationTiers]
+                                tiers[i] = { ...tiers[i], priceDisplay: e.target.value }
+                                return { ...d, durationTiers: tiers }
+                              })}
+                              placeholder="e.g. $30"
+                              className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-[#6BA3D6] focus:ring-1 focus:ring-[#6BA3D6]/20"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setEditDraft(d => ({ ...d, durationTiers: d.durationTiers.filter((_, j) => j !== i) }))}
+                              className="shrink-0 rounded-lg p-1.5 text-gray-400 transition hover:bg-red-50 hover:text-red-500"
+                            >
+                              <IconX size={14} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
                   {/* Pricing structure */}
                   <div>
                     <label className={LBL_CLS}>Pricing Structure</label>
@@ -5179,14 +5237,16 @@ function BookingInformationTab() {
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className={LBL_CLS}>Price Display</label>
-                      <input value={editDraft.priceDisplay}
-                        onChange={e => setEditDraft(d => ({ ...d, priceDisplay: e.target.value }))}
-                        placeholder="e.g. $75, $40/athlete"
-                        className={FIELD_CLS} />
-                    </div>
-                    <div>
+                    {editDraft.durationTiers.length === 0 && (
+                      <div>
+                        <label className={LBL_CLS}>Price Display</label>
+                        <input value={editDraft.priceDisplay}
+                          onChange={e => setEditDraft(d => ({ ...d, priceDisplay: e.target.value }))}
+                          placeholder="e.g. $75, $40/athlete"
+                          className={FIELD_CLS} />
+                      </div>
+                    )}
+                    <div className={editDraft.durationTiers.length > 0 ? 'col-span-2' : ''}>
                       <label className={LBL_CLS}>Notes</label>
                       <input value={editDraft.notes}
                         onChange={e => setEditDraft(d => ({ ...d, notes: e.target.value }))}

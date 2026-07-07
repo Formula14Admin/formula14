@@ -23,12 +23,13 @@ const BIT_LS_PRICING  = 'f14_pricing_configs'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type Step = 'type' | 'date' | 'time' | 'confirm' | 'done'
+type Step = 'type' | 'duration' | 'date' | 'time' | 'confirm' | 'done'
 
 interface BITSettings { enabled: boolean; reason: string }
 interface BITMeta {
   label?: string; description?: string; durationMins?: number
   location?: string; style?: string; priceDisplay?: string
+  durationTiers?: Array<{ durationMins: number; priceDisplay: string }>
 }
 interface PricingTier   { min: number; max: number | null; pricePerAthlete: number }
 interface PricingConfig { sessionType: string; tiers: PricingTier[]; durationMins?: number }
@@ -122,8 +123,9 @@ function StepBadge({ step, current }: { step: number; current: number }) {
   )
 }
 
-const STEP_LABELS = ['Session Type', 'Date', 'Time', 'Confirm']
-const STEP_KEYS: Step[] = ['type', 'date', 'time', 'confirm']
+const STEP_LABELS_BASE = ['Session Type', 'Date', 'Time', 'Confirm']
+// 'duration' is inserted dynamically for types that have durationTiers
+const STEP_KEYS_BASE: Step[] = ['type', 'date', 'time', 'confirm']
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
@@ -147,11 +149,12 @@ export default function BookPage() {
   const [availLoaded,      setAvailLoaded]      = useState(false)
 
   // Flow state
-  const [step,         setStep]         = useState<Step>('type')
-  const [selectedTypeId,  setSelectedTypeId]  = useState<SessionTypeId | null>(null)
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null)
-  const [selectedTime, setSelectedTime] = useState<number | null>(null)
-  const [notes,        setNotes]        = useState('')
+  const [step,            setStep]           = useState<Step>('type')
+  const [selectedTypeId,  setSelectedTypeId] = useState<SessionTypeId | null>(null)
+  const [selectedDuration, setSelectedDuration] = useState<number | null>(null)
+  const [selectedDate,    setSelectedDate]   = useState<Date | null>(null)
+  const [selectedTime,    setSelectedTime]   = useState<number | null>(null)
+  const [notes,           setNotes]          = useState('')
 
   // Calendar state
   const today = useMemo(() => { const d = new Date(); d.setHours(0,0,0,0); return d }, [])
@@ -340,11 +343,24 @@ export default function BookPage() {
 
   function getLabel(id: string):    string  { return bitMeta[id]?.label       ?? CANONICAL_SESSION_TYPES.find(t=>t.id===id)?.label       ?? id }
   function getDesc(id: string):     string  { return bitMeta[id]?.description ?? CANONICAL_SESSION_TYPES.find(t=>t.id===id)?.description ?? '' }
-  function getDuration(id: string): number  { return bitMeta[id]?.durationMins ?? pricing.find(p=>p.sessionType===id)?.durationMins ?? CANONICAL_SESSION_TYPES.find(t=>t.id===id)?.durationMins ?? 60 }
+  function getDuration(id: string): number  {
+    if (selectedDuration) return selectedDuration
+    return bitMeta[id]?.durationMins ?? pricing.find(p=>p.sessionType===id)?.durationMins ?? CANONICAL_SESSION_TYPES.find(t=>t.id===id)?.durationMins ?? 60
+  }
   function getLocation(id: string): string  { return bitMeta[id]?.location     ?? CANONICAL_SESSION_TYPES.find(t=>t.id===id)?.location ?? '' }
   function isSelfServe(id: string): boolean { return CANONICAL_SESSION_TYPES.find(t=>t.id===id)?.selfServe ?? false }
 
   function getPrice(id: string): string | null {
+    const tiers = bitMeta[id]?.durationTiers
+    if (tiers && tiers.length > 0) {
+      if (selectedDuration) {
+        return tiers.find(t => t.durationMins === selectedDuration)?.priceDisplay ?? null
+      }
+      // No duration chosen yet — show price range
+      const prices = tiers.map(t => t.priceDisplay).filter(Boolean)
+      if (prices.length === 0) return null
+      return prices.length === 1 ? prices[0] : `${prices[0]} – ${prices[prices.length - 1]}`
+    }
     return bitMeta[id]?.priceDisplay ?? null
   }
 
@@ -519,10 +535,15 @@ export default function BookPage() {
 
   // ── Navigation ────────────────────────────────────────────────────────────────
 
+  const hasDurationTiers = !!(selectedTypeId && (bitMeta[selectedTypeId]?.durationTiers?.length ?? 0) > 0)
+  const STEP_KEYS:   Step[]  = hasDurationTiers ? ['type', 'duration', 'date', 'time', 'confirm'] : STEP_KEYS_BASE
+  const STEP_LABELS: string[] = hasDurationTiers ? ['Session Type', 'Duration', 'Date', 'Time', 'Confirm'] : STEP_LABELS_BASE
+
   function goBack() {
-    if (step === 'date')    { setStep('type');    setSelectedDate(null) }
-    if (step === 'time')    { setStep('date');    setSelectedTime(null) }
-    if (step === 'confirm') { setStep('time') }
+    if (step === 'duration') { setStep('type');     setSelectedDuration(null) }
+    if (step === 'date')     { hasDurationTiers ? setStep('duration') : setStep('type'); setSelectedDate(null) }
+    if (step === 'time')     { setStep('date');     setSelectedTime(null) }
+    if (step === 'confirm')  { setStep('time') }
   }
 
   const stepIndex = STEP_KEYS.indexOf(step as Step)
@@ -680,7 +701,7 @@ export default function BookPage() {
           </div>
           <div className="flex gap-2">
             <button type="button"
-              onClick={() => { setStep('type'); setSelectedTypeId(null); setSelectedDate(null); setSelectedTime(null); setNotes('') }}
+              onClick={() => { setStep('type'); setSelectedTypeId(null); setSelectedDuration(null); setSelectedDate(null); setSelectedTime(null); setNotes('') }}
               className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-semibold text-gray-600 transition hover:bg-gray-50">
               Book Another
             </button>
@@ -784,7 +805,12 @@ export default function BookPage() {
 
                     return (
                       <button key={t.id} type="button"
-                        onClick={() => { setSelectedTypeId(t.id); setStep('date') }}
+                        onClick={() => {
+                          setSelectedTypeId(t.id)
+                          setSelectedDuration(null)
+                          const tiers = bitMeta[t.id]?.durationTiers
+                          setStep(tiers && tiers.length > 0 ? 'duration' : 'date')
+                        }}
                         className="group flex w-full items-stretch overflow-hidden rounded-2xl bg-white shadow-sm transition hover:shadow-md active:scale-[0.99]"
                         style={{ border: '1.5px solid #e5e7eb' }}>
                         <div className="w-1.5 shrink-0 rounded-l-2xl transition-all group-hover:w-2"
@@ -824,6 +850,32 @@ export default function BookPage() {
                 </div>
               )
             })()}
+          </div>
+        )}
+
+        {/* ── STEP 1b: Duration (only for types with durationTiers) ────────────── */}
+        {step === 'duration' && selectedTypeId && (
+          <div>
+            <p className="mb-5 text-sm text-gray-500">
+              Choose your session duration for <span className="font-semibold text-gray-700">{getLabel(selectedTypeId)}</span>.
+            </p>
+            <div className="space-y-3">
+              {(bitMeta[selectedTypeId]?.durationTiers ?? []).map(tier => (
+                <button
+                  key={tier.durationMins}
+                  type="button"
+                  onClick={() => { setSelectedDuration(tier.durationMins); setStep('date') }}
+                  className="flex w-full items-center justify-between rounded-2xl border-2 bg-white px-5 py-4 text-left shadow-sm transition hover:border-[#6BA3D6] hover:shadow-md"
+                  style={{ borderColor: selectedDuration === tier.durationMins ? '#6BA3D6' : '#e5e7eb' }}
+                >
+                  <div>
+                    <p className="text-sm font-bold text-gray-800">{fmtDuration(tier.durationMins)}</p>
+                    <p className="mt-0.5 text-xs text-gray-400">Click to select this duration</p>
+                  </div>
+                  <span className="text-lg font-bold" style={{ color: '#6BA3D6' }}>{tier.priceDisplay}</span>
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
