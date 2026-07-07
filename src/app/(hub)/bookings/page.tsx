@@ -4594,7 +4594,15 @@ function BookingInformationTab() {
     try { const r = typeof window !== 'undefined' ? localStorage.getItem(BIT_LS_CUSTOM) : null; if (r) return JSON.parse(r) } catch {} return []
   })
   const [deletedTypeIds, setDeletedTypeIds] = useState<Set<string>>(() => {
-    try { const r = typeof window !== 'undefined' ? localStorage.getItem(BIT_LS_DELETED) : null; if (r) return new Set(JSON.parse(r)) } catch {} return new Set()
+    try {
+      const r = typeof window !== 'undefined' ? localStorage.getItem(BIT_LS_DELETED) : null
+      if (r) {
+        const ids = new Set<string>(JSON.parse(r))
+        ids.delete('team-training') // restore accidentally deleted built-in type
+        return ids
+      }
+    } catch {}
+    return new Set()
   })
 
   // ── Persist
@@ -4828,14 +4836,6 @@ function BookingInformationTab() {
         >
           <IconPencil size={12} /> Edit
         </button>
-        {!isProg && (
-          <button
-            onClick={() => deleteType(id)}
-            className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-red-100 bg-white px-3 py-1.5 text-xs font-semibold text-red-400 transition hover:bg-red-50 hover:border-red-200"
-          >
-            <IconTrash size={12} /> Delete
-          </button>
-        )}
       </div>
     )
   }
@@ -5199,15 +5199,29 @@ function BookingInformationTab() {
             </div>
 
             <div className="flex items-center justify-between border-t border-gray-100 px-6 py-4">
-              <button onClick={() => setEditingId(null)}
-                className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50">
-                Cancel
-              </button>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setEditingId(null)}
+                  className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50">
+                  Cancel
+                </button>
+                {!editIsProg && editingId !== '__new__' && (
+                  <button
+                    onClick={() => {
+                      if (window.confirm('Are you sure you want to delete this session type? This cannot be undone.')) {
+                        deleteType(editingId!)
+                        setEditingId(null)
+                      }
+                    }}
+                    className="flex items-center gap-1.5 rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-500 transition hover:bg-red-50">
+                    <IconTrash size={14} /> Delete
+                  </button>
+                )}
+              </div>
               <button
                 onClick={editIsProg ? saveProgEdit : saveSessionEdit}
                 className="rounded-lg px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90"
                 style={{ backgroundColor: BIT_ACCENT }}>
-                Save Changes
+                {editingId === '__new__' ? 'Add Session Type' : 'Save Changes'}
               </button>
             </div>
           </div>
