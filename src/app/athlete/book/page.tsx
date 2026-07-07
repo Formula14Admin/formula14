@@ -137,10 +137,11 @@ export default function BookPage() {
   const [membershipTier,      setMembershipTier]      = useState<string | null>(null)
   const [athleteDisplayName,  setAthleteDisplayName]  = useState<string>('')
 
-  // Booking Information settings (localStorage)
-  const [bitSettings, setBitSettings] = useState<Record<string, BITSettings>>({})
-  const [bitMeta,     setBitMeta]     = useState<Record<string, BITMeta>>({})
-  const [pricing,     setPricing]     = useState<PricingConfig[]>([])
+  // Booking Information settings (Supabase, with localStorage fallback)
+  const [bitSettings,     setBitSettings]     = useState<Record<string, BITSettings>>({})
+  const [bitMeta,         setBitMeta]         = useState<Record<string, BITMeta>>({})
+  const [pricing,         setPricing]         = useState<PricingConfig[]>([])
+  const [settingsLoaded,  setSettingsLoaded]  = useState(false)
 
   // Real availability from Supabase
   const [facilitySchedule, setFacilitySchedule] = useState<FacilityDay[]>([])
@@ -202,21 +203,23 @@ export default function BookPage() {
         try { const r = localStorage.getItem(BIT_LS_PRICING); if (r) setPricing(JSON.parse(r)) } catch {}
       }
     })
-    // Load settings + meta from Supabase so admin toggles and pricing apply across all devices
+    // Load settings + meta from Supabase — must resolve before showing the type list
     void supabase
       .from('booking_session_settings')
       .select('settings, meta')
       .eq('id', 'singleton')
       .maybeSingle()
-      .then(({ data }) => {
-        if (data?.settings && Object.keys(data.settings as Record<string, unknown>).length > 0) {
+      .then(({ data, error }) => {
+        if (!error && data?.settings && Object.keys(data.settings as Record<string, unknown>).length > 0) {
           setBitSettings(data.settings as Record<string, BITSettings>)
         } else {
+          // Supabase unavailable or row missing — fall back to localStorage
           try { const r = localStorage.getItem(BIT_LS_SETTINGS); if (r) setBitSettings(JSON.parse(r)) } catch {}
         }
-        if (data?.meta && Object.keys(data.meta as Record<string, unknown>).length > 0) {
+        if (!error && data?.meta && Object.keys(data.meta as Record<string, unknown>).length > 0) {
           setBitMeta(data.meta as Record<string, BITMeta>)
         }
+        setSettingsLoaded(true)
       })
   }, [])
 
@@ -749,7 +752,7 @@ export default function BookPage() {
           <div>
             <p className="mb-5 text-sm text-gray-500">Choose the type of session you&apos;d like to book.</p>
 
-            {!availLoaded ? (
+            {(!availLoaded || !settingsLoaded) ? (
               <div className="flex items-center justify-center gap-2 py-16 text-sm text-gray-400">
                 <IconLoader2 size={18} className="animate-spin" />
                 Checking availability…
