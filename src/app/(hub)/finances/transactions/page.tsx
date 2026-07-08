@@ -56,7 +56,7 @@ export default function TransactionsPage() {
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#f4f6f9' }}>
-      <div className="sticky top-0 z-20 border-b border-gray-200 bg-white px-6 py-4">
+      <div className="sticky top-0 z-20 border-b border-gray-200 bg-white px-4 py-3 md:px-6 md:py-4">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold text-gray-900">Transactions</h1>

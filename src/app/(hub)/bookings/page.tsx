@@ -4918,7 +4918,7 @@ function BookingInformationTab() {
 
   return (
     <div className="flex flex-1 min-h-0 flex-col overflow-y-auto" style={{ backgroundColor: '#f4f6f9' }}>
-      <div className="mx-auto w-full max-w-[1040px] px-6 py-8">
+      <div className="mx-auto w-full max-w-[1040px] px-4 py-6 md:px-6 md:py-8">
 
         <div className="mb-6 flex items-start justify-between gap-4">
           <div>

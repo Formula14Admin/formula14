@@ -317,20 +317,20 @@ export default function FinancesPage() {
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#f4f6f9' }}>
       {/* Header */}
-      <div className="sticky top-0 z-20 border-b border-gray-200 bg-white px-6 py-4">
-        <div className="flex items-center justify-between">
+      <div className="sticky top-0 z-20 border-b border-gray-200 bg-white px-4 py-3 md:px-6 md:py-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h1 className="text-xl font-bold text-gray-900">Finances</h1>
-            <p className="text-sm text-gray-500">Business financial overview</p>
+            <p className="hidden text-sm text-gray-500 sm:block">Business financial overview</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => void fetchTransactions()}
               disabled={loading}
               className="flex items-center gap-1.5 rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50"
             >
               <IconRefresh size={15} className={loading ? 'animate-spin' : ''} />
-              Refresh
+              <span className="hidden sm:inline">Refresh</span>
             </button>
             {bankConnected && (
               <button
@@ -339,13 +339,13 @@ export default function FinancesPage() {
                 className="flex items-center gap-1.5 rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50"
               >
                 <IconCloudDownload size={15} className={syncing ? 'animate-bounce' : ''} />
-                {syncing ? 'Syncing…' : 'Sync Bank'}
+                <span className="hidden sm:inline">{syncing ? 'Syncing…' : 'Sync Bank'}</span>
               </button>
             )}
             <button onClick={() => setShowSend(true)}
-              className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+              className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-white transition hover:opacity-90 sm:px-4"
               style={{ backgroundColor: ACCENT }}>
-              <IconSend size={15} /> Send Summary
+              <IconSend size={15} /> <span className="hidden sm:inline">Send Summary</span>
             </button>
           </div>
         </div>
@@ -369,7 +369,7 @@ export default function FinancesPage() {
       </div>
 
       {/* Content */}
-      <div className="p-6">
+      <div className="p-4 md:p-6">
         {loading && transactions.length === 0 ? (
           <div className="flex items-center justify-center py-20">
             <div className="h-8 w-8 animate-spin rounded-full border-2 border-gray-200" style={{ borderTopColor: ACCENT }} />

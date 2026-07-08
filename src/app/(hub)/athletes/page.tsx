@@ -1578,8 +1578,8 @@ export default function AthletesPage() {
     <div className="min-h-screen" style={{ backgroundColor: '#f4f6f9' }}>
 
       {/* ── Header ─────────────────────────────────────────────────────────────── */}
-      <div className="sticky top-0 z-20 border-b border-gray-200 bg-white px-6 py-4">
-        <div className="flex items-start justify-between gap-4">
+      <div className="sticky top-0 z-20 border-b border-gray-200 bg-white px-4 py-3 md:px-6 md:py-4">
+        <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h1 className="text-xl font-bold text-gray-900">Athletes</h1>
             {/* Tab bar */}
@@ -1630,7 +1630,7 @@ export default function AthletesPage() {
         </div>
       </div>
 
-      <div className="p-6">
+      <div className="p-4 md:p-6">
 
         {/* ════════════════════════════════ ALL TAB ════════════════════════════ */}
         {activeTab === 'all' && (
@@ -2354,10 +2354,10 @@ export default function AthletesPage() {
                 <IconX size={18} />
               </button>
             </div>
-            <div className="p-6 space-y-6">
+            <div className="p-4 space-y-6 sm:p-6">
               <div>
                 <p className="mb-3 text-xs font-bold uppercase tracking-wider text-gray-400">Personal Details</p>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div><label className={LABEL}>First Name</label>
                     <input type="text" value={form.firstName} onChange={e => patchForm({ firstName: e.target.value })} placeholder="Jordan" className={INPUT} /></div>
                   <div><label className={LABEL}>Last Name</label>
@@ -2387,7 +2387,7 @@ export default function AthletesPage() {
               </div>
               <div>
                 <p className="mb-3 text-xs font-bold uppercase tracking-wider text-gray-400">Basketball Details</p>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
                     <label className={LABEL}>Position</label>
                     <div className="flex gap-1.5 flex-wrap">
@@ -2408,7 +2408,7 @@ export default function AthletesPage() {
               </div>
               <div>
                 <p className="mb-3 text-xs font-bold uppercase tracking-wider text-gray-400">Emergency Contact</p>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div><label className={LABEL}>Name</label>
                     <input type="text" value={form.emergencyName} onChange={e => patchForm({ emergencyName: e.target.value })} placeholder="Jane Williams" className={INPUT} /></div>
                   <div><label className={LABEL}>Phone</label>
@@ -2417,7 +2417,7 @@ export default function AthletesPage() {
                     <input type="text" value={form.emergencyRel} onChange={e => patchForm({ emergencyRel: e.target.value })} placeholder="Mother" className={INPUT} /></div>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div><label className={LABEL}>Initial Goals <span className="normal-case font-normal text-gray-400">(optional)</span></label>
                   <textarea rows={3} value={form.goals} onChange={e => patchForm({ goals: e.target.value })} placeholder="What does this athlete want to achieve?" className={INPUT + ' resize-none'} /></div>
                 <div><label className={LABEL}>Coach Notes <span className="normal-case font-normal text-gray-400">(optional)</span></label>

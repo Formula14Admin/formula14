@@ -283,10 +283,10 @@ export default function DashboardPage() {
   ]
 
   return (
-    <div className="min-h-screen p-8" style={{ backgroundColor: '#f4f6f9' }}>
+    <div className="min-h-screen p-4 md:p-8" style={{ backgroundColor: '#f4f6f9' }}>
 
       {/* ── Header ── */}
-      <div className="mb-6 flex items-start justify-between">
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
           <p className="mt-0.5 text-sm text-gray-500">{dateStr}</p>
@@ -390,7 +390,7 @@ export default function DashboardPage() {
       )}
 
       {/* ── Stat Cards ── */}
-      <div className="mb-6 grid grid-cols-4 gap-5">
+      <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4 md:gap-5">
         <div className="rounded-xl bg-white p-5 shadow-sm">
           <div className="mb-4 flex items-start justify-between">
             <p className="text-sm font-medium text-gray-500">Active Athletes</p>
@@ -449,10 +449,10 @@ export default function DashboardPage() {
       </div>
 
       {/* ── Schedule + Quick Actions ── */}
-      <div className="mb-6 grid grid-cols-5 gap-6">
+      <div className="mb-6 grid grid-cols-1 gap-6 md:grid-cols-5">
 
         {/* Upcoming Bookings */}
-        <div className="col-span-3 rounded-xl bg-white p-6 shadow-sm">
+        <div className="md:col-span-3 rounded-xl bg-white p-6 shadow-sm">
           {/* Header with day nav */}
           <div className="mb-5 flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
@@ -614,7 +614,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Quick Actions */}
-        <div className="col-span-2 rounded-xl bg-white p-6 shadow-sm">
+        <div className="md:col-span-2 rounded-xl bg-white p-6 shadow-sm">
           <h2 className="mb-5 text-base font-semibold text-gray-900">Quick Actions</h2>
           <div className="grid grid-cols-2 gap-3">
             {QUICK_ACTIONS.map(({ label, icon: Icon, onClick, badge, disabled }) => (
@@ -649,7 +649,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ── Athlete Engagement + Mood Check-ins ── */}
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
 
         {/* Athlete Engagement */}
         <div className="rounded-xl bg-white p-6 shadow-sm">

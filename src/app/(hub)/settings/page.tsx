@@ -291,7 +291,7 @@ function AddRecipientForm({ onAdd, onCancel }: { onAdd: (r: Recipient) => void; 
   return (
     <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4">
       <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">New Recipient</p>
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div>
           <label className={LABEL}>Name</label>
           <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Sarah" className={INPUT} />
@@ -1285,11 +1285,11 @@ export default function SettingsPage() {
     <div className="min-h-screen" style={{ backgroundColor: '#f4f6f9' }}>
 
       {/* Header */}
-      <div className="sticky top-0 z-20 border-b border-gray-200 bg-white px-6 py-4">
+      <div className="sticky top-0 z-20 border-b border-gray-200 bg-white px-4 py-3 md:px-6 md:py-4">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold text-gray-900">Settings</h1>
-            <p className="text-sm text-gray-500">Manage operational preferences and configurations</p>
+            <p className="hidden text-sm text-gray-500 sm:block">Manage operational preferences and configurations</p>
           </div>
           {activeTab === 'visibility'    && <SaveIndicator state={saveState} />}
           {activeTab === 'notifications' && <SaveIndicator state={notifSaveState} />}
@@ -1316,7 +1316,7 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      <div className="p-6 space-y-6">
+      <div className="p-4 space-y-6 md:p-6">
 
         {/* ── App Settings ─────────────────────────────────────────────────── */}
         {activeTab === 'app' && (

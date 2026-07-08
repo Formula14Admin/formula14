@@ -85,7 +85,7 @@ export function OverviewTab({ transactions }: { transactions: Transaction[] }) {
     <div className="space-y-6">
 
       {/* KPI cards */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <StatCard icon={<IconTrendingUp size={16}/>}      label="Revenue (Jun)"         value={fmtMoney(junIncome)}   sub={`${fmtMoney(mayIncome)} in May`} />
         <StatCard icon={<IconTrendingDown size={16}/>}    label="Expenses (Jun)"        value={fmtMoney(junExpenses)} sub={`${fmtMoney(mayExpenses)} in May`} color="#ef4444" negative />
         <StatCard icon={<IconChartPie size={16}/>}        label="Net Profit (Jun)"      value={fmtMoney(junNet)}      sub="Partial month" color="#10b981" />

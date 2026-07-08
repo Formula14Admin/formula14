@@ -707,7 +707,7 @@ export default function TodoPage() {
       <div className="flex flex-1 flex-col overflow-hidden">
 
         {/* Header */}
-        <div className="shrink-0 px-6 pb-3 pt-6">
+        <div className="shrink-0 px-4 pb-3 pt-4 md:px-6 md:pt-6">
           <div className="flex items-end justify-between">
             <div>
               <h1 className="text-2xl font-bold text-gray-900" style={{ color: listColor }}>

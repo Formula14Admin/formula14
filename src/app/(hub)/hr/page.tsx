@@ -21,7 +21,7 @@ export default function HRPage() {
 
   return (
     <div className="flex h-screen flex-col overflow-hidden" style={{ backgroundColor: '#f4f6f9' }}>
-      <div className="shrink-0 border-b border-gray-200 bg-white px-6 py-4">
+      <div className="shrink-0 border-b border-gray-200 bg-white px-4 py-3 md:px-6 md:py-4">
         <h1 className="text-xl font-bold text-gray-900">People</h1>
         <p className="text-sm text-gray-500">Staff directory and profiles</p>
       </div>

@@ -376,7 +376,7 @@ export default function SponsorshipsPage() {
   }
 
   return (
-    <div className="min-h-screen p-8" style={{ backgroundColor: '#f4f6f9' }}>
+    <div className="min-h-screen p-4 md:p-8" style={{ backgroundColor: '#f4f6f9' }}>
 
       {/* Header */}
       <div className="mb-6 flex items-center justify-between">

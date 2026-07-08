@@ -862,8 +862,8 @@ export default function BoardsPage() {
         </div>
       </div>
 
-      <div className="space-y-5 p-6">
-        <div className="grid grid-cols-3 gap-4">
+      <div className="space-y-5 p-4 md:p-6">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           {[
             { label: 'Boards',       value: boards.length },
             { label: 'Total Cards',  value: totalCards },

@@ -234,7 +234,7 @@ export default function GoalsPage() {
     <div className="min-h-screen" style={{ backgroundColor: '#f4f6f9' }}>
 
       {/* Header */}
-      <div className="sticky top-0 z-20 border-b border-gray-200 bg-white px-6 py-4 shadow-sm">
+      <div className="sticky top-0 z-20 border-b border-gray-200 bg-white px-4 py-3 shadow-sm md:px-6 md:py-4">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <span className="flex h-9 w-9 items-center justify-center rounded-xl" style={{ backgroundColor: ACCENT + '18' }}>

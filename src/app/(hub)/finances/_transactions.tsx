@@ -294,7 +294,7 @@ function AddModal({ onClose, onAdd }: { onClose: () => void; onAdd: (t: Transact
             <ReceiptUpload value={receipt} onChange={setReceipt} />
           )}
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className={LABEL}>Date</label>
               <DatePicker value={date} onChange={setDate} />
@@ -311,7 +311,7 @@ function AddModal({ onClose, onAdd }: { onClose: () => void; onAdd: (t: Transact
 
           {/* GST — expense only */}
           {type === 'expense' && (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <label className={LABEL}>GST Amount <span className="normal-case font-normal text-gray-400">(auto)</span></label>
                 <input
@@ -514,7 +514,7 @@ export function TransactionsTab({
       </div>
 
       {/* Table */}
-      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+      <div className="overflow-x-auto rounded-2xl border border-gray-200 bg-white shadow-sm">
         {filtered.length === 0 ? (
           <div className="py-14 text-center text-sm text-gray-400">
             {transactions.length === 0
