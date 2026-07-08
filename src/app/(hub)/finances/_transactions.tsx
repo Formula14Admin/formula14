@@ -556,6 +556,12 @@ export function TransactionsTab({
                               <IconPaperclip size={12} />
                             </button>
                           )}
+                          {(t.source === 'basiq' || t.source === 'bank') && (
+                            <span className="rounded-full bg-violet-50 px-1.5 py-0.5 text-[9px] font-bold text-violet-600">Bank Import</span>
+                          )}
+                          {t.source === 'stripe' && (
+                            <span className="rounded-full bg-blue-50 px-1.5 py-0.5 text-[9px] font-bold text-blue-600">Stripe</span>
+                          )}
                           {t.isReimbursable && (
                             <span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold text-amber-700">Reimb.</span>
                           )}

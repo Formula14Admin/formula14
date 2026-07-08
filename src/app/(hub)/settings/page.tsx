@@ -851,13 +851,12 @@ interface BankConn {
 const BASIQ_ROW_ID = '00000000-0000-0000-0000-000000000001'
 
 function BankConnectionPanel() {
-  const [conn,      setConn]      = useState<BankConn | null>(null)
-  const [loading,   setLoading]   = useState(true)
-  const [connecting,setConnecting]= useState(false)
-  const [syncing,   setSyncing]   = useState(false)
-  const [syncResult,setSyncResult]= useState<string | null>(null)
-  const [apiKey,    setApiKey]    = useState('')
-  const [showKey,   setShowKey]   = useState(false)
+  const [conn,       setConn]       = useState<BankConn | null>(null)
+  const [loading,    setLoading]    = useState(true)
+  const [connecting, setConnecting] = useState(false)
+  const [syncing,    setSyncing]    = useState(false)
+  const [syncResult, setSyncResult] = useState<string | null>(null)
+  const [balance,    setBalance]    = useState<string | null>(null)
 
   async function fetchConn() {
     setLoading(true)
@@ -870,19 +869,33 @@ function BankConnectionPanel() {
     setLoading(false)
   }
 
+  async function fetchBalance() {
+    try {
+      const res = await fetch('/api/basiq/accounts')
+      if (!res.ok) return
+      const json = await res.json() as { accounts?: { balance: string; availableFunds: string }[] }
+      const bal = json.accounts?.[0]?.balance
+      if (bal) setBalance(bal)
+    } catch { /* silent */ }
+  }
+
   useEffect(() => {
     void fetchConn()
-    // Re-fetch after returning from Basiq OAuth (URL param)
     const params = new URLSearchParams(window.location.search)
     if (params.get('bankConnected') === '1') {
-      setSyncResult('Bank account connected! Syncing now…')
+      setSyncResult('Bank account connected! Syncing transactions…')
       void handleSync()
     }
     if (params.get('bankError') === '1') {
-      setSyncResult('Bank connection failed. Please try again.')
+      setSyncResult('Bank connection failed — please try again.')
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Fetch live balance once we know we're connected
+  useEffect(() => {
+    if (conn?.status === 'connected') void fetchBalance()
+  }, [conn?.status])
 
   async function handleConnect() {
     setConnecting(true)
@@ -902,10 +915,11 @@ function BankConnectionPanel() {
     setSyncResult(null)
     try {
       const res = await fetch('/api/basiq/sync', { method: 'POST' })
-      const json = await res.json() as { imported?: number; error?: string }
+      const json = await res.json() as { imported?: number; total?: number; error?: string }
       if (!res.ok) throw new Error(json.error ?? 'Sync failed')
-      setSyncResult(`Sync complete — ${json.imported} new transaction${json.imported !== 1 ? 's' : ''} imported`)
+      setSyncResult(`Sync complete — ${json.imported} new transaction${json.imported !== 1 ? 's' : ''} imported (${json.total} fetched from bank)`)
       await fetchConn()
+      await fetchBalance()
     } catch (e) {
       setSyncResult(e instanceof Error ? e.message : 'Sync error')
     } finally {
@@ -914,7 +928,7 @@ function BankConnectionPanel() {
   }
 
   async function handleDisconnect() {
-    if (!window.confirm('Disconnect your bank account? Imported transactions will remain.')) return
+    if (!window.confirm('Disconnect your bank account? Already-imported transactions will remain in the ledger.')) return
     await supabase
       .from('bank_connections')
       .update({
@@ -923,8 +937,9 @@ function BankConnectionPanel() {
         last_synced_at: null, last_sync_cursor: null, updated_at: new Date().toISOString(),
       })
       .eq('id', BASIQ_ROW_ID)
-    await fetchConn()
+    setBalance(null)
     setSyncResult(null)
+    await fetchConn()
   }
 
   const isConnected = conn?.status === 'connected'
@@ -932,7 +947,8 @@ function BankConnectionPanel() {
 
   return (
     <div className="space-y-4">
-      {/* Status card */}
+
+      {/* Bank connection card */}
       <div className="overflow-hidden rounded-xl bg-white shadow-sm">
         <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
           <div className="flex items-center gap-3">
@@ -941,7 +957,7 @@ function BankConnectionPanel() {
             </span>
             <div>
               <p className="font-bold text-gray-900">Bank Account</p>
-              <p className="text-xs text-gray-400">Automatically import transactions via Basiq open banking</p>
+              <p className="text-xs text-gray-400">Auto-import transactions via Basiq open banking</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -966,12 +982,23 @@ function BankConnectionPanel() {
             {!isConnected && !isPending && (
               <button
                 onClick={() => void handleConnect()}
-                disabled={connecting || !process.env.NEXT_PUBLIC_BASIQ_ENABLED}
-                className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                disabled={connecting}
+                className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
                 style={{ backgroundColor: ACCENT }}
               >
                 <IconLink size={14} />
-                {connecting ? 'Opening…' : 'Connect Bank'}
+                {connecting ? 'Opening Basiq…' : 'Connect Bank Account'}
+              </button>
+            )}
+            {isPending && (
+              <button
+                onClick={() => void handleConnect()}
+                disabled={connecting}
+                className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                style={{ backgroundColor: ACCENT }}
+              >
+                <IconRefresh size={14} className="animate-spin" />
+                Reconnect
               </button>
             )}
           </div>
@@ -983,63 +1010,73 @@ function BankConnectionPanel() {
               <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-200" style={{ borderTopColor: ACCENT }} />
             </div>
           ) : isConnected ? (
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Bank</p>
-                <p className="text-sm font-semibold text-gray-800">{conn?.bank_name ?? '—'}</p>
+                <p className="mt-0.5 text-sm font-semibold text-gray-800">{conn?.bank_name ?? '—'}</p>
               </div>
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Account</p>
-                <p className="text-sm font-semibold text-gray-800">{conn?.account_name ?? '—'}</p>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Account Name</p>
+                <p className="mt-0.5 text-sm font-semibold text-gray-800">{conn?.account_name ?? '—'}</p>
               </div>
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">BSB / Number</p>
-                <p className="text-sm font-mono text-gray-800">{conn?.account_bsb ?? '—'} / {conn?.account_number ?? '—'}</p>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">BSB</p>
+                <p className="mt-0.5 font-mono text-sm text-gray-800">{conn?.account_bsb ?? '—'}</p>
               </div>
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Last Synced</p>
-                <p className="text-sm text-gray-800">
-                  {conn?.last_synced_at
-                    ? new Date(conn.last_synced_at).toLocaleString('en-AU', { dateStyle: 'short', timeStyle: 'short' })
-                    : 'Never'}
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Account Number</p>
+                <p className="mt-0.5 font-mono text-sm text-gray-800">{conn?.account_number ?? '—'}</p>
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Current Balance</p>
+                <p className="mt-0.5 text-sm font-bold" style={{ color: ACCENT }}>
+                  {balance != null
+                    ? `$${parseFloat(balance).toLocaleString('en-AU', { minimumFractionDigits: 2 })}`
+                    : '—'}
                 </p>
               </div>
             </div>
           ) : isPending ? (
-            <div className="flex items-center gap-2 text-sm text-amber-600">
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-amber-200 border-t-amber-600" />
-              Waiting for bank connection to complete…
+            <div className="flex items-center gap-3 rounded-xl bg-amber-50 px-4 py-3">
+              <div className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-amber-200 border-t-amber-600" />
+              <div>
+                <p className="text-sm font-semibold text-amber-800">Waiting for bank connection…</p>
+                <p className="text-xs text-amber-600">Complete the Basiq consent flow in the browser window, then return here.</p>
+              </div>
             </div>
           ) : conn?.status === 'error' ? (
-            <div className="flex items-center gap-2 text-sm text-red-600">
-              <IconAlertTriangle size={14} />
-              {conn.error_message ?? 'Connection error — please try reconnecting'}
+            <div className="flex items-center gap-3 rounded-xl bg-red-50 px-4 py-3">
+              <IconAlertTriangle size={16} className="shrink-0 text-red-500" />
+              <div>
+                <p className="text-sm font-semibold text-red-800">Connection error</p>
+                <p className="text-xs text-red-600">{conn.error_message ?? 'Unknown error — please try reconnecting'}</p>
+              </div>
             </div>
           ) : (
-            <p className="text-sm text-gray-400">No bank account connected. Click "Connect Bank" to link your account via Basiq secure open banking.</p>
+            <div className="rounded-xl border border-dashed border-gray-200 px-5 py-6 text-center">
+              <IconBuildingBank size={28} className="mx-auto mb-2 text-gray-300" />
+              <p className="text-sm font-semibold text-gray-600">No bank account connected</p>
+              <p className="mt-1 text-xs text-gray-400">Click "Connect Bank Account" above to link your CommBank account via Basiq open banking. Transactions will import automatically.</p>
+            </div>
           )}
         </div>
 
-        {syncResult && (
+        {isConnected && (
           <div className="border-t border-gray-100 px-5 py-3">
-            <p className="text-xs text-gray-500">{syncResult}</p>
+            <p className="text-[11px] text-gray-400">
+              Last synced: {conn?.last_synced_at
+                ? new Date(conn.last_synced_at).toLocaleString('en-AU', { dateStyle: 'short', timeStyle: 'short' })
+                : 'Never'} · Auto-syncs daily at midnight AEST
+            </p>
+          </div>
+        )}
+
+        {syncResult && (
+          <div className="border-t border-gray-100 bg-gray-50 px-5 py-3">
+            <p className="text-xs font-medium text-gray-600">{syncResult}</p>
           </div>
         )}
       </div>
-
-      {/* Setup instructions — shown when not connected */}
-      {!isConnected && (
-        <div className="rounded-xl border border-blue-100 bg-blue-50 p-5">
-          <h3 className="mb-2 text-sm font-bold text-blue-900">How to connect your bank account</h3>
-          <ol className="space-y-1.5 text-sm text-blue-800">
-            <li><span className="font-semibold">1.</span> Sign up for a free account at <span className="font-mono text-blue-700">basiq.io</span></li>
-            <li><span className="font-semibold">2.</span> Create an application to get an API key</li>
-            <li><span className="font-semibold">3.</span> Add <span className="font-mono text-blue-700">BASIQ_API_KEY</span> to your Vercel environment variables</li>
-            <li><span className="font-semibold">4.</span> Add <span className="font-mono text-blue-700">NEXT_PUBLIC_BASIQ_ENABLED=true</span> to Vercel environment variables</li>
-            <li><span className="font-semibold">5.</span> Redeploy, then click "Connect Bank" above</li>
-          </ol>
-        </div>
-      )}
 
       {/* Other integrations */}
       <div className="overflow-hidden rounded-xl bg-white shadow-sm">
@@ -1048,8 +1085,9 @@ function BankConnectionPanel() {
         </div>
         <div className="divide-y divide-gray-100">
           {[
-            { name: 'Stripe', desc: 'Payment processing for memberships', status: 'Connected' },
-            { name: 'Resend', desc: 'Transactional email delivery',       status: 'Connected' },
+            { name: 'Stripe',  desc: 'Payment processing for memberships', status: 'Connected' },
+            { name: 'Resend',  desc: 'Transactional email delivery',       status: 'Connected' },
+            { name: 'Basiq',   desc: 'Bank feed via open banking',         status: 'Configured' },
           ].map(i => (
             <div key={i.name} className="flex items-center justify-between px-5 py-3.5">
               <div>

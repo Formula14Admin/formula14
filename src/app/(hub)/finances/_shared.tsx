@@ -24,6 +24,7 @@ export interface Transaction {
   amount: number
   reference: string
   notes: string
+  source?: string        // 'manual' | 'stripe' | 'basiq'
   // Expense-only extras
   receiptUrl?:     string
   gstAmount?:      number
@@ -135,6 +136,7 @@ export function rowToTransaction(row: any): Transaction {
     amount:         parseFloat(row.amount ?? 0),
     reference:      row.reference ?? '',
     notes:          row.notes ?? '',
+    source:         row.source ?? 'manual',
     receiptUrl:     row.receipt_url ?? undefined,
     gstAmount:      row.gst_amount != null ? parseFloat(row.gst_amount) : undefined,
     paymentMethod:  row.payment_method ?? undefined,
