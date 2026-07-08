@@ -1,15 +1,21 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Transaction, PersonalTx, loadTransactions, loadPersonalTxns } from '../_shared'
+import { Transaction, PersonalTx, rowToTransaction, loadPersonalTxns } from '../_shared'
 import { AskClaudeTab } from '../_claude'
+import { supabase } from '@/lib/supabase'
 
 export default function AskClaudePage() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [personalTxns, setPersonalTxns] = useState<PersonalTx[]>([])
 
   useEffect(() => {
-    setTransactions(loadTransactions([]))
+    supabase
+      .from('finance_transactions')
+      .select('*')
+      .order('date', { ascending: false })
+      .then(({ data }) => { if (data) setTransactions(data.map(rowToTransaction)) })
+
     setPersonalTxns(loadPersonalTxns([]))
   }, [])
 

@@ -72,7 +72,7 @@ async function onPaymentSucceeded(invoice: Stripe.Invoice) {
     membership_status:   'active',
   }).eq('id', athlete.id)
 
-  // Add to finance transactions
+  // Add to athlete billing log
   await supabase.from('transactions').insert({
     athlete_id:     athlete.id,
     amount,
@@ -82,6 +82,18 @@ async function onPaymentSucceeded(invoice: Stripe.Invoice) {
     payment_method: 'stripe',
     reference:      invoice.id,
     payment_status: 'paid',
+  })
+
+  // Mirror into finance_transactions for the bookkeeping module
+  await supabase.from('finance_transactions').insert({
+    date:           todayStr(),
+    description:    `Membership — ${athlete.first_name} ${athlete.last_name}`,
+    type:           'income',
+    category:       'membership',
+    amount,
+    reference:      invoice.id,
+    payment_method: 'stripe',
+    source:         'stripe',
   })
 
   // Update next charge date (+7 days from now)

@@ -190,7 +190,7 @@ function ReceiptUpload({
 
 // ─── Add Transaction Modal ─────────────────────────────────────────────────────
 
-function AddModal({ onClose, onAdd }: { onClose: () => void; onAdd: (t: Transaction) => void }) {
+function AddModal({ onClose, onAdd }: { onClose: () => void; onAdd: (t: Transaction) => Promise<void> }) {
   const [type,          setType]          = useState<TxType>('income')
   const [date,          setDate]          = useState(new Date().toISOString().slice(0, 10))
   const [desc,          setDesc]          = useState('')
@@ -238,7 +238,7 @@ function AddModal({ onClose, onAdd }: { onClose: () => void; onAdd: (t: Transact
       }
     }
 
-    onAdd({
+    await onAdd({
       id:             uid(),
       date,
       description:    desc.trim(),
@@ -393,22 +393,31 @@ function AddModal({ onClose, onAdd }: { onClose: () => void; onAdd: (t: Transact
 
 // ─── Transactions Tab ──────────────────────────────────────────────────────────
 
-const PERIOD_OPTIONS = [
-  { value: '2026-06', label: 'Jun 2026' },
-  { value: '2026-05', label: 'May 2026' },
-  { value: 'all',     label: 'All time' },
-]
+function buildPeriodOptions() {
+  const opts: { value: string; label: string }[] = [{ value: 'all', label: 'All time' }]
+  const now = new Date()
+  for (let i = 0; i < 6; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+    const ym = d.toLocaleDateString('en-CA').slice(0, 7)
+    const label = d.toLocaleDateString('en-AU', { month: 'short', year: 'numeric' })
+    opts.splice(opts.length - 1, 0, { value: ym, label })
+  }
+  return opts
+}
+
+const PERIOD_OPTIONS = buildPeriodOptions()
+const DEFAULT_PERIOD = PERIOD_OPTIONS[0]?.value ?? 'all'
 
 export function TransactionsTab({
   transactions, onAdd, onDelete, showAddModalProp = false, onAddModalClose,
 }: {
   transactions: Transaction[]
-  onAdd: (t: Transaction) => void
-  onDelete: (id: string) => void
+  onAdd: (t: Transaction) => Promise<void>
+  onDelete: (id: string) => Promise<void>
   showAddModalProp?: boolean
   onAddModalClose?: () => void
 }) {
-  const [period,     setPeriod]     = useState('2026-06')
+  const [period,     setPeriod]     = useState(DEFAULT_PERIOD)
   const [typeFilter, setTypeFilter] = useState<'all' | TxType>('all')
   const [search,     setSearch]     = useState('')
   const [showModal,  setShowModal]  = useState(false)
@@ -438,10 +447,15 @@ export function TransactionsTab({
   const expenses = periodTxns.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0)
   const net      = income - expenses
 
-  const chartData = useMemo(() => [
-    { label: 'May', ym: '2026-05', income: monthTotal(transactions, '2026-05', 'income'), expenses: monthTotal(transactions, '2026-05', 'expense') },
-    { label: 'Jun', ym: '2026-06', income: monthTotal(transactions, '2026-06', 'income'), expenses: monthTotal(transactions, '2026-06', 'expense') },
-  ], [transactions])
+  const chartData = useMemo(() => {
+    const now = new Date()
+    return Array.from({ length: 3 }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - (2 - i), 1)
+      const ym = d.toLocaleDateString('en-CA').slice(0, 7)
+      const label = d.toLocaleDateString('en-AU', { month: 'short' })
+      return { label, ym, income: monthTotal(transactions, ym, 'income'), expenses: monthTotal(transactions, ym, 'expense') }
+    })
+  }, [transactions])
 
   return (
     <div className="space-y-5">
@@ -589,7 +603,7 @@ export function TransactionsTab({
         )}
       </div>
 
-      {isModalOpen && <AddModal onClose={closeModal} onAdd={t => { onAdd(t); closeModal() }} />}
+      {isModalOpen && <AddModal onClose={closeModal} onAdd={onAdd} />}
       {previewUrl  && <ReceiptPreviewModal url={previewUrl} onClose={() => setPreviewUrl(null)} />}
     </div>
   )

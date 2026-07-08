@@ -1,14 +1,19 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Transaction, loadTransactions } from '../_shared'
+import { Transaction, rowToTransaction } from '../_shared'
 import { ReportsTab } from '../_reports'
+import { supabase } from '@/lib/supabase'
 
 export default function ReportsPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
 
   useEffect(() => {
-    setTransactions(loadTransactions([]))
+    supabase
+      .from('finance_transactions')
+      .select('*')
+      .order('date', { ascending: false })
+      .then(({ data }) => { if (data) setTransactions(data.map(rowToTransaction)) })
   }, [])
 
   return (

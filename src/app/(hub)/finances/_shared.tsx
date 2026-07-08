@@ -105,24 +105,10 @@ export function monthTotal(txns: Transaction[], ym: string, type: TxType) {
   return txns.filter(t => t.date.startsWith(ym) && t.type === type).reduce((s, t) => s + t.amount, 0)
 }
 
-// ─── localStorage ──────────────────────────────────────────────────────────────
+// ─── localStorage (personal finances + goals only) ────────────────────────────
 
-const TX_KEY      = 'f14_bk_transactions'
 const PTX_KEY     = 'f14_personal_txns'
 const GOAL_KEY    = 'f14_savings_goals'
-const FIN_FLUSH   = 'f14_fin_flushed_v2'
-
-export function loadTransactions(defaults: Transaction[]): Transaction[] {
-  if (typeof window === 'undefined') return defaults
-  if (!localStorage.getItem(FIN_FLUSH)) {
-    localStorage.removeItem(TX_KEY)
-    localStorage.removeItem(PTX_KEY)
-    localStorage.removeItem(GOAL_KEY)
-    localStorage.setItem(FIN_FLUSH, '1')
-  }
-  try { const s = localStorage.getItem(TX_KEY); return s ? JSON.parse(s) : defaults } catch { return defaults }
-}
-export function saveTransactions(txns: Transaction[]) { localStorage.setItem(TX_KEY, JSON.stringify(txns)) }
 
 export function loadPersonalTxns(defaults: PersonalTx[]): PersonalTx[] {
   if (typeof window === 'undefined') return defaults
@@ -135,6 +121,26 @@ export function loadGoals(defaults: SavingsGoal[]): SavingsGoal[] {
   try { const s = localStorage.getItem(GOAL_KEY); return s ? JSON.parse(s) : defaults } catch { return defaults }
 }
 export function saveGoals(goals: SavingsGoal[]) { localStorage.setItem(GOAL_KEY, JSON.stringify(goals)) }
+
+// ─── Supabase row → Transaction ────────────────────────────────────────────────
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function rowToTransaction(row: any): Transaction {
+  return {
+    id:             row.id,
+    date:           typeof row.date === 'string' ? row.date.slice(0, 10) : new Date(row.created_at).toISOString().slice(0, 10),
+    description:    row.description ?? '',
+    type:           row.type === 'expense' ? 'expense' : 'income',
+    category:       (row.category ?? 'other-income') as TxCategory,
+    amount:         parseFloat(row.amount ?? 0),
+    reference:      row.reference ?? '',
+    notes:          row.notes ?? '',
+    receiptUrl:     row.receipt_url ?? undefined,
+    gstAmount:      row.gst_amount != null ? parseFloat(row.gst_amount) : undefined,
+    paymentMethod:  row.payment_method ?? undefined,
+    isReimbursable: row.is_reimbursable ?? false,
+  }
+}
 
 // ─── Personal finance category lists ──────────────────────────────────────────
 

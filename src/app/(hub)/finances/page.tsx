@@ -1,15 +1,17 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { IconSend, IconMail, IconX, IconCheck } from '@tabler/icons-react'
+import { IconSend, IconMail, IconX, IconCheck, IconRefresh, IconLayoutDashboard, IconList } from '@tabler/icons-react'
 import {
   Transaction,
-  loadTransactions, saveTransactions,
+  rowToTransaction,
   ACCENT, INPUT, LABEL,
 } from './_shared'
 import { OverviewTab } from './_overview'
+import { TransactionsTab } from './_transactions'
 import { loadRecipients, type Recipient } from '@/lib/finances-recipients'
 import { sendEmail } from '@/lib/send-email'
+import { supabase } from '@/lib/supabase'
 
 // ─── Send Summary Modal ────────────────────────────────────────────────────────
 
@@ -33,9 +35,19 @@ const INCLUDE_OPTS = [
   { id: 'pnl',          label: 'Monthly P&L table'          },
 ]
 
+function currentMonthLabel() {
+  return new Date().toLocaleDateString('en-AU', { month: 'long', year: 'numeric' })
+}
+
+function lastMonthLabel() {
+  const d = new Date()
+  d.setMonth(d.getMonth() - 1)
+  return d.toLocaleDateString('en-AU', { month: 'long', year: 'numeric' })
+}
+
 function pLabel(p: SummaryPeriod, f: string, t: string) {
-  if (p === 'this-month') return 'June 2026'
-  if (p === 'last-month') return 'May 2026'
+  if (p === 'this-month') return currentMonthLabel()
+  if (p === 'last-month') return lastMonthLabel()
   if (p === 'this-fy')    return 'FY 2025–26'
   if (p === 'last-fy')    return 'FY 2024–25'
   if (f && t)             return `${f} to ${t}`
@@ -194,18 +206,62 @@ function Toast({ message, onClose }: { message: string; onClose: () => void }) {
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
+type Tab = 'overview' | 'transactions'
+
+const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
+  { id: 'overview',      label: 'Overview',     icon: <IconLayoutDashboard size={15} /> },
+  { id: 'transactions',  label: 'Transactions', icon: <IconList size={15} /> },
+]
+
 export default function FinancesPage() {
+  const [tab,          setTab]          = useState<Tab>('overview')
   const [transactions, setTransactions] = useState<Transaction[]>([])
-  const [loaded,       setLoaded]       = useState(false)
+  const [loading,      setLoading]      = useState(true)
   const [showSend,     setShowSend]     = useState(false)
   const [toast,        setToast]        = useState<string | null>(null)
 
-  useEffect(() => {
-    setTransactions(loadTransactions([]))
-    setLoaded(true)
+  const fetchTransactions = useCallback(async () => {
+    setLoading(true)
+    const { data, error } = await supabase
+      .from('finance_transactions')
+      .select('*')
+      .order('date', { ascending: false })
+    if (!error && data) {
+      setTransactions(data.map(rowToTransaction))
+    }
+    setLoading(false)
   }, [])
 
-  useEffect(() => { if (loaded) saveTransactions(transactions) }, [transactions, loaded])
+  useEffect(() => { void fetchTransactions() }, [fetchTransactions])
+
+  const addTransaction = useCallback(async (t: Transaction) => {
+    const { data, error } = await supabase
+      .from('finance_transactions')
+      .insert({
+        date:            t.date,
+        description:     t.description,
+        type:            t.type,
+        category:        t.category,
+        amount:          t.amount,
+        reference:       t.reference || null,
+        notes:           t.notes || null,
+        receipt_url:     t.receiptUrl ?? null,
+        gst_amount:      t.gstAmount ?? null,
+        payment_method:  t.paymentMethod ?? null,
+        is_reimbursable: t.isReimbursable ?? false,
+        source:          'manual',
+      })
+      .select()
+      .single()
+    if (!error && data) {
+      setTransactions(prev => [rowToTransaction(data), ...prev])
+    }
+  }, [])
+
+  const deleteTransaction = useCallback(async (id: string) => {
+    await supabase.from('finance_transactions').delete().eq('id', id)
+    setTransactions(prev => prev.filter(t => t.id !== id))
+  }, [])
 
   const triggerToast = useCallback((msg: string) => setToast(msg), [])
 
@@ -235,22 +291,63 @@ export default function FinancesPage() {
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#f4f6f9' }}>
+      {/* Header */}
       <div className="sticky top-0 z-20 border-b border-gray-200 bg-white px-6 py-4">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold text-gray-900">Finances</h1>
             <p className="text-sm text-gray-500">Business financial overview</p>
           </div>
-          <button onClick={() => setShowSend(true)}
-            className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
-            style={{ backgroundColor: ACCENT }}>
-            <IconSend size={15} /> Send Summary
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => void fetchTransactions()}
+              disabled={loading}
+              className="flex items-center gap-1.5 rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+            >
+              <IconRefresh size={15} className={loading ? 'animate-spin' : ''} />
+              Refresh
+            </button>
+            <button onClick={() => setShowSend(true)}
+              className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+              style={{ backgroundColor: ACCENT }}>
+              <IconSend size={15} /> Send Summary
+            </button>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="mt-3 flex gap-1">
+          {TABS.map(t => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors"
+              style={tab === t.id
+                ? { backgroundColor: ACCENT + '18', color: ACCENT }
+                : { color: '#6b7280' }}
+            >
+              {t.icon}
+              {t.label}
+            </button>
+          ))}
         </div>
       </div>
 
+      {/* Content */}
       <div className="p-6">
-        <OverviewTab transactions={transactions} />
+        {loading && transactions.length === 0 ? (
+          <div className="flex items-center justify-center py-20">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-gray-200" style={{ borderTopColor: ACCENT }} />
+          </div>
+        ) : tab === 'overview' ? (
+          <OverviewTab transactions={transactions} />
+        ) : (
+          <TransactionsTab
+            transactions={transactions}
+            onAdd={addTransaction}
+            onDelete={deleteTransaction}
+          />
+        )}
       </div>
 
       {showSend && <SendSummaryModal onClose={() => setShowSend(false)} onSend={handleSend} />}
