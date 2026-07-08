@@ -7,8 +7,8 @@ export interface Recipient {
 
 export const DEFAULT_RECIPIENTS: Recipient[] = [
   { id: 'r1', name: 'Accountant', email: 'accountant@formula14.com.au', role: 'Accountant' },
-  { id: 'r2', name: 'Matt',       email: 'matt@formula14.com.au',        role: 'Head Coach' },
-  { id: 'r3', name: 'Jade',       email: 'jade@formula14.com.au',        role: 'Coach'      },
+  { id: 'r2', name: 'Matt',       email: 'admin@formula14.com.au',       role: 'Head Coach' },
+  { id: 'r3', name: 'Jade',       email: 'admin@formula14.com.au',       role: 'Coach'      },
   { id: 'r4', name: 'Admin',      email: 'admin@formula14.com.au',       role: 'Admin'      },
 ]
 

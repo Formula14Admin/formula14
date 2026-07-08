@@ -95,7 +95,7 @@ export default function EmailTemplateEditor({ template, brandSettings, onClose, 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           template:    template.id,
-          to:          'matt@formula14.com.au',
+          to:          'admin@formula14.com.au',
           data:        subVars,
           test:        true,
           _testBody:   html,
@@ -252,7 +252,7 @@ export default function EmailTemplateEditor({ template, brandSettings, onClose, 
               <div className="flex items-center gap-2">
                 {testResult === 'sent' && (
                   <span className="flex items-center gap-1 text-xs font-semibold text-green-600">
-                    <IconCheck size={12} /> Test sent to matt@formula14.com.au
+                    <IconCheck size={12} /> Test sent to admin@formula14.com.au
                   </span>
                 )}
                 {testResult === 'error' && (

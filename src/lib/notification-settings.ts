@@ -3,8 +3,8 @@ import type { TemplateName } from '@/lib/email-templates'
 // ─── Recipient helpers ────────────────────────────────────────────────────────
 
 export const ADMIN_EMAILS = {
-  matt: 'matt@formula14.com.au',
-  jade: 'jade@formula14.com.au',
+  matt: 'admin@formula14.com.au',
+  jade: 'admin@formula14.com.au',
   accountant: 'accounts@formula14.com.au',
 } as const
 

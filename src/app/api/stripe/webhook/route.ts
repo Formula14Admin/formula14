@@ -150,7 +150,7 @@ async function onPaymentFailed(invoice: Stripe.Invoice) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       template: 'failed-payment-admin',
-      to:       'matt@formula14.com.au',
+      to:       'admin@formula14.com.au',
       data: {
         athleteName:        `${athlete.first_name} ${athlete.last_name}`,
         athleteEmail:       athlete.email,
