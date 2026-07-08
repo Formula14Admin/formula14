@@ -4,6 +4,6 @@ import { Resend } from 'resend'
 export const resend = new Resend(process.env.RESEND_API_KEY)
 
 export const FROM_EMAIL =
-  process.env.RESEND_FROM_EMAIL ?? 'onboarding@resend.dev'
+  process.env.RESEND_FROM_EMAIL ?? 'noreply@formula14.com.au'
 
 export const REPLY_TO = 'admin@formula14.com.au'
