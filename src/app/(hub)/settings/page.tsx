@@ -7,6 +7,7 @@ import {
   IconSend, IconEye, IconBell, IconPlug, IconUser,
   IconToggleLeft, IconClock, IconRefresh, IconAlertTriangle,
   IconPlayerPause, IconPlayerPlay, IconFlask, IconChevronDown,
+  IconBuildingBank, IconLink, IconLinkOff, IconCloudDownload,
 } from '@tabler/icons-react'
 import {
   loadRecipients, saveRecipients, DEFAULT_RECIPIENTS,
@@ -835,6 +836,237 @@ function NotificationsTab({
   )
 }
 
+// ─── Bank Connection Panel ──────────────────────────────────────────────────────
+
+interface BankConn {
+  status: string
+  bank_name: string | null
+  account_name: string | null
+  account_bsb: string | null
+  account_number: string | null
+  last_synced_at: string | null
+  error_message: string | null
+}
+
+const BASIQ_ROW_ID = '00000000-0000-0000-0000-000000000001'
+
+function BankConnectionPanel() {
+  const [conn,      setConn]      = useState<BankConn | null>(null)
+  const [loading,   setLoading]   = useState(true)
+  const [connecting,setConnecting]= useState(false)
+  const [syncing,   setSyncing]   = useState(false)
+  const [syncResult,setSyncResult]= useState<string | null>(null)
+  const [apiKey,    setApiKey]    = useState('')
+  const [showKey,   setShowKey]   = useState(false)
+
+  async function fetchConn() {
+    setLoading(true)
+    const { data } = await supabase
+      .from('bank_connections')
+      .select('status, bank_name, account_name, account_bsb, account_number, last_synced_at, error_message')
+      .eq('id', BASIQ_ROW_ID)
+      .single()
+    setConn(data as BankConn | null)
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    void fetchConn()
+    // Re-fetch after returning from Basiq OAuth (URL param)
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('bankConnected') === '1') {
+      setSyncResult('Bank account connected! Syncing now…')
+      void handleSync()
+    }
+    if (params.get('bankError') === '1') {
+      setSyncResult('Bank connection failed. Please try again.')
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  async function handleConnect() {
+    setConnecting(true)
+    try {
+      const res = await fetch('/api/basiq/connect', { method: 'POST' })
+      const json = await res.json() as { url?: string; error?: string }
+      if (!res.ok || !json.url) throw new Error(json.error ?? 'Failed to start connection')
+      window.location.href = json.url
+    } catch (e) {
+      setSyncResult(e instanceof Error ? e.message : 'Connection error')
+      setConnecting(false)
+    }
+  }
+
+  async function handleSync() {
+    setSyncing(true)
+    setSyncResult(null)
+    try {
+      const res = await fetch('/api/basiq/sync', { method: 'POST' })
+      const json = await res.json() as { imported?: number; error?: string }
+      if (!res.ok) throw new Error(json.error ?? 'Sync failed')
+      setSyncResult(`Sync complete — ${json.imported} new transaction${json.imported !== 1 ? 's' : ''} imported`)
+      await fetchConn()
+    } catch (e) {
+      setSyncResult(e instanceof Error ? e.message : 'Sync error')
+    } finally {
+      setSyncing(false)
+    }
+  }
+
+  async function handleDisconnect() {
+    if (!window.confirm('Disconnect your bank account? Imported transactions will remain.')) return
+    await supabase
+      .from('bank_connections')
+      .update({
+        status: 'disconnected', basiq_user_id: null, basiq_connection_id: null,
+        account_name: null, account_bsb: null, account_number: null, bank_name: null,
+        last_synced_at: null, last_sync_cursor: null, updated_at: new Date().toISOString(),
+      })
+      .eq('id', BASIQ_ROW_ID)
+    await fetchConn()
+    setSyncResult(null)
+  }
+
+  const isConnected = conn?.status === 'connected'
+  const isPending   = conn?.status === 'pending'
+
+  return (
+    <div className="space-y-4">
+      {/* Status card */}
+      <div className="overflow-hidden rounded-xl bg-white shadow-sm">
+        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+          <div className="flex items-center gap-3">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl" style={{ backgroundColor: ACCENT + '18' }}>
+              <IconBuildingBank size={18} style={{ color: ACCENT }} />
+            </span>
+            <div>
+              <p className="font-bold text-gray-900">Bank Account</p>
+              <p className="text-xs text-gray-400">Automatically import transactions via Basiq open banking</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {isConnected && (
+              <>
+                <button
+                  onClick={() => void handleSync()}
+                  disabled={syncing}
+                  className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  <IconCloudDownload size={13} className={syncing ? 'animate-bounce' : ''} />
+                  {syncing ? 'Syncing…' : 'Sync Now'}
+                </button>
+                <button
+                  onClick={() => void handleDisconnect()}
+                  className="flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50"
+                >
+                  <IconLinkOff size={13} /> Disconnect
+                </button>
+              </>
+            )}
+            {!isConnected && !isPending && (
+              <button
+                onClick={() => void handleConnect()}
+                disabled={connecting || !process.env.NEXT_PUBLIC_BASIQ_ENABLED}
+                className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                style={{ backgroundColor: ACCENT }}
+              >
+                <IconLink size={14} />
+                {connecting ? 'Opening…' : 'Connect Bank'}
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="px-5 py-4">
+          {loading ? (
+            <div className="flex h-16 items-center justify-center">
+              <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-200" style={{ borderTopColor: ACCENT }} />
+            </div>
+          ) : isConnected ? (
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Bank</p>
+                <p className="text-sm font-semibold text-gray-800">{conn?.bank_name ?? '—'}</p>
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Account</p>
+                <p className="text-sm font-semibold text-gray-800">{conn?.account_name ?? '—'}</p>
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">BSB / Number</p>
+                <p className="text-sm font-mono text-gray-800">{conn?.account_bsb ?? '—'} / {conn?.account_number ?? '—'}</p>
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Last Synced</p>
+                <p className="text-sm text-gray-800">
+                  {conn?.last_synced_at
+                    ? new Date(conn.last_synced_at).toLocaleString('en-AU', { dateStyle: 'short', timeStyle: 'short' })
+                    : 'Never'}
+                </p>
+              </div>
+            </div>
+          ) : isPending ? (
+            <div className="flex items-center gap-2 text-sm text-amber-600">
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-amber-200 border-t-amber-600" />
+              Waiting for bank connection to complete…
+            </div>
+          ) : conn?.status === 'error' ? (
+            <div className="flex items-center gap-2 text-sm text-red-600">
+              <IconAlertTriangle size={14} />
+              {conn.error_message ?? 'Connection error — please try reconnecting'}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-400">No bank account connected. Click "Connect Bank" to link your account via Basiq secure open banking.</p>
+          )}
+        </div>
+
+        {syncResult && (
+          <div className="border-t border-gray-100 px-5 py-3">
+            <p className="text-xs text-gray-500">{syncResult}</p>
+          </div>
+        )}
+      </div>
+
+      {/* Setup instructions — shown when not connected */}
+      {!isConnected && (
+        <div className="rounded-xl border border-blue-100 bg-blue-50 p-5">
+          <h3 className="mb-2 text-sm font-bold text-blue-900">How to connect your bank account</h3>
+          <ol className="space-y-1.5 text-sm text-blue-800">
+            <li><span className="font-semibold">1.</span> Sign up for a free account at <span className="font-mono text-blue-700">basiq.io</span></li>
+            <li><span className="font-semibold">2.</span> Create an application to get an API key</li>
+            <li><span className="font-semibold">3.</span> Add <span className="font-mono text-blue-700">BASIQ_API_KEY</span> to your Vercel environment variables</li>
+            <li><span className="font-semibold">4.</span> Add <span className="font-mono text-blue-700">NEXT_PUBLIC_BASIQ_ENABLED=true</span> to Vercel environment variables</li>
+            <li><span className="font-semibold">5.</span> Redeploy, then click "Connect Bank" above</li>
+          </ol>
+        </div>
+      )}
+
+      {/* Other integrations */}
+      <div className="overflow-hidden rounded-xl bg-white shadow-sm">
+        <div className="border-b border-gray-100 px-5 py-4">
+          <p className="font-bold text-gray-900">Other Integrations</p>
+        </div>
+        <div className="divide-y divide-gray-100">
+          {[
+            { name: 'Stripe', desc: 'Payment processing for memberships', status: 'Connected' },
+            { name: 'Resend', desc: 'Transactional email delivery',       status: 'Connected' },
+          ].map(i => (
+            <div key={i.name} className="flex items-center justify-between px-5 py-3.5">
+              <div>
+                <p className="text-sm font-semibold text-gray-800">{i.name}</p>
+                <p className="text-xs text-gray-400">{i.desc}</p>
+              </div>
+              <span className="flex items-center gap-1.5 rounded-full bg-green-50 px-2.5 py-1 text-[11px] font-bold text-green-700">
+                <IconCheck size={10} /> {i.status}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Placeholder tab ───────────────────────────────────────────────────────────
 
 function PlaceholderTab({ title, desc }: { title: string; desc: string }) {
@@ -1201,12 +1433,9 @@ export default function SettingsPage() {
           </div>
         )}
 
-        {/* ── Integrations (placeholder) ────────────────────────────────────── */}
+        {/* ── Integrations ─────────────────────────────────────────────────── */}
         {activeTab === 'integrations' && (
-          <PlaceholderTab
-            title="Integrations"
-            desc="Connect third-party services like Stripe for payments, Resend for email, and Basiq for bank feeds. Coming soon."
-          />
+          <BankConnectionPanel />
         )}
 
         {/* ── Account (placeholder) ─────────────────────────────────────────── */}

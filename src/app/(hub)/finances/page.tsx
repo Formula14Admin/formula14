@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { IconSend, IconMail, IconX, IconCheck, IconRefresh, IconLayoutDashboard, IconList } from '@tabler/icons-react'
+import { IconSend, IconMail, IconX, IconCheck, IconRefresh, IconLayoutDashboard, IconList, IconCloudDownload } from '@tabler/icons-react'
 import {
   Transaction,
   rowToTransaction,
@@ -219,6 +219,8 @@ export default function FinancesPage() {
   const [loading,      setLoading]      = useState(true)
   const [showSend,     setShowSend]     = useState(false)
   const [toast,        setToast]        = useState<string | null>(null)
+  const [bankConnected, setBankConnected] = useState(false)
+  const [syncing,       setSyncing]       = useState(false)
 
   const fetchTransactions = useCallback(async () => {
     setLoading(true)
@@ -232,7 +234,15 @@ export default function FinancesPage() {
     setLoading(false)
   }, [])
 
-  useEffect(() => { void fetchTransactions() }, [fetchTransactions])
+  useEffect(() => {
+    void fetchTransactions()
+    supabase
+      .from('bank_connections')
+      .select('status')
+      .eq('id', '00000000-0000-0000-0000-000000000001')
+      .single()
+      .then(({ data }) => { if (data?.status === 'connected') setBankConnected(true) })
+  }, [fetchTransactions])
 
   const addTransaction = useCallback(async (t: Transaction) => {
     const { data, error } = await supabase
@@ -264,6 +274,21 @@ export default function FinancesPage() {
   }, [])
 
   const triggerToast = useCallback((msg: string) => setToast(msg), [])
+
+  async function syncBank() {
+    setSyncing(true)
+    try {
+      const res = await fetch('/api/basiq/sync', { method: 'POST' })
+      const json = await res.json() as { imported?: number; error?: string }
+      if (!res.ok) throw new Error(json.error ?? 'Sync failed')
+      triggerToast(`Bank sync complete — ${json.imported} new transaction${json.imported !== 1 ? 's' : ''} imported`)
+      await fetchTransactions()
+    } catch (e) {
+      triggerToast(e instanceof Error ? e.message : 'Sync error')
+    } finally {
+      setSyncing(false)
+    }
+  }
 
   async function handleSend(
     summaryRecipients: SummaryRecipient[],
@@ -307,6 +332,16 @@ export default function FinancesPage() {
               <IconRefresh size={15} className={loading ? 'animate-spin' : ''} />
               Refresh
             </button>
+            {bankConnected && (
+              <button
+                onClick={() => void syncBank()}
+                disabled={syncing}
+                className="flex items-center gap-1.5 rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+              >
+                <IconCloudDownload size={15} className={syncing ? 'animate-bounce' : ''} />
+                {syncing ? 'Syncing…' : 'Sync Bank'}
+              </button>
+            )}
             <button onClick={() => setShowSend(true)}
               className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
               style={{ backgroundColor: ACCENT }}>
