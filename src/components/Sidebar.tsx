@@ -38,6 +38,8 @@ import {
   IconFile,
   IconStar,
   IconShieldCheck,
+  IconMenu2,
+  IconX,
 } from '@tabler/icons-react'
 
 // ─── Nav types ────────────────────────────────────────────────────────────────
@@ -179,6 +181,7 @@ export default function Sidebar() {
   const rawSearchParams = useSearchParams()
   const searchStr = rawSearchParams.toString()
   const { data: session } = useSession()
+  const [mobileOpen, setMobileOpen] = useState(false)
 
   // Notification badge counts keyed by nav href
   const [badges, setBadges] = useState<Record<string, number>>({})
@@ -271,6 +274,11 @@ export default function Sidebar() {
     )
   }, [pathname, searchStr])
 
+  // Close mobile drawer on navigation
+  useEffect(() => {
+    setMobileOpen(false)
+  }, [pathname])
+
   function toggleExpanded(href: string) {
     setExpanded(prev => {
       const next = new Set(prev)
@@ -281,12 +289,38 @@ export default function Sidebar() {
   }
 
   return (
+    <>
+      {/* Hamburger button — mobile only */}
+      <button
+        onClick={() => setMobileOpen(true)}
+        className="fixed left-3 top-3 z-50 flex items-center justify-center rounded-lg p-2 text-white shadow-md md:hidden"
+        style={{ backgroundColor: '#1a1a1a' }}
+        aria-label="Open menu"
+      >
+        <IconMenu2 size={20} strokeWidth={1.75} />
+      </button>
+
+      {/* Backdrop — mobile only, visible when drawer is open */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-black/60 md:hidden"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
     <aside
-      className="flex h-screen w-64 shrink-0 flex-col overflow-hidden"
+      className={[
+        'flex h-screen w-64 flex-col overflow-hidden',
+        // Mobile: fixed overlay, slides in from left
+        'fixed inset-y-0 left-0 z-40 transition-transform duration-300 ease-in-out',
+        mobileOpen ? 'translate-x-0' : '-translate-x-full',
+        // Desktop: static (in-flow), always visible
+        'md:static md:shrink-0 md:translate-x-0',
+      ].join(' ')}
       style={{ backgroundColor: '#1a1a1a' }}
     >
       {/* Logo */}
-      <div className="px-4 py-5">
+      <div className="relative px-4 py-5">
         <Image
           src="/Updated Primary Logo.png"
           alt="Formula14"
@@ -296,6 +330,14 @@ export default function Sidebar() {
           style={{ width: '100%', height: 'auto' }}
           priority
         />
+        {/* Close button — mobile only */}
+        <button
+          onClick={() => setMobileOpen(false)}
+          className="absolute right-2 top-2 rounded-lg p-1.5 text-gray-400 hover:bg-white/10 hover:text-gray-200 md:hidden"
+          aria-label="Close menu"
+        >
+          <IconX size={18} strokeWidth={1.75} />
+        </button>
       </div>
 
       <div className="mx-4 border-b border-white/10" />
@@ -454,5 +496,6 @@ export default function Sidebar() {
         </button>
       </div>
     </aside>
+    </>
   )
 }

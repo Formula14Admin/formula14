@@ -171,7 +171,7 @@ export default function BookingNotificationBell() {
           {/* Backdrop – click outside to close */}
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
 
-          <div className="absolute right-0 top-12 z-50 w-80 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-2xl">
+          <div className="absolute right-0 top-12 z-50 w-[calc(100vw-2.5rem)] max-w-80 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-2xl">
             {/* Header */}
             <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
               <h3 className="text-sm font-bold text-gray-900">
